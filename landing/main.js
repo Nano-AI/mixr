@@ -152,7 +152,7 @@ if (reduced) {
     defaults: { ease: 'outQuad', duration: 60 },
     autoplay: onScroll({ target: '#scroll', enter: 'top top', leave: 'bottom bottom', sync: 0.25 }),
     onUpdate: (self) => {
-      const p = utils.clamp((self.currentTime - 480) / 470, 0, 1);
+      const p = utils.clamp((self.currentTime - 510) / 440, 0, 1);
       if (p <= reached) return;
       reached = p;
       chat.seek(p * chat.duration);
@@ -160,17 +160,20 @@ if (reduced) {
     },
   })
     // pick the phone up off the table
-    .add(phone, { rotateX: [62, 0], rotateZ: [-24, 0], rotateY: [14, 0], y: [300, 0], duration: 320, ease: 'inOutCubic' }, 0)
+    .add(phone, { rotateX: [62, 0], rotateZ: [-24, 0], rotateY: [14, 0], y: [110, 0], duration: 300, ease: 'inOutCubic' }, 0)
     .add('.lede', { opacity: [1, 0], y: [0, -50], duration: 180 }, 0)
     .add('.screen', { '--sheen': ['-60%', '60%'], duration: 520, ease: 'linear' }, 0)
-    // wake, notify, open
-    .add('.off', { opacity: [1, 0], duration: 50 }, 280)
-    .add('.statusbar', { opacity: [0, 1], duration: 40 }, 280)
-    .add('[data-notif]', { opacity: [0, 1], y: [-40, 0], scale: [0.94, 1], duration: 70, ease: 'outBack' }, 340)
-    .add('[data-notif]', { scale: [1, 1.06], opacity: [1, 0], duration: 50 }, 450)
-    .add('.lock', { opacity: [1, 0], scale: [1, 1.08], duration: 60 }, 455)
-    .add('.statusbar', { color: ['#fff', '#000'], duration: 30 }, 470)
-    .add('.homebar', { opacity: [0, 1], duration: 30 }, 470)
+    // wake, notify, swipe up to unlock
+    .add('.off', { opacity: [1, 0], duration: 50 }, 260)
+    .add('.statusbar', { opacity: [0, 1], duration: 40 }, 260)
+    .add('[data-notif]', { opacity: [0, 1], y: [-40, 0], scale: [0.94, 1], duration: 70, ease: 'outBack' }, 320)
+    .add('.swipe-text', { opacity: [0.85, 0.35, 0.85], duration: 60, ease: 'inOutSine' }, 390)
+    .add('.touch', { opacity: [0, 1], scale: [1.3, 1], y: [-40, -40], duration: 25 }, 420)
+    .add('.touch', { y: [-40, -520], opacity: [1, 0], duration: 70, ease: 'inQuad' }, 445)
+    .add('.lock', { y: ['0%', '-100%'], duration: 70, ease: 'inOutQuad' }, 445)
+    .add('.chat', { scale: [0.92, 1], opacity: [0.4, 1], duration: 70, ease: 'outQuad' }, 450)
+    .add('.statusbar', { color: ['#fff', '#000'], duration: 20 }, 490)
+    .add('.homebar', { opacity: [0, 1], duration: 20 }, 495)
     .add('#hint', { opacity: [0, 1], y: [10, 0], duration: 40 }, 950);
 }
 
