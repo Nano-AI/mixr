@@ -6,27 +6,42 @@
 
 ## The loop (MVP)
 
-```
-text "hi" ─► opt in + @uw.edu email ─► braindump interests ─► confirm summary ─► pick free slots
-                                                                                     │
-   ┌─────────────────────────────────────────────────────────────────────────────────┘
-   ▼
-planner finds 2 (pair) or 3–6 (group) compatible + available people
-   ▼
-"4 students want beginner ultimate, Thu 5 PM at Denny Field. YES 12 / PASS 12"
-   ▼
-min headcount says YES ─► CONFIRMED (first names + meet spot) ─► reminder ─► "WENT or MISSED?"
+```mermaid
+flowchart TD
+    A["Text 'hi'"] --> B["Opt in + @uw.edu email"]
+    B --> C["Braindump interests"]
+    C --> D["Confirm summary"]
+    D --> E["Pick free slots"]
+    E --> F["Planner finds 2 (pair) or 3–6 (group)<br/>compatible + available people"]
+    F --> G["Invite: '4 students want beginner ultimate,<br/>Thu 5 PM at Denny Field. YES 12 / PASS 12'"]
+    G --> H{"Min headcount<br/>said YES?"}
+    H -- "yes" --> I["CONFIRMED<br/>first names + meet spot"]
+    H -- "deadline passed" --> X["Expired → try again later"]
+    I --> J["Reminder 2h before"]
+    J --> K["'WENT or MISSED?' → Elo reliability"]
 ```
 
 ## Architecture
 
-```
- phone ⇄ Photon v2 ⇄ ┌──────────────────────── one Node/TS process ────────────────────────┐
-                     │  messaging/ (Wayne)     matching/ (John)        meetups/ (Aditya)    │
-                     │  webhook, router,  ──►  buildProfile       ◄──  createProposal       │
-                     │  onboarding,            findCandidates          recordResponse       │
-                     │  sendMessage  ◄──────────────────────────────── planner, tick()      │
-                     └───────────────────────────── SQLite (mixr.db) ───────────────────────┘
+```mermaid
+flowchart LR
+    Phone(["Student phone"]) <--> Photon["Photon v2<br/>iMessage / SMS"]
+    Photon <--> MSG
+
+    subgraph App["One Node/TS process"]
+        MSG["messaging/ (Wayne)<br/>webhook · router · onboarding · sendMessage"]
+        MAT["matching/ (John)<br/>buildProfile · findCandidates"]
+        MEET["meetups/ (Aditya)<br/>createProposal · recordResponse · planner · tick()"]
+        DB[("SQLite<br/>mixr.db")]
+
+        MSG -- "buildProfile" --> MAT
+        MSG -- "recordResponse" --> MEET
+        MEET -- "findCandidates" --> MAT
+        MEET -- "sendMessage" --> MSG
+        MSG --- DB
+        MAT --- DB
+        MEET --- DB
+    end
 ```
 
 - **Matching** = hard filters (availability, mode, opted-in, not busy) → cosine similarity over **one vector per interest**, so a philosophy + soccer person can join either group → greedy group selection against a running centroid.
