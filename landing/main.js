@@ -209,7 +209,12 @@ if (reduced) {
       chat.seek(head);
       if (head >= chat.duration) openKeypad();
     }
-    hint.classList.toggle('on', kbOn && scrollT > CHAT_TO);
+    const on = kbOn && scrollT > CHAT_TO;
+    if (on) {
+      const r = compose.querySelector('.field').getBoundingClientRect();
+      root.style.setProperty('--hint-y', `${r.top + r.height / 2}px`);
+    }
+    hint.classList.toggle('on', on);
     requestAnimationFrame(chase);
   };
   requestAnimationFrame(chase);

@@ -1,7 +1,8 @@
 // Living background. A small Navier-Stokes fluid (velocity + ink) runs at low resolution;
 // the icon's color field is drawn on top of it, pushed around by the flow, so the page swirls
-// on its own and stirs when the cursor moves. `reveal.v` (0..1, from the scroll timeline)
-// grows the color out of the black with a soft, glowing edge.
+// on its own and stirs when the cursor moves. While `reveal.v` (0..1, from the scroll timeline)
+// rises, the phone's center jets velocity and a "reveal dye" into the fluid; the color shows
+// wherever that dye has been carried, so the unlock blooms out as fluid, not as a shape.
 
 const VERT = `#version 300 es
 void main() {
@@ -17,6 +18,7 @@ uniform vec2 uRes;
 uniform float uTime;
 uniform vec2 uMouse;
 uniform vec2 uMouseVel;
+uniform float uEmit;
 out vec4 o;
 #define T(q) texture(uState, (q) / uRes)
 #define DT 0.15
@@ -56,6 +58,13 @@ void main() {
   c.xy += DT * k2 * vec2(-cos(t * 0.4), sin(t * 0.6)) * 1.4;
   c.w += DT * (k1 + k2) * 0.5;
 
+  // the unlock: an outward jet with a twist, from behind the phone
+  vec2 fromC = p - uRes * 0.5;
+  float kc = exp(-dot(fromC, fromC) / (r2 * 1.6));
+  vec2 dir = normalize(fromC + 1e-3);
+  c.xy += uEmit * kc * (dir * (3.2 + 1.6 * sin(atan(fromC.y, fromC.x) * 7.0 - t * 2.0)) + vec2(-dir.y, dir.x) * 3.0 * sin(atan(fromC.y, fromC.x) * 5.0 + t));
+  c.w += uEmit * kc * 0.8;
+
   // the cursor stirs it
   float km = exp(-dot(p - uMouse, p - uMouse) / (r2 * 0.3));
   c.xy += km * uMouseVel * 0.5;
@@ -66,9 +75,29 @@ void main() {
   o = clamp(c, vec4(-5.0, -5.0, 0.5, 0.0), vec4(5.0, 5.0, 3.0, 5.0));
 }`;
 
+// reveal dye: carried by the fluid's velocity, fed at the center during the unlock, cleared when scrolled back
+const DYE = `#version 300 es
+precision highp float;
+uniform sampler2D uState;
+uniform sampler2D uDye;
+uniform vec2 uRes;
+uniform float uEmit;
+uniform float uReveal;
+out vec4 o;
+#define DT 0.15
+void main() {
+  vec2 p = gl_FragCoord.xy;
+  vec2 vel = texture(uState, p / uRes).xy;
+  float d = texture(uDye, (p - DT * vel * 2.5) / uRes).x;
+  vec2 fromC = p - uRes * 0.5;
+  d += uEmit * exp(-dot(fromC, fromC) / pow(uRes.y * 0.1, 2.0)) * 0.12;
+  o = vec4(uReveal < 0.01 ? 0.0 : min(d, 1.5), 0.0, 0.0, 1.0);
+}`;
+
 const VIEW = `#version 300 es
 precision highp float;
 uniform sampler2D uState;
+uniform sampler2D uDye;
 uniform vec2 uRes;
 uniform float uTime;
 uniform float uReveal;
@@ -111,10 +140,11 @@ void main() {
                 fbm(p * 0.9 + 1.8 * q + vec2(8.3, 2.8) - 0.5 * t));
   float f = fbm(p * 0.9 + 2.0 * r);
 
-  vec3 blue  = vec3(0.737, 0.796, 1.000);
-  vec3 lilac = vec3(0.788, 0.769, 0.965);
-  vec3 pink  = vec3(1.000, 0.824, 0.933);
-  vec3 peach = vec3(1.000, 0.902, 0.812);
+  // the icon's glass colors, a step deeper than the icon so the field has contrast
+  vec3 blue  = vec3(0.580, 0.680, 1.000);
+  vec3 lilac = vec3(0.700, 0.660, 0.960);
+  vec3 pink  = vec3(1.000, 0.700, 0.880);
+  vec3 peach = vec3(1.000, 0.840, 0.700);
   vec3 page  = vec3(0.961, 0.965, 0.984);
 
   vec3 col = mix(blue, lilac, smoothstep(0.25, 0.65, f));
@@ -123,18 +153,19 @@ void main() {
   // where the fluid carries ink, the color deepens toward the icon's saturated pink and blue
   float ink = smoothstep(0.0, 2.5, st.w);
   vec3 inkCol = mix(vec3(1.0, 0.62, 0.84), vec3(0.55, 0.64, 1.0), 0.5 + 0.5 * sin(atan(st.y, st.x) + t));
-  col = mix(col, inkCol, ink * 0.4);
-  col = mix(col, page, 0.10 + 0.08 * breathe);
-  col = mix(col, page, smoothstep(1.0, 2.3, length(p0)) * 0.45);
+  col = mix(col, inkCol, ink * 0.55);
+  // light veins where the field folds over itself
+  col = mix(col, page, smoothstep(0.55, 0.75, f) * 0.55 + 0.04 * breathe);
+  col = mix(col, page, smoothstep(1.2, 2.4, length(p0)) * 0.3);
 
-  // reveal: the edge wobbles with its own noise so it reads as grown, not drawn
-  float d = length(p0 * vec2(0.85, 1.0)) + (fbm(p0 * 1.6 + vec2(t, -t)) - 0.5) * 0.55;
-  float edge = uReveal * 2.8;
-  float m = smoothstep(edge, edge - 0.3, d);
-  float aura = smoothstep(1.2, 0.0, d) * (0.10 + 0.07 * breathe) * (1.0 - uReveal);
-  float rim = smoothstep(0.32, 0.0, abs(d - (edge - 0.15))) * (1.0 - smoothstep(0.75, 1.0, uReveal));
-  vec3 rimCol = mix(vec3(1.0, 0.48, 0.78), vec3(0.42, 0.55, 1.0), 0.5 + 0.5 * sin(atan(p0.y, p0.x) * 2.0 + t * 3.0));
-  vec3 c = mix(col * aura, col, m) + rim * rimCol * 0.55;
+  // reveal: color shows wherever the fluid has carried the dye; the end of the scroll fills the rest
+  float dye = texture(uDye, uv).x;
+  float m = max(smoothstep(0.02, 0.55, dye), smoothstep(0.82, 1.0, uReveal));
+  float aura = smoothstep(1.2, 0.0, length(p0)) * (0.10 + 0.07 * breathe) * (1.0 - uReveal);
+  // the dye's leading edge glows, shifting between the icon's pink and blue
+  float rim = smoothstep(0.0, 0.05, dye) * (1.0 - smoothstep(0.05, 0.35, dye)) * (1.0 - smoothstep(0.8, 1.0, uReveal));
+  vec3 rimCol = mix(vec3(1.0, 0.45, 0.76), vec3(0.40, 0.52, 1.0), 0.5 + 0.5 * sin(atan(p0.y, p0.x) * 2.0 + t * 3.0));
+  vec3 c = mix(col * aura, col, m) + rim * rimCol * 0.7;
   // settle into the page color at the bottom of the section, where the footer begins
   c = mix(c, page, smoothstep(0.32, 0.0, uv.y) * m);
   fragColor = vec4(min(c, vec3(1.0)), 1.0);
@@ -152,7 +183,7 @@ function program(gl, frag) {
   gl.linkProgram(prog);
   if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) throw Error(gl.getProgramInfoLog(prog));
   const u = {};
-  for (const name of ['uState', 'uRes', 'uTime', 'uReveal', 'uMouse', 'uMouseVel']) u[name] = gl.getUniformLocation(prog, name);
+  for (const name of ['uState', 'uDye', 'uRes', 'uTime', 'uReveal', 'uMouse', 'uMouseVel', 'uEmit']) u[name] = gl.getUniformLocation(prog, name);
   return { prog, u };
 }
 
@@ -160,9 +191,10 @@ export function startGlow(canvas, reveal, still) {
   const gl = canvas.getContext('webgl2', { alpha: false, antialias: false, powerPreference: 'low-power' });
   if (!gl) return false;
   gl.getExtension('EXT_color_buffer_float'); // needed to render into half-float textures
-  let sim, view;
+  let sim, dyeProg, view;
   try {
     sim = program(gl, SIM);
+    dyeProg = program(gl, DYE);
     view = program(gl, VIEW);
   } catch (err) {
     console.error(err);
@@ -171,7 +203,7 @@ export function startGlow(canvas, reveal, still) {
   gl.bindVertexArray(gl.createVertexArray());
 
   // ponytail: view at half resolution, fluid at a quarter; it's all soft gradients, so nobody can tell
-  let sw = 0, sh = 0, bufs = [];
+  let sw = 0, sh = 0, bufs = [], dyes = [];
   const makeBuf = () => {
     const tex = gl.createTexture();
     gl.bindTexture(gl.TEXTURE_2D, tex);
@@ -192,13 +224,14 @@ export function startGlow(canvas, reveal, still) {
     canvas.height = Math.max(1, Math.round(canvas.clientHeight * 0.5));
     sw = Math.max(1, Math.round(canvas.width / 2));
     sh = Math.max(1, Math.round(canvas.height / 2));
-    bufs.forEach((b) => (gl.deleteTexture(b.tex), gl.deleteFramebuffer(b.fbo)));
+    [...bufs, ...dyes].forEach((b) => (gl.deleteTexture(b.tex), gl.deleteFramebuffer(b.fbo)));
     bufs = [makeBuf(), makeBuf()];
+    dyes = [makeBuf(), makeBuf()];
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
   };
   size();
   addEventListener('resize', size);
-  const fluid = () => bufs[0].ok && bufs[1].ok && !still;
+  const fluid = () => [...bufs, ...dyes].every((b) => b.ok) && !still;
 
   // cursor in fluid pixels, and how far it moved since the last frame
   const mouse = { x: -1e4, y: -1e4, px: null, py: null };
@@ -213,6 +246,8 @@ export function startGlow(canvas, reveal, still) {
   const t0 = performance.now();
   const frame = (now) => {
     const time = still ? 12 : (now - t0) / 1000;
+    // emit while the unlock is under way
+    const emit = reveal.v > 0.01 && reveal.v < 0.85 ? 1 : 0;
     if (fluid()) {
       const clamp = (v) => Math.max(-20, Math.min(20, v));
       const vx = mouse.px === null ? 0 : clamp(mouse.x - mouse.px);
@@ -228,14 +263,35 @@ export function startGlow(canvas, reveal, still) {
       gl.uniform1f(sim.u.uTime, time);
       gl.uniform2f(sim.u.uMouse, mouse.x, mouse.y);
       gl.uniform2f(sim.u.uMouseVel, vx, vy);
+      gl.uniform1f(sim.u.uEmit, emit);
       gl.drawArrays(gl.TRIANGLES, 0, 3);
       bufs.reverse();
+
+      gl.useProgram(dyeProg.prog);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, dyes[1].fbo);
+      gl.activeTexture(gl.TEXTURE0);
+      gl.bindTexture(gl.TEXTURE_2D, bufs[0].tex);
+      gl.activeTexture(gl.TEXTURE1);
+      gl.bindTexture(gl.TEXTURE_2D, dyes[0].tex);
+      gl.uniform1i(dyeProg.u.uState, 0);
+      gl.uniform1i(dyeProg.u.uDye, 1);
+      gl.uniform2f(dyeProg.u.uRes, sw, sh);
+      gl.uniform1f(dyeProg.u.uEmit, emit);
+      gl.uniform1f(dyeProg.u.uReveal, reveal.v);
+      gl.drawArrays(gl.TRIANGLES, 0, 3);
+      dyes.reverse();
+      gl.activeTexture(gl.TEXTURE0);
     }
     gl.useProgram(view.prog);
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     gl.viewport(0, 0, canvas.width, canvas.height);
+    gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, bufs[0].tex);
+    gl.activeTexture(gl.TEXTURE1);
+    gl.bindTexture(gl.TEXTURE_2D, dyes[0].tex);
+    gl.activeTexture(gl.TEXTURE0);
     gl.uniform1i(view.u.uState, 0);
+    gl.uniform1i(view.u.uDye, 1);
     gl.uniform2f(view.u.uRes, canvas.width, canvas.height);
     gl.uniform1f(view.u.uTime, time);
     gl.uniform1f(view.u.uReveal, reveal.v);
