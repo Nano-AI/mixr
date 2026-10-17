@@ -22,9 +22,22 @@ async function send(msgs: Msg[]): Promise<void> {
   }
 }
 
+let running = false;
+
 // Runs every 60s. State changes commit first; messages are then derived from durable state and deduped by key,
-// so a crash or failed send is retried on the next tick and re-running is safe.
+// so a crash or failed send is retried on the next tick and re-running is safe. A tick that starts while
+// another is still running returns at once.
 export async function tick(now: Date, plan = planMeetups): Promise<void> {
+  if (running) return;
+  running = true;
+  try {
+    await runTick(now, plan);
+  } finally {
+    running = false;
+  }
+}
+
+async function runTick(now: Date, plan: typeof planMeetups): Promise<void> {
   const iso = now.toISOString();
   const recent = new Date(now.getTime() - RETRY_WINDOW_H * HOUR).toISOString();
 
@@ -45,8 +58,8 @@ export async function tick(now: Date, plan = planMeetups): Promise<void> {
   const soon = db.prepare("SELECT id, activity, slot, place_id FROM meetups WHERE state = 'confirmed' AND slot <= ? AND slot > ?")
     .all(new Date(now.getTime() + REMIND_BEFORE_H * HOUR).toISOString(), iso) as Row[];
   for (const m of soon) {
-    const spot = placeOf(m.place_id).meetSpot;
-    const text = `Today ${formatSlot(m.slot)}: ${m.activity} at ${spot}. Still in? CANCEL ${m.id} if not. Anything you're hoping to talk about?`;
+    const place = placeOf(m.place_id);
+    const text = `Today ${formatSlot(m.slot)}: ${m.activity} at ${place.name}, ${place.meetSpot}. CANCEL ${m.id} if you can't make it. Anything you're hoping to talk about?`;
     await send(accepted(m.id).map((u): Msg => [u, text, `remind:${m.id}:${u}`]));
   }
 

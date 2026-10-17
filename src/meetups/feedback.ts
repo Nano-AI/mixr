@@ -23,6 +23,6 @@ export async function recordFeedback(userId: number, attended: boolean, note: st
     return row.meetup_id;
   });
   if (meetupId === null) return false;
-  await sendMessage(userId, "Thanks! Want another one soon? I'll keep looking.", `feedback-thanks:${meetupId}:${userId}`);
+  await sendMessage(userId, "Thanks! I'll keep looking for your next one.", `feedback-thanks:${meetupId}:${userId}`);
   return true;
 }

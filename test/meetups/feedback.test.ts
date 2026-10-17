@@ -30,7 +30,7 @@ test('recordFeedback fills the latest outstanding row, updates reliability, than
   assert.deepEqual(rows.map((r) => ({ ...r })), [{ m: m1, a: null, n: null }, { m: m2, a: 1, n: 'great' }]);
   assert.equal(rel(u), 1216);
   const job = db.prepare('SELECT text FROM message_jobs WHERE dedupe_key = ?').get(`feedback-thanks:${m2}:${u}`) as { text: string };
-  assert.equal(job.text, "Thanks! Want another one soon? I'll keep looking.");
+  assert.equal(job.text, "Thanks! I'll keep looking for your next one.");
   assert.equal(await recordFeedback(u, false, ''), true); // m1 next
   assert.equal(rel(u), eloUpdate(1216, false));
 });

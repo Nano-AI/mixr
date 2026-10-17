@@ -57,7 +57,7 @@ test('reminder only once now >= slot - 2h, and only for confirmed', async () => 
   assert.equal(jobs('remind').length, 0);
   await tick(at(22, 15), noPlan);
   assert.equal(jobs('remind').length, 3);
-  assert.match(jobs('remind')[0].text, new RegExp(`Today Thu 5 PM: frisbee at .*CANCEL ${m.id} if not`));
+  assert.equal(jobs('remind')[0].text, `Today Thu 5 PM: frisbee at Denny Field, the field entrance off Stevens Way. CANCEL ${m.id} if you can't make it. Anything you're hoping to talk about?`);
   await tick(at(22, 15, 30), noPlan);
   assert.equal(jobs('remind').length, 3);
 });
@@ -82,6 +82,17 @@ test('tick calls the plan function with now', async () => {
   let got: Date | undefined;
   await tick(NOW, async (n) => { got = n; return 0; });
   assert.equal(got, NOW);
+});
+
+test('a tick that starts while another runs is a no-op; the flag clears even on error', async () => {
+  reset();
+  let calls = 0;
+  const plan = async () => { calls++; return 0; };
+  await Promise.all([tick(NOW, plan), tick(NOW, plan)]);
+  assert.equal(calls, 1);
+  await assert.rejects(tick(NOW, async () => { throw new Error('boom'); }), /boom/);
+  await tick(NOW, plan);
+  assert.equal(calls, 2);
 });
 
 test('crash after commit: expired meetup with no messages is still told, once', async () => {
