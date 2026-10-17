@@ -7,12 +7,15 @@
   <meta name="description" content="mixr is a campus organizer you can text. Tell it what you're into and it plans a meetup with UW students who want the same thing.">
   <meta name="theme-color" content="#f5f6fb">
   <link rel="icon" href="brand/mixr-icon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,300..500&display=swap">
   <link rel="stylesheet" href="style.css">
   <script type="module" src="main.js"></script>
 </head>
 <body>
   <header class="top">
-    <a class="brand" href="/"><img src="brand/mixr-icon.svg" alt="" width="28" height="28"><span>mixr</span></a>
+    <a class="brand" href="/" aria-label="mixr home"><img src="brand/mixr-icon.svg" alt="" width="30" height="30"><svg class="wordmark" viewBox="0 0 197 62" aria-hidden="true"><path d="M0 62V0H8L34 42L60 0H68V62H60V15L35 54H32L8 15V62Z"/><path d="M87 62V18H95V62ZM86 4A5 5 0 1 1 96 4A5 5 0 1 1 86 4Z"/><path d="M109 62L126 39L110 18H120L131 33L142 18H152L136 39L154 62H144L131 45L119 62Z"/><path d="M170 62V18H178V26C183 19 188 17 197 18V26C185 24 178 31 178 42V62Z"/></svg></a>
   </header>
 
   <main>
@@ -80,14 +83,15 @@
 
                 <form class="compose" id="compose" novalidate>
                   <span class="plus" aria-hidden="true"><svg viewBox="0 0 14 14" width="13"><path d="M7 1v12M1 7h12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></span>
-                  <label class="field">
-                    <span class="sr">Your phone number</span>
-                    <input id="phoneInput" name="phone" type="tel" inputmode="tel" autocomplete="tel" placeholder="iMessage" maxlength="40" enterkeyhint="send">
-                    <button class="send" type="submit" aria-label="Send">
+                  <div class="field">
+                    <span class="typed" id="typed" role="textbox" aria-label="Your phone number" aria-readonly="true" data-empty></span>
+                    <button class="send" type="submit" aria-label="Send" disabled>
                       <svg viewBox="0 0 24 24" width="24"><circle cx="12" cy="12" r="12"/><path d="M12 17.5V7m0 0-4.5 4.5M12 7l4.5 4.5" fill="none" stroke="#fff" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
                     </button>
-                  </label>
+                  </div>
                 </form>
+
+                <div class="keypad" id="keypad" role="group" aria-label="Number pad"></div>
               </div>
 
               <div class="homebar"></div>
