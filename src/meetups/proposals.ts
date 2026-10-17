@@ -4,8 +4,8 @@ import { PLACES, pickPlace } from './places.ts';
 import { formatSlot } from './slots.ts';
 import type { Meetup, ProposalDetails } from '../types.ts';
 
-const DEADLINE_H = 6; // tune:
-const CLOSE_BEFORE_H = 2; // tune: replies close this long before the slot
+export const DEADLINE_H = 6; // tune:
+export const CLOSE_BEFORE_H = 2; // tune: replies close this long before the slot
 
 const H = 3600_000;
 const time = (iso: string) => new Date(iso).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
