@@ -7,11 +7,12 @@ import {
 import { db, tx } from '../db.ts';
 import { getState, saveState } from './state.ts';
 import { services, type Services } from './services.ts';
+import { chatWithStudent } from './conversation.ts';
 
 const brainPrompt =
-  'Braindump time: what are you into, what do you want to try, and what kind of hangouts do you like?';
+  'What have you been into lately? Tell me a little about yourself—we can start anywhere.';
 export const help =
-  'YES/PASS/CANCEL <invite number>; EDIT interests; FREE availability; HELP; STOP to unsubscribe. Message frequency varies.';
+  'PROFILE to review your interests; YES/PASS/CANCEL <invite number>; EVENTS; JOIN <event number>; WENT/MISSED feedback; EDIT interests; FREE availability; HELP; STOP to unsubscribe. Message frequency varies.';
 const consent =
   "Hey! I'm mixr. I find UW students with shared interests and organize small meetups. Reply YES to opt in to onboarding and meetup messages. Message frequency varies. Reply STOP anytime.";
 export function setStep(id: number, step: string): void {
@@ -147,15 +148,21 @@ export async function onboardingStep(
       ) {
         deps.confirmProfile(id);
         db.prepare('UPDATE profiles SET confirmed=1 WHERE user_id=?').run(id);
-        setStep(id, 'availability');
-        return availabilityPrompt(id, deps);
+        state.onboarded = true;
+        saveState(id, state);
+        setStep(id, 'active');
+        return "Got it—I've saved your profile. We can keep chatting; tell me whenever your interests change.";
       }
+      if (u.step === 'braindump' && normalized !== 'PROFILE')
+        return chatWithStudent(id, text, deps.converse);
       const previous = state.draft ?? '';
-      const draft = previous
-        ? `${previous}\n${u.step === 'confirm' ? 'Correction: ' : ''}${text}`
-        : text;
+      const draft = u.step === 'braindump'
+        ? previous || state.interestNotes || ''
+        : `${previous}\nCorrection: ${text}`;
+      if (!draft.trim()) return 'Tell me a little about your interests first, then send PROFILE to review them.';
       const p = await deps.buildProfile(id, draft);
       state.draft = draft;
+      state.interestNotes = p.summary.slice(0, 2000);
       saveState(id, state);
       db.prepare(
         "INSERT INTO profiles(user_id,braindump,data,confirmed) VALUES (?,?,?,0) ON CONFLICT(user_id) DO UPDATE SET braindump=excluded.braindump,data=excluded.data,confirmed=0,updated_at=datetime('now')",
@@ -204,8 +211,13 @@ export async function onboardingStep(
             id,
             s,
           );
-        setStep(id, 'mode');
+        setStep(id, state.onboarded ? 'active' : 'mode');
       });
+      if (state.onboarded) {
+        try { await deps.planMeetups(new Date()); }
+        catch { console.error('Meetup planning failed; scheduler can retry.'); }
+        return 'Your availability is updated.';
+      }
       return 'Last one: 1) 1:1 intros 2) small groups 3) both';
     }
     case 'mode': {
@@ -227,6 +239,8 @@ export async function onboardingStep(
       }
       return `You're in. I'll text when I find your people. ${help}`;
     }
+    case 'active':
+      return chatWithStudent(id, text, deps.converse);
     default:
       return help;
   }

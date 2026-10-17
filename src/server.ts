@@ -5,6 +5,7 @@ import { connectPhoton } from './messaging/photon.ts';
 import { retryFailed } from './messaging/send.ts';
 import { createServer } from './messaging/http.ts';
 import { integrationStatus, tick } from './messaging/services.ts';
+import { moveCompletedProfilesToChat } from './messaging/state.ts';
 
 const transport = process.env.TRANSPORT ?? 'photon';
 if (!['console', 'photon'].includes(transport))
@@ -58,6 +59,8 @@ process.once('SIGTERM', () => {
   void stop();
 });
 try {
+  const resumed = moveCompletedProfilesToChat();
+  if (resumed) console.info('Completed profiles moved from deferred scheduling to chat:', resumed);
   db.prepare(
     "UPDATE inbound_processing SET status='failed',error='Process interrupted; inspect before replay' WHERE status='processing'",
   ).run();
@@ -77,6 +80,12 @@ try {
       ),
   );
   console.info('Teammate modules available:', integrationStatus);
+  console.info('Conversation configuration:', {
+    provider: process.env.LLM === 'fake' ? 'offline fake' : 'Claude',
+    model: process.env.ANTHROPIC_MODEL || 'claude-haiku-5-5',
+    keyPresent: !!process.env.ANTHROPIC_API_KEY?.trim(),
+    dailyRequestCap: process.env.CLAUDE_DAILY_REQUEST_LIMIT || '50',
+  });
   if (!emailConfigured())
     console.warn(
       'Email verification is unconfigured; onboarding will wait at email verification.',

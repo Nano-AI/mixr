@@ -32,34 +32,84 @@ Use `DB_PATH` for a persistent SQLite file, `ADMIN_TOKEN` for inspection,
 inside a container. Production requires an admin token and database path.
 Store secrets in the host's secret manager; never bake `.env` into an image.
 
+## Claude conversation
+
+Set `ANTHROPIC_API_KEY` in the ignored `.env`. The default model is
+`claude-haiku-5-5` (`ANTHROPIC_MODEL`). Keys that are not workspace-scoped also
+need `ANTHROPIC_WORKSPACE_ID`; the app sends it as `anthropic-workspace-id`.
+The official `@anthropic-ai/sdk` makes requests directly to Anthropic.
+
+The default `CLAUDE_DAILY_REQUEST_LIMIT=50` is a hard, persistent cap on attempted
+requests per UTC day. It counts failed requests and tool follow-ups; restarting
+the process does not reset it. Set it to 0 to disable API requests. Each inbound
+chat message makes at most two requests, each capped at 256 output tokens with
+low effort, thinking disabled, a 15-second timeout, and automatic retries disabled.
+Disabling thinking leaves the short output budget available for tool arguments
+and visible replies instead of exhausting it before producing text. Context is
+limited to eight turns (1,200 characters each) plus bounded profile context.
+This caps request counts, not dollar spending; a provider-side spending limit
+can additionally bound the API account. Tests use `LLM=fake` or fake HTTP responses.
+
+After deterministic consent/name/email verification, Mixr chats naturally about
+interests. Claude can call only `get_my_profile` and `save_interest_notes`:
+both are bound to the current verified student by application code, and neither
+can select a different user, RSVP, change consent, or schedule a meetup. Draft
+notes survive restarts and are provided as context for later messages. Known
+email/phone/code patterns are redacted from model input; early verification
+messages never go through Claude. This is not general-purpose PII detection.
+
+`PROFILE` explicitly reviews the conversation through John's extraction
+interface. `OK` confirms it and returns to chat. Newer student statements are
+retained even if the model did not call its notes tool. Availability collection
+is deferred: there is no automatic time menu after confirmation. The existing
+`FREE` command remains available only when explicitly requested. Scheduling and
+matching algorithms remain owned by the teammate modules.
+On startup, verified students with confirmed profiles paused at the old compulsory
+availability/mode step resume chat. Existing availability is preserved; an
+already-onboarded student's explicit FREE flow is left intact.
+
+`HELP`, `STOP`, verification, and explicit RSVP commands do not spend Claude
+tokens. A bare YES with a pending invitation still routes to RSVP; an ordinary
+affirmative with no invitation remains conversational. Model failures yield a
+bounded retry-later message while deterministic commands continue working.
+
 ## Team interfaces
 
 - Person 2: `buildProfile(userId, text)` and `confirmProfile(userId)` in
   `src/matching/profile.ts`. Messaging appends corrections to the original
-  braindump and calls extraction again. The current checkout still has stubs;
+  braindump and calls extraction again. The profile module still has stubs;
   real interests and embeddings depend on Person 2's implementation.
 - Person 3: `recordResponse` and `openInvitations` in `src/meetups/responses.ts`.
-  Those are also still stubs. Messaging routes replies without implementing
-  scheduling or seat allocation.
+  The lifecycle implementation is present. Messaging routes replies without
+  implementing scheduling or seat allocation. Lifecycle services own RSVP
+  acknowledgements; the router adds only the missing-invitation response.
 - Person 3 sends invitations, confirmations, and reminders through
   `sendMessage(userId, text, dedupeKey)`. Use a stable key for each logical
   notification, e.g. `invite:12:7` or `reminder:12:7:one-hour`.
-- When `meetups/slots.ts`, `planner.ts`, and `scheduler.ts` exist, restart the
-  application to load `upcomingSlots`, `planMeetups`, and `tick`. The current
-  checkout lacks them; startup prints their availability. Without the slot
+- `meetups/slots.ts`, `planner.ts`, and `scheduler.ts` are present; startup
+  reports their availability. Restart after changing these modules to load
+  `upcomingSlots`, `planMeetups`, and `tick`. Without the slot
   module, students can supply explicit future ISO start times with timezone
   offsets. Messaging does not generate proposals itself.
+- `recordFeedback` records WENT/MISSED and owns the thank-you response.
+  `listPublicEvents` sends the EVENTS menu with the inbound reply dedupe key;
+  `joinEvent` handles JOIN and owns lifecycle responses. These commands require
+  completed onboarding and a verified email, including during profile edits.
 
 ## Consent and conversation
 
 New phone identities receive an explicit opt-in prompt before name, email,
-verification code, interests, confirmation, availability, and pair/group mode.
+verification code, and natural interest conversation. Profile review is explicit;
+availability and mode are no longer compulsory onboarding questions.
 `YES` at consent or summary confirmation belongs to onboarding. Once active,
 `YES`, `PASS`, and `CANCEL` target invitations. Bare replies with multiple
 invitations ask for a numbered choice. `STOP`, `STOPALL`, `UNSUBSCRIBE`, `END`,
 and `QUIT` suppress subsequent deliveries, cancel accepted invitations and
 pass pending ones through Person 3's API. `START` resumes messaging.
 `EDIT`, `FREE`, and `HELP` support profile/availability maintenance.
+`EVENTS` lists public meetups; `JOIN <id>` requests a seat. `WENT` or `MISSED`,
+optionally followed by a note, answers the newest outstanding feedback request.
+`YES <id> + <place>` passes a suggested location to the meetup service.
 
 Only phone-number direct messages are accepted. Group conversations and
 email-based iMessage identities are ignored to avoid publishing onboarding
@@ -109,8 +159,13 @@ Photon process remains active. Cloud deployment requires a chosen host/account.
 summary corrections, availability selection, ambiguous routing, inbound
 validation, and admin access. `npm run typecheck` checks application code;
 `skipLibCheck` works around errors in the SDK's shipped declaration bundle.
-Live UW mail, Person 2 extraction, Person 3 scheduling, and the cloud deployment
-must be verified separately once their dependencies are available.
+`test/messaging/workflows.test.ts` exercises the actual meetup services through
+the router and durable outbox, with only network delivery replaced. It covers
+feedback, public events, joins, location suggestions, consent gating, and
+duplicate input. Real profile extraction still depends on John's implementation.
+Live multi-phone confirmation/reminders and sustained Photon capacity remain
+unverified; unit-test throughput is not a measurement of line capacity.
+Cloud deployment is deferred by the user; the demo runs on the Mac.
 
 ## iMessage personalization
 
@@ -119,7 +174,7 @@ conversation handler runs. Typing is cleared even when processing fails.
 Indicator failures are best-effort and do not block the reply. Duplicate input
 and messages from opted-out users do not trigger indicators (START can resume).
 
-The Photon project profile is named Mixr with `assets/mixr-avatar.png` uploaded.
+The Photon project profile is named Mixr with its previously generated avatar uploaded.
 The current Free shared line reports `imessageSynced=false`; native name/photo
 sharing is therefore not active. `assets/mixr-contact.vcf` is a saveable contact
 card with the avatar and the current test user's assigned number, +16287896827.
