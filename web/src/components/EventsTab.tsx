@@ -168,6 +168,38 @@ function EventDetail({
         <pre className="profile-text">{ev.hydeProfile || '—'}</pre>
       </details>
 
+      <div className="section-head">
+        <h4>Going</h4>
+        <span className="muted small">
+          host + {ev.going}/{ev.capacity} guest{ev.capacity === 1 ? '' : 's'}
+        </span>
+      </div>
+      <ul className="invites attendees">
+        {(ev.attendees ?? []).map((a) => {
+          const phone = phoneOf.get(a.userId);
+          return (
+            <li key={`${a.role}-${a.userId}`} className="invite">
+              <div className="invite-top">
+                <button className="link strong" onClick={() => onShowUser(a.userId)}>
+                  {a.name ?? `user #${a.userId}`}
+                </button>
+                <span className="muted small">
+                  {a.role === 'host' ? 'host' : a.source === 'discover' ? 'joined via discover' : 'said yes to an invite'}
+                  {a.role === 'guest' && a.joinedAt ? ` · ${fmtRel(a.joinedAt, now)}` : ''}
+                </span>
+                <span className="grow" />
+                {phone && (
+                  <button className="mini-btn" onClick={() => onOpenPhone(phone)} title="Open their phone">
+                    phone
+                  </button>
+                )}
+              </div>
+            </li>
+          );
+        })}
+        {(ev.attendees ?? []).every((a) => a.role === 'host') && <li className="invite muted small">No guests yet.</li>}
+      </ul>
+
       <div className="internal">
         <div className="internal-label">internal · never shown to students</div>
         <div className="meta-grid">
@@ -219,6 +251,7 @@ function EventDetail({
                       {inv.name ?? `user #${inv.userId}`}
                     </button>
                     <InviteChip status={inv.status} />
+                    {inv.source === 'discover' && <span className="muted small">via discover</span>}
                     {inv.respondedAt && <span className="muted small">replied {fmtRel(inv.respondedAt, now)}</span>}
                     <span className="grow" />
                     {phone && (

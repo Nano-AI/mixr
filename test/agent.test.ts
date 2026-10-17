@@ -88,11 +88,12 @@ test('onboarding: save_profile call, output fed back, reply sent, user created a
   await handleInbound('+15550001111', "hey i'm maya, i play tennis (4.5) and love catan");
 
   expect(seen).toHaveLength(2);
-  // context block + the inbound message
-  expect(seen[0].input[0]).toMatchObject({ role: 'developer' });
-  expect((seen[0].input[0] as any).content).toContain('2026-10-20T12:00:00-07:00');
-  expect((seen[0].input[0] as any).content).toContain('Tuesday');
-  expect(seen[0].input.at(-1)).toEqual({ role: 'user', content: "hey i'm maya, i play tennis (4.5) and love catan" });
+  // the inbound message, then the context block last
+  expect(seen[0].input.at(-1)).toMatchObject({ role: 'developer' });
+  expect((seen[0].input.at(-1) as any).content).toContain('2026-10-20T12:00:00-07:00');
+  expect((seen[0].input.at(-1) as any).content).toContain('Tuesday');
+  expect((seen[0].input.at(-1) as any).content).toContain('FIRST text');
+  expect(seen[0].input.at(-2)).toEqual({ role: 'user', content: "hey i'm maya, i play tennis (4.5) and love catan" });
   expect(seen[0].instructions).toContain('mixr');
   // strict schemas
   for (const t of seen[0].tools) {
@@ -236,7 +237,7 @@ test('context block lists open invites with ids and recent find_people results',
 
   const seen = script(say('ok'));
   await handleInbound(phone, 'yes kai');
-  const ctx = (seen[0].input[0] as any).content as string;
+  const ctx = (seen[0].input.at(-1) as any).content as string;
   expect(ctx).toContain('event_id 42');
   expect(ctx).toContain('Catan night');
   expect(ctx).toContain('Fri, Oct 23');
@@ -244,7 +245,7 @@ test('context block lists open invites with ids and recent find_people results',
   expect(ctx).toContain('user_id 77: Kai');
   expect(ctx).not.toContain('Smith');
   // history replayed: in → user, out → assistant
-  expect(seen[0].input.slice(1)).toEqual([
+  expect(seen[0].input.slice(0, -1)).toEqual([
     { role: 'user', content: 'anyone to play tennis with?' },
     { role: 'assistant', content: 'kai plays 4.5, want an intro?' },
     { role: 'user', content: 'yes kai' },
@@ -256,7 +257,7 @@ test('per-phone serialization: texts from one phone never overlap', async () => 
   let maxActive = 0;
   const order: string[] = [];
   fake.agentHandler = (async (req: AgentRequest) => {
-    const last = (req.input.at(-1) as any).content as string;
+    const last = ([...req.input].reverse().find((i) => 'role' in i && i.role === 'user') as any).content as string;
     active++;
     maxActive = Math.max(maxActive, active);
     order.push(`start ${last}`);

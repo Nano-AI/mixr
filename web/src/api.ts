@@ -28,6 +28,16 @@ export type ApiInvite = {
   pitch: string | null;
   invitedAt: string | null;
   respondedAt: string | null;
+  source?: 'invite' | 'discover';
+};
+
+// Someone going to an event: the host plus every guest who said yes (server: event_attendees view).
+export type ApiAttendee = {
+  userId: number;
+  name: string | null;
+  role: 'host' | 'guest';
+  joinedAt: string | null;
+  source: 'host' | 'invite' | 'discover';
 };
 
 export type ApiEvent = {
@@ -46,6 +56,7 @@ export type ApiEvent = {
   going: number;
   cosToE0: number | null;
   invites: ApiInvite[];
+  attendees?: ApiAttendee[];
 };
 
 export type ApiIntro = { id: number; requesterName: string | null; targetName: string | null; reason: string; status: IntroStatus };

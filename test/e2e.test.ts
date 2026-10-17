@@ -17,7 +17,7 @@ const outbox = async (userId: number) =>
 
 test('seeded campus: hosted tennis event fills through hidden waves without overfilling', async () => {
   await fresh();
-  expect(await seed()).toBe(45);
+  expect(await seed()).toBe(50);
   const host = (await getUserByPhone('+12065550101'))!;
 
   const ev = await createEvent(host.id, {

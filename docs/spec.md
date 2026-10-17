@@ -76,16 +76,17 @@ Foundation (done, shared, don't change without coordination): `config.ts`, `type
 - **Rocchio** (recomputed from scratch after each RSVP, anchored to E0): `Et = normalize(0.70·E0 + 0.25·mean(U_yes) − 0.05·mean(U_no_vibe))`, dropping empty terms. Trace `rocchio` {yes, noVibe, cosToE0}.
 - `close_event` job: open/full → `closed`; remaining `invited` → `expired`.
 - `manageEvent(host, event, action, n)`: `status` → "Catan night: 2/3 going (Jordan, Taylor). still finding people." · `add_spots n` → capacity += n, reopen if full, wave now · `cancel` → `cancelled`, text yes-guests · `stop_inviting` → capacity = going, status `full`. Never mentions waves.
-- `discoverEvents(user, query?)`: open, future, spots left, not hosted by user; rank by `cosine(Et, query ? embed(query) : user.embedding)`; top 3. `joinEvent` inserts an invite (pitch `'joined via discover'`) then accepts.
+- `discoverEvents(user, query?)`: open, future, spots left, not hosted by user; rank by `cosine(Et, query ? embed(query) : user.embedding)`; top 3, each with `fit` (that cosine). Nearest isn't relevant, so the agent judges relevance from title/description. `joinEvent` inserts an invite (`source = 'discover'`) then accepts.
+- **Attendance:** `event_invites` is the stored record (`status = 'yes'` = going, `source` = invite or discover). The `event_attendees` view = host + yes guests, and `attendeesFor(event)` / `plansFor(user)` read it. Cancelling flips the row to `cancelled` (kept as history). `/api/state` events carry `attendees`; the agent context lists the user's plans with who's going (first names).
 
 ## Agent (`src/agent/`)
 
 - `handleInbound(phone, text)`: `getOrCreateUser`, `recordInbound`, run the loop, `send` the final text. Per-phone serialization (promise chain) so two texts from one phone don't race. After the turn, `runDue()`.
-- Input: last 20 messages (in → `user`, out → `assistant`) plus a `developer` context block: sim time (LA), user name/state/profile/snooze, open invites (id, title, when, where, spots left, invite status), intros awaiting their answer (intro id, requester first name, reason), events they host (status, going/capacity).
+- Input: last 20 messages (in → `user`, out → `assistant`), then a `developer` context block **last** (stable instructions + history prefix gets prompt-cached): sim time (LA), whether this is their first text ever, user name/state/profile/snooze, invites waiting on their answer, their plans with who's going, intros awaiting their answer, events they host, recently shown people/events.
 - Loop: up to 6 Responses calls; execute function calls, feed back `function_call_output` (JSON), stop when no calls. Trace `agent` per turn (tools called + args + results).
 - Tools (strict JSON schema; optional args are nullable):
   `save_profile {name|null, braindump}` · `edit_profile {change}` · `create_event {title, description, starts_at (ISO w/ offset), location, capacity}` · `respond_to_invite {event_id, response: yes|no_busy|no_vibe|cancel}` · `manage_event {event_id, action, n|null}` · `discover_events {query|null}` · `join_event {event_id}` · `find_people {request|null}` · `request_intro {target_user_id, reason}` · `respond_to_intro {intro_id, accept, message|null}` · `snooze {until|null}`.
-- Behavior: onboarding = get name + braindump; if a skill-gated activity (sports, climbing, running, chess, competitive games, instruments) lacks a level, ask **one** casual follow-up; then `save_profile`. Event creation needs what/when/where/how many; ask once for anything missing. Invite replies are natural language: "busy friday" → `no_busy`, "not my thing" → `no_vibe`; ask when ambiguous between two open invites. Find people: present matches, then `request_intro` for the one(s) they pick. SMS style: short, warm, casual, no markdown.
+- Behavior: every reply moves things forward (no dead-end "what's up?"). A first text from someone with an existing profile gets a welcome that names a few of their interests and asks what to add. Vague asks ("pickup soccer or something") → `discover_events`; if nothing genuinely matches → `find_people` for that activity → offer to round people up (becomes `create_event` with them as host). Onboarding = get name + braindump; if a skill-gated activity (sports, climbing, running, chess, competitive games, instruments) lacks a level, ask **one** casual follow-up; then `save_profile`. Event creation needs what/when/where/how many; ask once for anything missing. Invite replies are natural language: "busy friday" → `no_busy`, "not my thing" → `no_vibe`; ask when ambiguous between two open invites. Find people: present matches, then `request_intro` for the one(s) they pick. SMS style: short, warm, casual, no markdown.
 
 ## Server API (`src/server.ts`, port 8787)
 
@@ -109,7 +110,7 @@ Top bar: sim clock, +15m / +1h / +6h / +1d, Seed, Reset, LLM call counter. Left:
 
 ## Seed data
 
-`fixtures/seed-users.json`: ~45 hand-written UW students `{name, phone, profile}` in canonical format, clustered with overlaps (tennis at several levels, climbing, board games, hardware/maker, indie music, jazz, cooking, running, chess, Valorant/Smash, photography, hiking, anime, startups…) plus polymaths. Phones `+12065550101…`. Written by a human/Claude, never generated with gpt-6-luna.
+`fixtures/seed-users.json`: 50 hand-written UW students `{name, phone, profile, onboardedDaysAgo, history}`; `history` is the hand-written onboarding conversation that produced the profile (inserted into `messages` only if the user has none). Profiles are in canonical format, clustered with overlaps (tennis at several levels, climbing, board games, hardware/maker, indie music, jazz, cooking, running, chess, Valorant/Smash, photography, hiking, anime, startups…) plus polymaths. Phones `+12065550101…`. Written by a human/Claude, never generated with gpt-6-luna.
 
 ## Testing
 

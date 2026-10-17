@@ -27,7 +27,7 @@ app.use('/api/*', cors({ origin: (o) => (/^https?:\/\/(localhost|127\.0\.0\.1)(:
 app.onError((e, c) => c.json({ ok: false, error: errMsg(e) }, 500));
 
 app.get('/api/state', async (c) => {
-  const [users, events, invites, intros, llmRows, embedRow] = await Promise.all([
+  const [users, events, invites, intros, llmRows, embedRow, attendees] = await Promise.all([
     q(`SELECT id, phone, name, state, canonical_profile, snoozed_until, seeded FROM users ORDER BY id`),
     q(
       `SELECT e.id, e.host_id, h.name AS host_name, e.title, e.raw_description, e.starts_at, e.location, e.capacity, e.status,
@@ -37,7 +37,7 @@ app.get('/api/state', async (c) => {
          FROM events e JOIN users h ON h.id = e.host_id ORDER BY e.id`,
     ),
     q(
-      `SELECT i.event_id, i.user_id, u.name, i.wave, i.status, i.pitch, i.invited_at, i.responded_at
+      `SELECT i.event_id, i.user_id, u.name, i.wave, i.status, i.pitch, i.invited_at, i.responded_at, i.source
          FROM event_invites i JOIN users u ON u.id = i.user_id ORDER BY i.event_id, i.wave, i.invited_at, i.user_id`,
     ),
     q(
@@ -51,13 +51,25 @@ app.get('/api/state', async (c) => {
          FROM traces WHERE kind = 'llm' GROUP BY 1`,
     ),
     q<{ tokens: number }>(`SELECT coalesce(sum((data->>'tokens')::int), 0)::int AS tokens FROM traces WHERE kind = 'embed'`),
+    q(
+      `SELECT a.event_id, a.user_id, u.name, a.role, a.joined_at, a.source
+         FROM event_attendees a JOIN users u ON u.id = a.user_id
+        ORDER BY a.event_id, a.role = 'guest', a.joined_at NULLS LAST, a.user_id`,
+    ),
   ]);
 
   const invitesByEvent = new Map<number, unknown[]>();
   for (const i of invites) {
     const list = invitesByEvent.get(i.event_id) ?? [];
-    list.push({ userId: i.user_id, name: i.name, wave: i.wave, status: i.status, pitch: i.pitch, invitedAt: iso(i.invited_at), respondedAt: iso(i.responded_at) });
+    list.push({ userId: i.user_id, name: i.name, wave: i.wave, status: i.status, pitch: i.pitch, invitedAt: iso(i.invited_at), respondedAt: iso(i.responded_at), source: i.source });
     invitesByEvent.set(i.event_id, list);
+  }
+
+  const attendeesByEvent = new Map<number, unknown[]>();
+  for (const a of attendees) {
+    const list = attendeesByEvent.get(a.event_id) ?? [];
+    list.push({ userId: a.user_id, name: a.name, role: a.role, joinedAt: iso(a.joined_at), source: a.source });
+    attendeesByEvent.set(a.event_id, list);
   }
 
   return c.json({
@@ -87,6 +99,7 @@ app.get('/api/state', async (c) => {
       going: e.going,
       cosToE0: Number(e.cos_to_e0),
       invites: invitesByEvent.get(e.id) ?? [],
+      attendees: attendeesByEvent.get(e.id) ?? [], // host + confirmed guests
     })),
     intros: intros.map((x) => ({ id: x.id, requesterName: x.requester_name, targetName: x.target_name, reason: x.reason, status: x.status })),
     usage: {

@@ -49,7 +49,14 @@ export type EventSummary = {
   spotsLeft: number;
   goingCount: number;
   hostName: string;
+  fit?: number; // discover only: cosine of the event to what they asked for (or their profile), 3dp
 };
+
+// One person going to an event (host included). Backed by the event_attendees view.
+export type Attendee = { userId: number; name: string; role: 'host' | 'guest'; joinedAt: string | null; source: 'host' | 'invite' | 'discover' };
+
+// An upcoming event the user is going to, as host or guest, with who else is going.
+export type Plan = EventSummary & { role: 'host' | 'guest'; attendees: Attendee[] };
 
 export type RecallHit = { userId: number; name: string; profile: string; similarity: number };
 export type RerankPick = { userId: number; reason: string; pitch: string };

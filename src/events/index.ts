@@ -6,7 +6,7 @@ import { registerJob, schedule } from '../jobs/index.ts';
 import { send } from '../transport/index.ts';
 import { trace } from '../trace.ts';
 import { publish } from '../bus.ts';
-import type { EventRow, EventSummary, NewEvent, RsvpResponse, RsvpResult } from '../types.ts';
+import type { Attendee, EventRow, EventSummary, NewEvent, Plan, RsvpResponse, RsvpResult } from '../types.ts';
 import * as copy from './copy.ts';
 import { hydeProfile } from './hyde.ts';
 import { recomputeEt } from './rocchio.ts';
@@ -209,6 +209,7 @@ function toSummary(r: Record<string, any>): EventSummary {
     spotsLeft: Math.max(0, r.capacity - r.going),
     goingCount: r.going,
     hostName: copy.firstName(r.host_name),
+    ...(r.fit != null ? { fit: Math.round(Number(r.fit) * 1000) / 1000 } : {}),
   };
 }
 
@@ -217,11 +218,13 @@ export async function discoverEvents(userId: number, query?: string): Promise<Ev
   const t = (await now()).toISOString();
   const qv = query?.trim() ? await embedOne(query.trim()) : (await getUser(userId))?.embedding ?? null;
   const rows = await q(
-    `SELECT * FROM (${SUMMARY_SQL}
-       WHERE e.status = 'open' AND e.starts_at > $1 AND e.host_id <> $2
-         AND NOT EXISTS (SELECT 1 FROM event_invites x WHERE x.event_id = e.id AND x.user_id = $2 AND x.status = 'yes')
-       ${qv ? 'ORDER BY e.current_embedding <=> $3' : 'ORDER BY e.starts_at'}
-     ) s WHERE s.going < s.capacity LIMIT 3`,
+    `SELECT * FROM (
+       SELECT sm.*, ${qv ? '1 - (ev.current_embedding <=> $3)' : 'NULL'} AS fit
+       FROM (${SUMMARY_SQL}
+         WHERE e.status = 'open' AND e.starts_at > $1 AND e.host_id <> $2
+           AND NOT EXISTS (SELECT 1 FROM event_invites x WHERE x.event_id = e.id AND x.user_id = $2 AND x.status = 'yes')
+       ) sm JOIN events ev ON ev.id = sm.id
+     ) s WHERE s.going < s.capacity ORDER BY ${qv ? 's.fit DESC' : 's.starts_at'} LIMIT 3`,
     qv ? [t, userId, toVec(qv)] : [t, userId],
   );
   return rows.map(toSummary);
@@ -248,6 +251,32 @@ export async function hostedEventsFor(userId: number): Promise<(EventSummary & {
   return rows.map((r) => ({ ...toSummary(r), status: r.status }));
 }
 
+// Everyone going to an event, host first, then guests in the order they said yes.
+export async function attendeesFor(eventId: number): Promise<Attendee[]> {
+  const rows = await q<{ user_id: number; name: string | null; role: 'host' | 'guest'; joined_at: string | null; source: Attendee['source'] }>(
+    `SELECT a.user_id, u.name, a.role, a.joined_at, a.source FROM event_attendees a JOIN users u ON u.id = a.user_id
+     WHERE a.event_id = $1 ORDER BY a.role = 'guest', a.joined_at NULLS LAST, a.user_id`,
+    [eventId],
+  );
+  return rows.map((r) => ({
+    userId: r.user_id,
+    name: r.name ?? '',
+    role: r.role,
+    joinedAt: r.joined_at ? new Date(r.joined_at).toISOString() : null,
+    source: r.source,
+  }));
+}
+
+// Upcoming events this user is going to (hosting or a confirmed guest), soonest first, with the roster.
+export async function plansFor(userId: number): Promise<Plan[]> {
+  const rows = await q(
+    `SELECT s.*, a.role FROM (${SUMMARY_SQL}) s JOIN event_attendees a ON a.event_id = s.id AND a.user_id = $1
+     WHERE s.status IN ('open', 'full') AND s.starts_at > $2 ORDER BY s.starts_at`,
+    [userId, (await now()).toISOString()],
+  );
+  return Promise.all(rows.map(async (r) => ({ ...toSummary(r), role: r.role, attendees: await attendeesFor(r.id) })));
+}
+
 // Join an event the user found via discover (creates the invite row, then accepts).
 export async function joinEvent(userId: number, eventId: number): Promise<RsvpResult> {
   const ev = await loadEvent(eventId);
@@ -255,7 +284,7 @@ export async function joinEvent(userId: number, eventId: number): Promise<RsvpRe
   if (ev.hostId === userId) return { outcome: 'closed', detail: "that's your own event — you're already going!" };
   if (!accepting(ev, await now())) return { outcome: 'closed', detail: copy.guestClosed(ev.title) };
   await q(
-    `INSERT INTO event_invites (event_id, user_id, wave, pitch, invited_at) VALUES ($1, $2, $3, 'joined via discover', $4)
+    `INSERT INTO event_invites (event_id, user_id, wave, pitch, invited_at, source) VALUES ($1, $2, $3, 'joined via discover', $4, 'discover')
      ON CONFLICT (event_id, user_id) DO NOTHING`,
     [eventId, userId, ev.waveNumber, (await now()).toISOString()],
   );

@@ -158,7 +158,8 @@ export const TOOLS: ToolDef[] = [
   },
   {
     name: 'discover_events',
-    description: 'Find open upcoming events the user could join, optionally matching what they asked for ("anything climbing this weekend?"). Returns up to 3.',
+    description:
+      'Find open upcoming events the user could join, matching what they asked for ("anything climbing this weekend?", "pickup soccer or something"). Returns up to 3 nearest events with fit (0-1, how close each is to the request). Nearest is not the same as relevant: judge each by its title/description.',
     parameters: obj({ query: nstr('What they are looking for, or null to use their profile.') }),
     run: async (ctx, a) => {
       const u = await me(ctx);
@@ -166,7 +167,14 @@ export const TOOLS: ToolDef[] = [
       if (!query && u.state !== 'active') throw new ToolError('no profile yet: ask what they are looking for, or onboard them first');
       const events = await discoverEvents(u.id, query);
       return {
-        events: events.map((e) => ({ ...eventView(e), description: e.description, host: firstName(e.hostName), going: e.goingCount, spots_left: e.spotsLeft })),
+        events: events.map((e) => ({
+          ...eventView(e),
+          description: e.description,
+          host: firstName(e.hostName),
+          going: e.goingCount,
+          spots_left: e.spotsLeft,
+          fit: e.fit ?? null,
+        })),
       };
     },
   },
@@ -184,7 +192,8 @@ export const TOOLS: ToolDef[] = [
   },
   {
     name: 'find_people',
-    description: 'Search for people the user might want to meet, optionally for something specific ("someone to hit with at 4.5", "jazz people"). Returns up to 3 matches with first names and why.',
+    description:
+      'Search for people the user might want to meet, optionally for something specific ("someone to hit with at 4.5", "jazz people", "people who play pickup soccer"). Returns up to 3 matches with first names and why. Also use it to check whether anyone is into an activity before suggesting they host it.',
     parameters: obj({ request: nstr('What kind of person they want to meet, or null for general matches from their profile.') }),
     run: async (ctx, a) => {
       const u = await activeMe(ctx);

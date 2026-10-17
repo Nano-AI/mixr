@@ -48,8 +48,21 @@ CREATE TABLE IF NOT EXISTS event_invites (
     CHECK (status IN ('invited', 'yes', 'no_busy', 'no_vibe', 'expired', 'waitlisted', 'cancelled')),
   invited_at TIMESTAMPTZ NOT NULL,
   responded_at TIMESTAMPTZ,
+  source TEXT NOT NULL DEFAULT 'invite' CHECK (source IN ('invite', 'discover')),  -- how they got on the list
   PRIMARY KEY (event_id, user_id)
 );
+-- Databases created before `source` existed.
+ALTER TABLE event_invites ADD COLUMN IF NOT EXISTS source TEXT NOT NULL DEFAULT 'invite';
+
+-- Who is going to each event: the host plus every guest whose RSVP is 'yes'. Derived from events + event_invites
+-- (the stored source of truth), so it can never disagree with seat counting.
+CREATE OR REPLACE VIEW event_attendees AS
+  SELECT e.id AS event_id, e.host_id AS user_id, 'host' AS role, e.created_at AS joined_at, 'host' AS source
+  FROM events e
+  UNION ALL
+  SELECT i.event_id, i.user_id, 'guest' AS role, i.responded_at AS joined_at, i.source
+  FROM event_invites i
+  WHERE i.status = 'yes';
 
 CREATE TABLE IF NOT EXISTS intros (
   id SERIAL PRIMARY KEY,

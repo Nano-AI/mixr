@@ -41,7 +41,7 @@ test('seeded population: finite coords within [-1, 1], identical profiles coinci
   const ev = await makeEvent('Tennis ladder', axis(1), axis(2));
   await makeEvent('Cancelled thing', axis(5), axis(6), 'cancelled');
   const { points } = await projection();
-  expect(points.filter((x) => x.kind === 'user')).toHaveLength(47);
+  expect(points.filter((x) => x.kind === 'user')).toHaveLength(52); // 50 seeded + 2 twins
   expect(points.map((x) => x.id)).toEqual(expect.arrayContaining([`e${ev}:0`, `e${ev}:t`]));
   expect(points.filter((x) => x.kind !== 'user')).toHaveLength(2);
   expect(points.find((x) => x.id === `e${ev}:0`)).toMatchObject({ kind: 'event0', eventId: ev, label: 'Tennis ladder' });

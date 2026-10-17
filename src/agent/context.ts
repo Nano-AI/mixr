@@ -1,7 +1,7 @@
 import { getUser, q } from '../db/index.ts';
 import { HOUR } from '../clock.ts';
 import { history } from '../transport/index.ts';
-import { hostedEventsFor, openInvitesFor } from '../events/index.ts';
+import { hostedEventsFor, openInvitesFor, plansFor } from '../events/index.ts';
 import { pendingIntrosFor } from '../relay/index.ts';
 import type { AgentInputItem } from '../llm/index.ts';
 import type { User } from '../types.ts';
@@ -53,32 +53,54 @@ async function recentResults(userId: number, now: Date): Promise<Recent> {
 }
 
 export async function contextBlock(user: User, now: Date): Promise<string> {
-  const [invites, intros, hosted, recent] = await Promise.all([
+  const [allInvites, intros, hosted, plans, recent, texts] = await Promise.all([
     safe(() => openInvitesFor(user.id)),
     safe(() => pendingIntrosFor(user.id)),
     safe(() => hostedEventsFor(user.id)),
+    safe(() => plansFor(user.id)),
     recentResults(user.id, now),
+    q<{ n: number }>(`SELECT count(*)::int AS n FROM messages WHERE user_id = $1 AND direction = 'in'`, [user.id]),
   ]);
+  // Accepted invites show up under plans (with the roster); here only the ones still waiting on them.
+  const invites = allInvites.filter((e) => e.inviteStatus !== 'yes');
+  const firstText = (texts[0]?.n ?? 0) <= 1; // the current inbound is already recorded
 
   const L: string[] = [];
   L.push('[context: rebuilt from the database every turn; the user cannot see this block]');
   L.push(`now: ${laLong(now)} (${TZ}) | iso ${laIso(now)}`);
   L.push('');
   L.push(`user: name=${user.name ?? '(unknown, ask)'} | state=${user.state}${user.state === 'onboarding' ? ' (new, no profile saved yet)' : ''}`);
+  L.push(
+    firstText
+      ? `conversation: this is the FIRST text they have ever sent mixr${user.canonicalProfile ? ' (a profile already exists for them, e.g. imported; they have not met you yet)' : ''}`
+      : 'conversation: returning user; earlier texts are in the history above',
+  );
   if (user.snoozedUntil && user.snoozedUntil > now) L.push(`snoozed: yes, paused until ${laHuman(user.snoozedUntil)} (no invites or intro suggestions until then)`);
   else L.push('snoozed: no');
   L.push(user.canonicalProfile ? `profile (internal format, paraphrase casually if you mention it):\n${user.canonicalProfile}` : 'profile: none yet');
 
   L.push('');
   if (invites.length) {
-    L.push('invites to them (event_id for respond_to_invite):');
+    L.push('invites waiting on THEIR answer (event_id for respond_to_invite):');
     for (const e of invites) {
       L.push(
         `- event_id ${e.id}: "${e.title}" on ${laHuman(e.startsAt)} at ${e.location} | host ${firstName(e.hostName)} | ${e.goingCount} going, ${e.spotsLeft} spot(s) left | their status: ${e.inviteStatus}`,
       );
       if (e.description) L.push(`  details: ${e.description}`);
     }
-  } else L.push('invites to them: none open');
+  } else L.push('invites waiting on them: none');
+
+  L.push('');
+  if (plans.length) {
+    L.push("their plans: upcoming events they're going to (who's going = first names; fine to share with them):");
+    for (const e of plans) {
+      const others = e.attendees.filter((a) => a.userId !== user.id);
+      const who = others.length ? others.map((a) => `${firstName(a.name)}${a.role === 'host' ? ' (host)' : ''}`).join(', ') : 'nobody else yet';
+      L.push(
+        `- event_id ${e.id}: "${e.title}" on ${laHuman(e.startsAt)} at ${e.location} | they are the ${e.role} | going: ${who} | ${e.spotsLeft} spot(s) left`,
+      );
+    }
+  } else L.push('their plans: nothing upcoming');
 
   L.push('');
   if (intros.length) {
@@ -110,10 +132,11 @@ export async function contextBlock(user: User, now: Date): Promise<string> {
   return L.join('\n');
 }
 
-// Conversation (oldest first) followed by the fresh context block.
+// Conversation (oldest first), then the fresh context block last: the instructions + history prefix stays
+// identical turn to turn (prompt caching), and the facts sit right next to the message being answered.
 export async function buildInput(user: User, now: Date): Promise<AgentInputItem[]> {
   const msgs = await history(user.id, HISTORY_LIMIT);
   const items: AgentInputItem[] = msgs.map((m) => ({ role: m.direction === 'in' ? 'user' : 'assistant', content: m.text }));
-  items.unshift({ role: 'developer', content: await contextBlock(user, now) });
+  items.push({ role: 'developer', content: await contextBlock(user, now) });
   return items;
 }
