@@ -30,9 +30,9 @@ test('3 of 4 yes confirms and sends one confirm job per accepted user', async ()
   assert.equal((await recordResponse(userIds[1], m.id, 'yes', NOW)).outcome, 'accepted');
   assert.equal((await recordResponse(userIds[2], m.id, 'yes', NOW)).outcome, 'confirmed');
   assert.equal(meetup(m.id).state, 'confirmed');
-  for (const u of userIds.slice(0, 3)) assert.equal(jobs(`confirm:${m.id}:${u}`).length, 1);
-  assert.equal(jobs(`confirm:${m.id}:${userIds[3]}`).length, 0);
-  assert.match(jobs(`confirm:${m.id}:${userIds[0]}`)[0].text, /^Confirmed: ultimate frisbee, Thu 5 PM at Denny Field\. Meet at the field entrance off Stevens Way\. Going: User\d+, User\d+, User\d+\. CANCEL \d+ if plans change\.$/);
+  for (const u of userIds.slice(0, 3)) assert.equal(jobs(`confirm:${m.id}:${u}:%`).length, 1);
+  assert.equal(jobs(`confirm:${m.id}:${userIds[3]}:%`).length, 0);
+  assert.match(jobs(`confirm:${m.id}:${userIds[0]}:%`)[0].text, /^Confirmed: ultimate frisbee, Thu 5 PM at Denny Field\. Meet at the field entrance off Stevens Way\. Going: User\d+, User\d+, User\d+\. CANCEL \d+ if plans change\.$/);
 });
 
 test('2 of 4 yes stays proposed', async () => {
@@ -57,7 +57,7 @@ test('same user yes twice is a no-op', async () => {
   const before = db.prepare('SELECT COUNT(*) c FROM message_jobs').get() as any;
   await recordResponse(userIds[0], m.id, 'yes', NOW);
   assert.deepEqual(db.prepare('SELECT COUNT(*) c FROM message_jobs').get(), before);
-  assert.equal(jobs(`confirm:${m.id}:${userIds[0]}`).length, 1);
+  assert.equal(jobs(`confirm:${m.id}:${userIds[0]}:%`).length, 1);
 });
 
 test('yes after the deadline or on a cancelled meetup is closed', async () => {
@@ -106,7 +106,7 @@ test('joining a confirmed meetup confirms the joiner and tells the others', asyn
   const { m, userIds } = await setup(4);
   for (const u of userIds.slice(0, 3)) await recordResponse(u, m.id, 'yes', NOW);
   await recordResponse(userIds[3], m.id, 'yes', NOW);
-  assert.equal(jobs(`confirm:${m.id}:${userIds[3]}`).length, 1);
+  assert.equal(jobs(`confirm:${m.id}:${userIds[3]}:%`).length, 1);
   assert.equal(jobs(`joined:${m.id}:${userIds[3]}:${userIds[0]}`).length, 1);
 });
 
@@ -135,7 +135,7 @@ test('location votes: majority place wins at confirmation', async () => {
   await recordResponse(userIds[1], m.id, 'yes', NOW, 'allegro please');
   await recordResponse(userIds[2], m.id, 'yes', NOW);
   assert.equal(meetup(m.id).place_id, 'cafe-allegro');
-  assert.match(jobs(`confirm:${m.id}:${userIds[0]}`)[0].text, /at Cafe Allegro\. Meet at the alley entrance off the Ave\./);
+  assert.match(jobs(`confirm:${m.id}:${userIds[0]}:%`)[0].text, /at Cafe Allegro\. Meet at the alley entrance off the Ave\./);
 });
 
 test('unrecognized suggestion is accepted but stores nothing', async () => {
@@ -155,4 +155,26 @@ test('suggestion on a confirmed meetup is ignored', async () => {
   await recordResponse(userIds[3], m.id, 'yes', NOW, 'cafe allegro');
   assert.equal(meetup(m.id).place_id, place);
   assert.equal(inv(m.id, userIds[3]).place_suggestion, null);
+});
+
+test('re-confirmation after a reopen reaches old and new members', async () => {
+  const { m, userIds } = await confirmed();
+  const spare = makeUser();
+  await recordResponse(userIds[0], m.id, 'cancel', at(22, 12));
+  await recordResponse(spare, m.id, 'yes', at(22, 12, 30));
+  assert.equal(meetup(m.id).state, 'confirmed');
+  for (const u of [userIds[1], userIds[2], spare]) {
+    const sent = jobs(`confirm:${m.id}:${u}:%`);
+    assert.equal(sent.length, u === spare ? 1 : 2);
+    assert.match(sent.at(-1).text, new RegExp(`Going: .*User${spare}`.replace(/User(\d+)/, (_, n) => (db.prepare('SELECT name FROM users WHERE id = ?').get(spare) as any).name)));
+  }
+});
+
+test('cancel on a proposed meetup below min re-evaluates and backfills', async () => {
+  const { m, userIds } = await setup(3);
+  const spare = makeUser();
+  await recordResponse(userIds[0], m.id, 'yes', NOW);
+  await recordResponse(userIds[0], m.id, 'cancel', at(22, 12));
+  assert.equal(meetup(m.id).state, 'proposed');
+  assert.equal(inv(m.id, spare).state, 'pending');
 });

@@ -67,7 +67,7 @@ export async function recordResponse(userId: number, proposalId: number, reply: 
       set('cancelled');
       const left = accepted(proposalId);
       for (const u of left) msgs.push([u.id, `${name} can't make it.`, `cancel:${proposalId}:${userId}:${u.id}`]);
-      if (m.state === 'confirmed' && left.length < m.min_size) {
+      if (left.length < m.min_size) {
         if (now.getTime() < new Date(m.slot).getTime() - CLOSE_BEFORE_H * H) {
           reopened = true;
           db.prepare("UPDATE meetups SET state = 'proposed', deadline = ? WHERE id = ?").run(new Date(Math.min(now.getTime() + DEADLINE_H * H, new Date(m.slot).getTime() - CLOSE_BEFORE_H * H)).toISOString(), proposalId);
@@ -97,14 +97,14 @@ export async function recordResponse(userId: number, proposalId: number, reply: 
     rebias(m, members);
 
     if (m.state === 'confirmed') {
-      msgs.push([userId, confirmText(m, members), `confirm:${proposalId}:${userId}`]);
+      msgs.push([userId, confirmText(m, members), `confirm:${proposalId}:${userId}:${userId}`]);
       for (const u of members) if (u.id !== userId) msgs.push([u.id, `${name} is joining too.`, `joined:${proposalId}:${userId}:${u.id}`]);
       return { outcome: 'confirmed' };
     }
     if (members.length >= m.min_size) {
       m.place_id = tallyPlace(m, members);
       db.prepare("UPDATE meetups SET state = 'confirmed', place_id = ? WHERE id = ?").run(m.place_id, proposalId);
-      for (const u of members) msgs.push([u.id, confirmText(m, members), `confirm:${proposalId}:${u.id}`]);
+      for (const u of members) msgs.push([u.id, confirmText(m, members), `confirm:${proposalId}:${u.id}:${userId}`]);
       return { outcome: 'confirmed' };
     }
     const note = spot ? ` Noted your vote for ${spot.name}.` : suggestion?.trim() ? " I don't know that spot, so I'll stick to campus spots I know." : '';
