@@ -1,4 +1,5 @@
-import { animate, createTimeline, onScroll, utils } from 'https://cdn.jsdelivr.net/npm/animejs@4.5.0/dist/bundles/anime.esm.min.js';
+import { animate, createTimeline, onScroll, stagger, utils } from 'https://cdn.jsdelivr.net/npm/animejs@4.5.0/dist/bundles/anime.esm.min.js';
+import { startGlow } from './glow.js';
 
 const API = location.hostname.endsWith('joinmixr.club') ? 'https://api.joinmixr.club' : 'http://localhost:3000';
 const SMS = document.body.dataset.sms; // set data-sms="+1..." on <body> to offer a text-us fallback
@@ -24,7 +25,11 @@ for (let i = 1; i <= DEPTH; i++) {
 }
 
 // fit the native-size phone into the viewport
-const fit = () => phone.style.setProperty('--s', Math.min(1, (innerWidth * 0.88) / 426, (innerHeight * 0.82) / 898));
+const fit = () => {
+  const s = Math.min(1, (innerWidth * 0.88) / 426, (innerHeight * 0.82) / 898);
+  phone.style.setProperty('--s', s);
+  document.documentElement.style.setProperty('--pw', `${426 * s}px`);
+};
 fit();
 addEventListener('resize', fit);
 
@@ -69,11 +74,16 @@ const render = () => {
   sendBtn.disabled = digits.length !== 10;
 };
 
+const down = (el) => {
+  el.classList.add('down');
+  setTimeout(() => el.classList.remove('down'), 150);
+};
+// light the phone key and the matching keycap in the "your turn" legend
 function flash(k) {
+  document.querySelectorAll(`[data-cap="${k === 'del' || k === 'enter' ? k : 'digit'}"]`).forEach(down);
   const btn = keypad.querySelector(`[data-k="${k}"]`);
   if (!btn) return;
-  btn.classList.add('down');
-  setTimeout(() => btn.classList.remove('down'), 150);
+  down(btn);
   if (!reduced) animate(btn, { scale: [0.9, 1], duration: 260, ease: 'outBack(2)' });
 }
 const shake = () => !reduced && animate('.field', { x: [0, -6, 6, -3, 0], duration: 300 });
@@ -110,6 +120,7 @@ num.addEventListener('input', () => setDigits(num.value));
 num.addEventListener('keydown', (e) => {
   if (e.key === 'Enter') {
     e.preventDefault();
+    flash('enter');
     compose.requestSubmit();
   }
 });
@@ -128,6 +139,7 @@ function openKeypad() {
   if (kbOn) return;
   kbOn = true;
   chatView.classList.add('kb');
+  num.focus({ preventScroll: true }); // ready to type, no click needed
   keypad.style.height = 'auto';
   const h = keypad.offsetHeight;
   if (!reduced) {
@@ -150,16 +162,30 @@ const shown = steps.map((el) => parseFloat(getComputedStyle(el).marginTop));
 const hidden = steps.map((el) => -el.offsetHeight);
 const origin = (el) => (el.classList.contains('me') || el.classList.contains('receipt') ? '100% 100%' : '0% 100%');
 const root = document.documentElement;
+const hint = $('#hint');
+
+// background: 0 = black with a faint aura, 1 = the full living color field
+const reveal = { v: reduced ? 1 : 0 };
+const glowEl = $('#glow');
+const hasGL = startGlow($('#bg'), reveal, reduced);
+if (!hasGL) glowEl.classList.add('nogl');
+const paintReveal = () => !hasGL && (glowEl.style.opacity = reveal.v);
+
+const showHint = () => {
+  hint.classList.add('on');
+  if (!reduced) animate(hint.children, { opacity: [0, 1], y: [14, 0], delay: stagger(120), duration: 700, ease: 'outQuart' });
+};
 
 if (reduced) {
   utils.set(['.off', '.lock', '.lede'], { opacity: 0 });
   utils.set('.statusbar', { color: '#000' });
-  utils.set(['.homebar', '#hint'], { opacity: 1 });
-  utils.set('.burst', { scale: 1 });
+  utils.set('.homebar', { opacity: 1 });
   root.style.setProperty('--bg', '#f5f6fb');
   root.style.setProperty('--fg', '#22272b');
+  paintReveal();
   steps.filter((el) => el.hasAttribute('data-typing')).forEach((el) => el.remove());
   openKeypad();
+  showHint();
 } else {
   steps.forEach((el, i) => {
     el.style.transformOrigin = origin(el);
@@ -167,25 +193,27 @@ if (reduced) {
   });
   utils.set('[data-notif]', { opacity: 0, y: -40, scale: 0.94 });
   utils.set(['.statusbar', '.touch'], { opacity: 0 });
+  utils.set(hint.children, { opacity: 0 });
 
-  // the conversation only moves forward: bubbles that appeared stay, even when you scroll back up
-  const chat = createTimeline({ autoplay: false });
-  const at = [0, 80, 130, 180, 220, 280, 305, 350, 390, 440];
+  // the conversation runs on a clock, like real texts, once the phone unlocks; scrolling can't rush or rewind it
+  const chat = createTimeline({ autoplay: false, onComplete: () => (openKeypad(), showHint()) });
+  const at = [0, 1100, 1800, 2900, 3700, 4800, 5100, 5700, 6900, 7900];
   steps.forEach((el, i) => {
-    chat.add(el, { opacity: [0, 1], marginTop: [hidden[i], shown[i]], scale: [0.6, 1], duration: 40, ease: 'outBack(1.4)' }, at[i]);
-    if (el.hasAttribute('data-typing')) chat.add(el, { opacity: [1, 0], marginTop: [shown[i], hidden[i]], duration: 30, ease: 'outQuad' }, at[i + 1] - 5);
+    chat.add(el, { opacity: [0, 1], marginTop: [hidden[i], shown[i]], scale: [0.6, 1], duration: 420, ease: 'outBack(1.4)' }, at[i]);
+    if (el.hasAttribute('data-typing')) chat.add(el, { opacity: [1, 0], marginTop: [shown[i], hidden[i]], duration: 260, ease: 'outQuad' }, at[i + 1] - 140);
   });
-  let reached = 0;
+  let started = false;
+  const hold = { t: 0 };
 
   createTimeline({
     defaults: { ease: 'outQuad', duration: 60 },
     autoplay: onScroll({ target: '#scroll', enter: 'top top', leave: 'bottom bottom', sync: 0.25 }),
     onUpdate: (self) => {
-      const p = utils.clamp((self.currentTime - 540) / 410, 0, 1);
-      if (p <= reached) return;
-      reached = p;
-      chat.seek(p * chat.duration);
-      if (p === 1) openKeypad();
+      paintReveal();
+      if (!started && self.currentTime > 440) {
+        started = true;
+        chat.play();
+      }
     },
   })
     // the phone turns over from its back and pulls away
@@ -200,18 +228,15 @@ if (reduced) {
     .add('.touch', { opacity: [0, 1], scale: [1.3, 1], duration: 25 }, 410)
     .add('.touch', { y: [-40, -520], opacity: [1, 0], duration: 70, ease: 'inQuad' }, 440)
     .add('.lock', { y: ['0%', '-100%'], duration: 70, ease: 'inOutQuad' }, 440)
+    .add('.lede', { opacity: [1, 0], y: [0, -40], duration: 50 }, 230)
     .add('.statusbar', { color: ['#fff', '#000'], duration: 20 }, 485)
     .add('.homebar', { opacity: [0, 1], duration: 20 }, 490)
-    // color bursts out of the phone; the page goes from black to light and the type follows
-    .add('.burst', { scale: [0, 1], duration: 110, ease: 'outCubic' }, 450)
-    .add('.lede', { '--fg': ['#f5f6fb', '#22272b'], duration: 30, ease: 'linear' }, 452)
-    .add('.lede', { opacity: [1, 0], y: [0, -40], duration: 40 }, 505)
-    // once the burst covers the page, the page itself settles to light underneath it
-    .add(root, { '--bg': ['#000000', '#f5f6fb'], '--fg': ['#f5f6fb', '#22272b'], duration: 20, ease: 'linear' }, 545)
-    .add(phone, { scale: [0.82, 1], y: [100, 0], duration: 90, ease: 'inOutQuad' }, 540)
-    .add('#hint', { opacity: [0, 1], y: [10, 0], duration: 40 }, 960)
-    // hold the finished phone on screen before the page moves on
-    .add('#hint', { opacity: [1, 1], duration: 340, ease: 'linear' }, 1000);
+    // color grows out of the black behind the phone; the page settles to light under it
+    .add(reveal, { v: [0, 1], duration: 170, ease: 'inOutSine' }, 445)
+    .add(root, { '--bg': ['#000000', '#f5f6fb'], '--fg': ['#f5f6fb', '#22272b'], duration: 20, ease: 'linear' }, 590)
+    .add(phone, { scale: [0.82, 1], y: [100, 0], duration: 90, ease: 'inOutQuad' }, 520)
+    // hold the phone on screen while the conversation plays
+    .add(hold, { t: [0, 1], duration: 390, ease: 'linear' }, 610);
 }
 
 // ── the real sign-up ──
