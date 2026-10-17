@@ -21,7 +21,7 @@
   <main>
     <section class="scroll" id="scroll">
       <div class="stage">
-        <div class="burst-wrap" aria-hidden="true"><div class="burst"></div></div>
+        <div class="glow" id="glow" aria-hidden="true"><canvas id="bg"></canvas></div>
         <p class="lede">The campus organizer you text.</p>
 
         <div class="phone" id="phone">
@@ -106,7 +106,11 @@
           </div>
         </div>
 
-        <p class="hint" id="hint">Go ahead, type your number.</p>
+        <div class="hint" id="hint">
+          <p class="hint-big">Your turn.</p>
+          <p class="hint-body">Type your number and mixr texts you once to say hi. After that it's a normal conversation: tell it what you're into and it finds the people.</p>
+          <p class="hint-keys"><span><kbd data-cap="digit">0</kbd><kbd data-cap="digit">9</kbd> type</span><span><kbd data-cap="del">delete</kbd> fix</span><span><kbd data-cap="enter">return</kbd> send</span></p>
+        </div>
       </div>
     </section>
   </main>
