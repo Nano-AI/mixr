@@ -1,13 +1,14 @@
 :root {
   --page: #f5f6fb;
-  --ink: #1d1d1f;
+  --ink: #22272b;         /* the logo wordmark's ink */
   --muted: #86868b;
   --blue: #0a7cff;        /* iMessage sent */
   --gray: #e9e9eb;        /* iMessage received */
-  --ti-1: #d9d6d2;        /* natural titanium */
-  --ti-2: #a9a5a0;
-  --ti-3: #7c7873;
+  --ti-1: #f4f3ef;        /* iPhone 16 Pro, White Titanium: the lightest finish, so the page stays pale */
+  --ti-2: #d6d3cc;
+  --ti-3: #a9a59d;
   --thick: 30px;          /* phone depth */
+  --serif: "Newsreader", Georgia, serif;   /* mixr's voice, outside the phone */
   --sf: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", system-ui, sans-serif;
 }
 
@@ -25,7 +26,8 @@ a { color: inherit; }
 
 /* page chrome */
 .top { position: absolute; inset: 0 0 auto; padding: 20px 24px; z-index: 5; pointer-events: none; }
-.brand { display: inline-flex; align-items: center; gap: 9px; text-decoration: none; font-weight: 600; font-size: 19px; letter-spacing: -.02em; pointer-events: auto; }
+.brand { display: inline-flex; align-items: center; gap: 10px; text-decoration: none; pointer-events: auto; }
+.wordmark { height: 17px; width: auto; fill: var(--ink); }
 .brand img { border-radius: 22.4%; }
 
 .scroll { height: 520vh; position: relative; }
@@ -49,12 +51,12 @@ a { color: inherit; }
 
 .lede, .hint {
   position: absolute; left: 0; right: 0; text-align: center; padding: 0 24px;
-  font-weight: 600; letter-spacing: -.03em;
+  font-family: var(--serif); font-optical-sizing: auto;
 }
-.lede { top: 13svh; font-size: clamp(30px, 5.4vw, 64px); line-height: 1.05; }
-.hint { bottom: 4svh; font-size: 17px; font-weight: 500; letter-spacing: -.01em; color: var(--muted); opacity: 0; }
+.lede { top: 12svh; font-size: clamp(40px, 6.6vw, 88px); font-weight: 350; line-height: 1; letter-spacing: -.025em; }
+.hint { bottom: 3.5svh; font-size: 21px; font-weight: 400; letter-spacing: -.01em; color: #6b6f78; opacity: 0; }
 
-.foot { max-width: 34rem; margin: 0 auto; padding: 0 24px 56px; font-size: 13px; line-height: 1.5; color: var(--muted); text-align: center; }
+.foot { font-family: var(--serif); font-size: 15px; max-width: 34rem; margin: 0 auto; padding: 0 24px 56px; line-height: 1.5; color: #6b6f78; text-align: center; }
 .foot p + p { margin-top: 10px; }
 
 /* ── phone: designed at native iPhone points, scaled by --s ── */
@@ -73,7 +75,7 @@ a { color: inherit; }
   transform: translateZ(calc(var(--z) * 1px));
 }
 .layer.back {
-  background: radial-gradient(120% 80% at 30% 20%, #e7e4e0, #c9c5c0 60%, #b3afa9);
+  background: radial-gradient(120% 80% at 30% 20%, #f6f5f1, #e2dfd8 60%, #cfcbc3);
 }
 .btn { position: absolute; width: 5px; border-radius: 3px; background: linear-gradient(90deg, var(--ti-3), var(--ti-1)); transform: translateZ(calc(var(--thick) / -2)); }
 .btn.action   { left: -4px; top: 168px; height: 52px; }
@@ -83,7 +85,7 @@ a { color: inherit; }
 
 .face {
   padding: 4px;
-  background: linear-gradient(135deg, #efede9, var(--ti-2) 40%, #e4e1dc 60%, var(--ti-3));
+  background: linear-gradient(135deg, #fbfaf7, var(--ti-2) 40%, #efede8 60%, var(--ti-3));
   box-shadow: 0 60px 120px -40px rgba(60, 60, 110, .45);
 }
 .screen {
@@ -107,7 +109,7 @@ a { color: inherit; }
 }
 .statusbar .sys { display: flex; gap: 6px; align-items: center; }
 .statusbar svg { fill: currentColor; }
-.homebar { position: absolute; z-index: 14; bottom: 8px; left: 50%; width: 140px; height: 5px; translate: -50% 0; border-radius: 3px; background: var(--ink); opacity: 0; }
+.homebar { position: absolute; z-index: 14; bottom: 8px; left: 50%; width: 140px; height: 5px; translate: -50% 0; border-radius: 3px; background: #000; opacity: 0; }
 
 .view { position: absolute; inset: 0; }
 .off, .lock { pointer-events: none; }
@@ -123,17 +125,17 @@ a { color: inherit; }
     #b9b5f2;
   z-index: 2;
 }
-.lock-date { font: 600 21px/1 var(--sf); letter-spacing: -.01em; opacity: .9; }
-.lock-time { font: 700 104px/1 var(--sf); letter-spacing: -.04em; margin-top: 4px; }
+.lock-date { font: 600 23px/1 var(--sf); letter-spacing: -.01em; opacity: .9; }
+.lock-time { font: 700 112px/1 var(--sf); letter-spacing: -.04em; margin-top: 4px; }
 .notif {
   position: absolute; left: 12px; right: 12px; top: 330px;
-  display: flex; gap: 11px; padding: 13px 14px; text-align: left;
+  display: flex; gap: 12px; padding: 15px 16px; align-items: center; text-align: left;
   border-radius: 24px; color: #000;
   background: rgba(250, 250, 255, .62);
   -webkit-backdrop-filter: blur(24px) saturate(1.6); backdrop-filter: blur(24px) saturate(1.6);
-  font-size: 15px; line-height: 1.3; letter-spacing: -.01em;
+  font-size: 17px; line-height: 1.3; letter-spacing: -.02em;
 }
-.notif-icon { position: relative; flex: none; width: 40px; height: 40px; }
+.notif-icon { position: relative; flex: none; width: 48px; height: 48px; }
 .notif-icon img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; }
 .msg-badge {
   position: absolute; right: -4px; bottom: -4px; width: 18px; height: 18px; border-radius: 5px;
@@ -144,7 +146,7 @@ a { color: inherit; }
 .notif-text { display: flex; flex-direction: column; min-width: 0; }
 .notif-head { display: flex; justify-content: space-between; }
 .notif-head b { font-weight: 600; }
-.notif-head span { color: rgba(0,0,0,.45); font-size: 13px; }
+.notif-head span { color: rgba(0,0,0,.45); font-size: 14px; }
 
 /* ── Messages ── */
 .chat { background: #fff; z-index: 1; display: flex; flex-direction: column; }
@@ -200,21 +202,44 @@ a { color: inherit; }
 .b a { color: inherit; }
 
 .compose { flex: none; display: flex; align-items: flex-end; gap: 9px; padding: 8px 12px 30px; background: #fff; }
+.chat.kb .compose { padding-bottom: 8px; }
+
+/* iOS phone pad */
+.keypad {
+  flex: none; height: 0; overflow: hidden;
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 7px;
+  background: #d2d5db; padding: 0 6px;
+}
+.chat.kb .keypad { padding: 7px 6px 34px; }
+.key {
+  height: 50px; border: 0; border-radius: 6px; background: #fff; color: #000;
+  box-shadow: 0 1px 0 rgba(0,0,0,.3);
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  font: 400 27px/1 var(--sf); cursor: pointer; transition: background .25s, color .25s;
+  -webkit-tap-highlight-color: transparent;
+}
+.key small { font: 700 10px/1 var(--sf); letter-spacing: .14em; margin-top: 2px; }
+.key.blank, .key.del { background: none; box-shadow: none; }
+.key.blank { pointer-events: none; }
+.key.down { background: var(--blue); color: #fff; transition: none; }
+.key.del.down { background: #bcc0c8; color: #000; }
+.key:focus-visible { outline: 2px solid var(--blue); outline-offset: 1px; }
 .plus { flex: none; width: 36px; height: 36px; border-radius: 50%; background: #e9e9eb; color: #7d7d82; display: grid; place-items: center; }
 .field {
   flex: 1; display: flex; align-items: center; min-height: 36px;
   border: 1px solid #c8c8cc; border-radius: 18px; padding: 0 4px 0 14px;
   transition: border-color .2s;
 }
-.field:focus-within { border-color: var(--blue); }
-.field input {
-  flex: 1; min-width: 0; border: 0; outline: 0; background: none;
-  font: 17px/22px var(--sf); letter-spacing: -.43px; color: #000; padding: 6px 0;
-}
-.field input::placeholder { color: #b9b9be; }
+.chat.kb .field { border-color: var(--blue); }
+.typed { flex: 1; min-width: 0; display: flex; align-items: center; height: 34px; font: 17px/22px var(--sf); letter-spacing: -.43px; color: #000; padding: 6px 0; white-space: nowrap; }
+.typed[data-empty]::before { content: "iMessage"; color: #b9b9be; }
+/* fake caret: the field is driven by the on-screen keypad, not a native input */
+.chat.kb .typed::after { content: ""; display: inline-block; width: 2px; height: 21px; margin-left: 1px; flex: none; background: var(--blue); border-radius: 1px; animation: blink 1s steps(1) infinite; }
+.chat.kb .typed[data-empty]::after { order: -1; margin: 0 1px 0 0; }
+@keyframes blink { 50% { opacity: 0; } }
 .send { flex: none; border: 0; padding: 0; background: none; color: var(--blue); cursor: pointer; display: grid; transition: opacity .15s, scale .15s; }
 .send svg { fill: currentColor; width: 28px; height: 28px; }
-.field input:placeholder-shown + .send { opacity: 0; scale: .6; pointer-events: none; }
+.send:disabled { opacity: 0; scale: .6; pointer-events: none; }
 .send:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; border-radius: 50%; }
 
 /* the "type here" moment */

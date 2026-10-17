@@ -5,9 +5,12 @@ const SMS = document.body.dataset.sms; // set data-sms="+1..." on <body> to offe
 
 const $ = (s) => document.querySelector(s);
 const phone = $('#phone');
+const chatView = $('.chat');
 const rail = $('#rail');
 const compose = $('#compose');
-const input = $('#phoneInput');
+const typed = $('#typed');
+const sendBtn = compose.querySelector('.send');
+const keypad = $('#keypad');
 const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 // phone depth: stacked rounded slices read as a machined titanium edge
@@ -21,7 +24,7 @@ for (let i = 1; i <= DEPTH; i++) {
 }
 
 // fit the native-size phone into the viewport
-const fit = () => phone.style.setProperty('--s', Math.min(0.8, (innerWidth * 0.8) / 426, (innerHeight * 0.76) / 898));
+const fit = () => phone.style.setProperty('--s', Math.min(1, (innerWidth * 0.88) / 426, (innerHeight * 0.82) / 898));
 fit();
 addEventListener('resize', fit);
 
@@ -35,33 +38,119 @@ const tick = () => {
 tick();
 setInterval(tick, 15000);
 
+// ── keypad: iOS phone pad, also driven by the physical keyboard ──
+const KEYS = [['1', ''], ['2', 'ABC'], ['3', 'DEF'], ['4', 'GHI'], ['5', 'JKL'], ['6', 'MNO'], ['7', 'PQRS'], ['8', 'TUV'], ['9', 'WXYZ'], ['', ''], ['0', '+'], ['del', '']];
+const DEL_ICON = '<svg viewBox="0 0 28 20" width="27" aria-hidden="true"><path d="M9 1h15a3 3 0 0 1 3 3v12a3 3 0 0 1-3 3H9L1 10Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="m13 6 8 8m0-8-8 8" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>';
+for (const [k, sub] of KEYS) {
+  const b = document.createElement('button');
+  b.type = 'button';
+  b.className = k === 'del' ? 'key del' : k ? 'key' : 'key blank';
+  if (k === 'del') {
+    b.innerHTML = DEL_ICON;
+    b.setAttribute('aria-label', 'Delete');
+  } else if (k) {
+    b.innerHTML = `${k}<small>${sub}</small>`;
+    b.setAttribute('aria-label', k);
+  } else b.tabIndex = -1;
+  b.dataset.k = k;
+  keypad.append(b);
+}
+
+let digits = '';
+let busy = false;
+let kbOn = false;
+// (425) 340-5583, built as you type
+const fmt = (d) => (d.length < 4 ? (d ? `(${d}` : '') : d.length < 7 ? `(${d.slice(0, 3)}) ${d.slice(3)}` : `(${d.slice(0, 3)}) ${d.slice(3, 6)}-${d.slice(6)}`);
+const render = () => {
+  typed.textContent = fmt(digits);
+  typed.toggleAttribute('data-empty', !digits);
+  sendBtn.disabled = digits.length !== 10;
+};
+
+function press(k) {
+  const btn = keypad.querySelector(`[data-k="${k}"]`);
+  btn.classList.add('down');
+  setTimeout(() => btn.classList.remove('down'), 150);
+  if (!reduced) animate(btn, { scale: [0.9, 1], duration: 260, ease: 'outBack(2)' });
+  if (k === 'del') digits = digits.slice(0, -1);
+  else if (!digits && (k === '0' || k === '1')) {
+    // US area codes never start with 0 or 1
+    if (!reduced) animate('.field', { x: [0, -6, 6, -3, 0], duration: 300 });
+    return;
+  } else if (digits.length < 10) digits += k;
+  render();
+}
+
+keypad.addEventListener('click', (e) => {
+  const k = e.target.closest('.key')?.dataset.k;
+  if (k && !busy) press(k);
+});
+addEventListener('keydown', (e) => {
+  if (!kbOn || busy || e.metaKey || e.ctrlKey || e.altKey) return;
+  if (/^\d$/.test(e.key)) press(e.key);
+  else if (e.key === 'Backspace') press('del');
+  else if (e.key === 'Enter') compose.requestSubmit();
+  else return;
+  e.preventDefault();
+});
+
+function openKeypad() {
+  if (kbOn) return;
+  kbOn = true;
+  chatView.classList.add('kb');
+  keypad.style.height = 'auto';
+  const h = keypad.offsetHeight;
+  if (reduced) return;
+  keypad.style.height = '0px';
+  animate(keypad, { height: [0, h], duration: 480, ease: 'outQuart' });
+}
+function closeKeypad() {
+  kbOn = false;
+  const done = () => chatView.classList.remove('kb');
+  if (reduced) return (keypad.style.height = '0px'), done();
+  animate(keypad, { height: 0, duration: 380, ease: 'inOutQuad', onComplete: done });
+}
+
 // ── scroll story ──
 const steps = [...rail.querySelectorAll('[data-step]')];
 // hidden steps collapse via negative margin so the thread grows from the bottom like iOS
 const shown = steps.map((el) => parseFloat(getComputedStyle(el).marginTop));
 const hidden = steps.map((el) => -el.offsetHeight);
-const pop = (el) => ({ transformOrigin: el.classList.contains('me') || el.classList.contains('receipt') ? '100% 100%' : '0% 100%' });
-
-const ready = () => {
-  compose.classList.add('ready');
-};
+const origin = (el) => (el.classList.contains('me') || el.classList.contains('receipt') ? '100% 100%' : '0% 100%');
 
 if (reduced) {
-  utils.set(['.off', '.lock'], { opacity: 0 });
+  utils.set(['.off', '.lock', '.lede'], { opacity: 0 });
   utils.set('.statusbar', { color: '#000' });
   utils.set(['.homebar', '#hint'], { opacity: 1 });
-  utils.set('.lede', { opacity: 0 });
   steps.filter((el) => el.hasAttribute('data-typing')).forEach((el) => el.remove());
-  ready();
+  openKeypad();
 } else {
-  steps.forEach((el, i) => utils.set(el, { opacity: 0, marginTop: hidden[i], scale: 0.6, ...pop(el) }));
+  steps.forEach((el, i) => {
+    el.style.transformOrigin = origin(el);
+    utils.set(el, { opacity: 0, marginTop: hidden[i], scale: 0.6 });
+  });
   utils.set('[data-notif]', { opacity: 0, y: -40, scale: 0.94 });
   utils.set('.statusbar', { opacity: 0 });
 
-  const tl = createTimeline({
+  // the conversation only moves forward: bubbles that appeared stay, even when you scroll back up
+  const chat = createTimeline({ autoplay: false });
+  const at = [0, 80, 130, 180, 220, 280, 305, 350, 390, 440];
+  steps.forEach((el, i) => {
+    chat.add(el, { opacity: [0, 1], marginTop: [hidden[i], shown[i]], scale: [0.6, 1], duration: 40, ease: 'outBack(1.4)' }, at[i]);
+    if (el.hasAttribute('data-typing')) chat.add(el, { opacity: [1, 0], marginTop: [shown[i], hidden[i]], duration: 30, ease: 'outQuad' }, at[i + 1] - 5);
+  });
+  let reached = 0;
+
+  createTimeline({
     defaults: { ease: 'outQuad', duration: 60 },
     autoplay: onScroll({ target: '#scroll', enter: 'top top', leave: 'bottom bottom', sync: 0.25 }),
-    onUpdate: (self) => compose.classList.toggle('ready', self.progress > 0.97),
+    onUpdate: (self) => {
+      const p = utils.clamp((self.currentTime - 480) / 470, 0, 1);
+      if (p <= reached) return;
+      reached = p;
+      chat.seek(p * chat.duration);
+      if (p === 1) openKeypad();
+    },
   })
     // pick the phone up off the table
     .add(phone, { rotateX: [62, 0], rotateZ: [-24, 0], rotateY: [14, 0], y: [300, 0], duration: 320, ease: 'inOutCubic' }, 0)
@@ -74,79 +163,67 @@ if (reduced) {
     .add('[data-notif]', { scale: [1, 1.06], opacity: [1, 0], duration: 50 }, 450)
     .add('.lock', { opacity: [1, 0], scale: [1, 1.08], duration: 60 }, 455)
     .add('.statusbar', { color: ['#fff', '#000'], duration: 30 }, 470)
-    .add('.homebar', { opacity: [0, 1], duration: 30 }, 470);
-
-  // the conversation, one bubble at a time
-  const at = [480, 560, 610, 660, 700, 760, 785, 830, 870, 920];
-  steps.forEach((el, i) => {
-    tl.add(el, { opacity: [0, 1], marginTop: [hidden[i], shown[i]], scale: [0.6, 1], duration: 40, ease: 'outBack(1.4)' }, at[i]);
-    if (el.hasAttribute('data-typing')) tl.add(el, { opacity: [1, 0], marginTop: [shown[i], hidden[i]], duration: 30 }, at[i + 1] - 5);
-  });
-  tl.add('#hint', { opacity: [0, 1], y: [10, 0], duration: 40 }, 950);
+    .add('.homebar', { opacity: [0, 1], duration: 30 }, 470)
+    .add('#hint', { opacity: [0, 1], y: [10, 0], duration: 40 }, 950);
 }
 
-// ── the real sign-up: type into the phone ──
-function bubble(cls, text) {
+// ── the real sign-up ──
+function bubble(cls, content) {
   const p = document.createElement('p');
   p.className = cls;
-  if (text instanceof Node) p.append(text);
-  else p.textContent = text;
-  p.style.transformOrigin = pop(p).transformOrigin;
+  if (content instanceof Node) p.append(content);
+  else p.textContent = content;
+  p.style.transformOrigin = origin(p);
   rail.append(p);
   if (!reduced) animate(p, { opacity: [0, 1], scale: [0.6, 1], duration: 380, ease: 'outBack(1.4)' });
   return p;
 }
 
-const say = async (text) => {
+const say = async (content) => {
   const dots = bubble('typing them', '');
   dots.innerHTML = '<i></i><i></i><i></i>';
   await new Promise((r) => setTimeout(r, reduced ? 0 : 900));
   dots.remove();
-  return bubble('b them', text);
+  return bubble('b them', content);
 };
 
-let busy = false;
 compose.addEventListener('submit', async (e) => {
   e.preventDefault();
-  const raw = input.value.trim();
-  if (!raw || busy) return;
+  if (digits.length !== 10 || busy) return;
   busy = true;
-  input.value = '';
+  const number = digits;
   rail.querySelectorAll('.receipt').forEach((r) => r.remove());
-  bubble('b me', raw);
-
-  const digits = raw.replace(/\D/g, '');
-  if (!(digits.length === 10 || (digits.length === 11 && digits[0] === '1'))) {
-    await say("I'll need your number to text you. Just the 10 digits works.");
-    busy = false;
-    input.focus();
-    return;
-  }
+  bubble('b me', fmt(number));
+  digits = '';
+  render();
 
   let reply;
+  let ok = false;
   try {
     const res = await fetch(`${API}/join`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ phone: raw }),
+      body: JSON.stringify({ phone: `+1${number}` }),
     });
-    if (res.ok) {
-      bubble('receipt', 'Delivered');
-      reply = 'Just texted you. Reply YES there to get started.';
-    } else {
-      reply = (await res.json().catch(() => ({}))).error ?? "That didn't go through. Try again in a minute.";
-    }
+    ok = res.ok;
+    reply = ok
+      ? 'Just texted you. Reply YES there to get started.'
+      : (await res.json().catch(() => ({}))).error ?? "That didn't go through. Try again in a minute.";
   } catch {
     reply = "I can't reach my phone right now. Try again in a minute.";
   }
-  if (SMS && !reply.startsWith('Just')) {
+  if (ok) {
+    bubble('receipt', 'Delivered');
+    closeKeypad();
+  }
+  await say(reply);
+  if (!ok && SMS) {
     const a = document.createElement('a');
     a.href = `sms:${SMS}&body=hi`;
     a.textContent = 'Or text me hi directly.';
-    await say(reply);
     await say(a);
-  } else {
-    await say(reply);
   }
   busy = false;
 });
+
+render();
