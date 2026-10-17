@@ -166,6 +166,7 @@ const hidden = steps.map((el) => -el.offsetHeight);
 const origin = (el) => (el.classList.contains('me') || el.classList.contains('receipt') ? '100% 100%' : '0% 100%');
 const root = document.documentElement;
 const hint = $('#hint');
+const cta = $('.hero-cta');
 
 // background: 0 = black with a faint aura, 1 = the full living color field
 const reveal = { v: reduced ? 1 : 0, goal: reduced ? 1 : 0 };
@@ -211,6 +212,7 @@ if (reduced) {
     const dt = last ? Math.min(now - last, 50) : 16;
     last = now;
     const sp = scrollPos();
+    cta.classList.toggle('gone', sp > 260); // faded out: don't leave an invisible link to click
     // color on past the unlock, off only once clearly back before it: the gap stops a scroll that
     // hovers near the line (or the observer's own jitter) from flicking it on and off
     if (sp > 470) reveal.goal = 1;
@@ -242,7 +244,7 @@ if (reduced) {
     // the phone turns over from its back and pulls away
     .add(phone, { rotateY: [200, 0], rotateX: [16, 0], rotateZ: [-8, 0], duration: 300, ease: 'inOutCubic' }, 0)
     .add(phone, { scale: [1.3, 0.82], y: [420, 100], duration: 300, ease: 'inOutCubic' }, 0)
-    .add('.lede', { opacity: [1, 0], y: [0, -40], duration: 50 }, 230)
+    .add(['.lede', '.hero-cta'], { opacity: [1, 0], y: [0, -40], duration: 50 }, 230)
     .add('.screen', { '--sheen': ['-60%', '60%'], duration: 520, ease: 'linear' }, 0)
     // wake, notify, swipe up to unlock
     .add('.off', { opacity: [1, 0], duration: 50 }, 270)
