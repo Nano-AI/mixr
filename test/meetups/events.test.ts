@@ -31,7 +31,7 @@ test('lists only open, future, matching, public meetups, best cosine first, max 
   for (const r of db.prepare('SELECT user_id FROM invitations WHERE meetup_id = ?').all(full.id) as any[]) await recordResponse(r.user_id, full.id, 'yes', NOW);
   const past = await propose({ activity: 'old game' });
   db.prepare('UPDATE meetups SET slot = ? WHERE id = ?').run(at(21, 17).toISOString(), past.id);
-  await propose({ activity: 'already invited', userIds: [u, makeUser(), makeUser()] });
+  await propose({ activity: 'already invited', slot: at(23, 17).toISOString(), userIds: [u, makeUser(), makeUser()] });
 
   await listPublicEvents(u, NOW);
   const [msg, ...rest] = texts(u);
@@ -42,6 +42,17 @@ test('lists only open, future, matching, public meetups, best cosine first, max 
   assert.match(lines[1], new RegExp(`^${close.id}\\) pickup soccer`));
   assert.match(lines[2], new RegExp(`^${chess.id}\\) chess`));
   assert.equal(lines[3], `Reply JOIN ${best.id}`);
+});
+
+test('lists nothing the user was ever invited to, nor anything at a slot they already hold', async () => {
+  const u = viewer();
+  const passed = await propose({ activity: 'passed game', slot: at(23, 12).toISOString(), userIds: [u, makeUser(), makeUser()] });
+  await recordResponse(u, passed.id, 'pass', NOW);
+  await propose({ kind: 'pair', activity: 'booked', visibility: 'private', userIds: [u, makeUser()] });
+  await propose({ activity: 'same slot game' });
+  const open = await propose({ activity: 'later game', slot: at(23, 17).toISOString() });
+  await listPublicEvents(u, NOW);
+  assert.deepEqual(texts(u), [`${open.id}) later game, Fri 5 PM at Denny Field (0/6)\nReply JOIN ${open.id}`]);
 });
 
 test('nothing matching sends the fallback', async () => {
@@ -76,4 +87,17 @@ test('7th joiner gets full and the count stays 6', async () => {
   for (let i = 0; i < 6; i++) await joinEvent(makeUser(), m.id, NOW);
   assert.equal((await joinEvent(makeUser(), m.id, NOW)).outcome, 'full');
   assert.equal((db.prepare("SELECT COUNT(*) c FROM invitations WHERE meetup_id = ? AND state = 'accepted'").get(m.id) as any).c, 6);
+});
+
+test('joinEvent on a started or ended meetup is closed, replies, and adds no invitation', async () => {
+  const u = viewer();
+  const m = await propose();
+  const started = at(22, 17);
+  assert.deepEqual(await joinEvent(u, m.id, started), { outcome: 'closed' });
+  assert.equal((db.prepare('SELECT text FROM message_jobs WHERE dedupe_key = ?').get(`reply:closed:${m.id}:${u}:${started.getTime()}`) as any).text, "That one closed. I'll find you another.");
+  for (const s of ['cancelled', 'expired', 'done']) {
+    db.prepare('UPDATE meetups SET state = ? WHERE id = ?').run(s, m.id);
+    assert.deepEqual(await joinEvent(u, m.id, NOW), { outcome: 'closed' }, s);
+  }
+  assert.equal((db.prepare('SELECT COUNT(*) c FROM invitations WHERE user_id = ?').get(u) as any).c, 0);
 });

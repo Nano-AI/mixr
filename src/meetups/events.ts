@@ -17,8 +17,10 @@ export async function listPublicEvents(userId: number, now = new Date(), dedupeK
     `SELECT m.*, (SELECT COUNT(*) FROM invitations i WHERE i.meetup_id = m.id AND i.state = 'accepted') AS n
      FROM meetups m
      WHERE m.visibility = 'public' AND m.state IN ('proposed', 'confirmed') AND m.slot > ?
-       AND NOT EXISTS (SELECT 1 FROM invitations i WHERE i.meetup_id = m.id AND i.user_id = ? AND i.state IN ('pending', 'accepted'))`,
-  ).all(now.toISOString(), userId) as Row[];
+       AND NOT EXISTS (SELECT 1 FROM invitations i WHERE i.meetup_id = m.id AND i.user_id = ?)
+       AND m.slot NOT IN (SELECT b.slot FROM invitations i JOIN meetups b ON b.id = i.meetup_id
+                          WHERE i.user_id = ? AND i.state IN ('pending', 'accepted') AND b.state IN ('proposed', 'confirmed'))`,
+  ).all(now.toISOString(), userId, userId) as Row[];
 
   const top = open
     .map((m) => ({ m, sim: Math.max(-1, ...mine.map((v) => cosine(v, fromBlob(m.embedding)))) }))
@@ -34,8 +36,12 @@ export async function listPublicEvents(userId: number, now = new Date(), dedupeK
 }
 
 export async function joinEvent(userId: number, meetupId: number, now = new Date()): Promise<ResponseResult> {
-  const m = db.prepare('SELECT visibility FROM meetups WHERE id = ?').get(meetupId) as Row | undefined;
+  const m = db.prepare('SELECT visibility, state, slot FROM meetups WHERE id = ?').get(meetupId) as Row | undefined;
   if (!m || m.visibility !== 'public') return { outcome: 'not_invited' };
+  if (!['proposed', 'confirmed'].includes(m.state) || now.getTime() >= new Date(m.slot).getTime()) {
+    await sendMessage(userId, "That one closed. I'll find you another.", `reply:closed:${meetupId}:${userId}:${now.getTime()}`);
+    return { outcome: 'closed' };
+  }
   db.prepare('INSERT OR IGNORE INTO invitations (meetup_id, user_id) VALUES (?, ?)').run(meetupId, userId);
   return recordResponse(userId, meetupId, 'yes', now);
 }
