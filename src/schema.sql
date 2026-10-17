@@ -56,6 +56,7 @@ CREATE TABLE IF NOT EXISTS invitations (
   state TEXT NOT NULL DEFAULT 'pending'
     CHECK (state IN ('pending','accepted','declined','cancelled','expired','full')),
   responded_at TEXT,
+  place_suggestion TEXT,                            -- place id voted for via "YES 12 cafe allegro"
   PRIMARY KEY (meetup_id, user_id)
 );
 CREATE TABLE IF NOT EXISTS message_jobs (
