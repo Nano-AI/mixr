@@ -65,7 +65,7 @@ class OpenAiLlm implements Llm {
 // Deterministic stand-in for tests and credit-free dev. Register handlers per call name.
 export class FakeLlm implements Llm {
   jsonHandlers = new Map<string, (req: JsonRequest) => unknown>();
-  agentHandler: (req: AgentRequest) => AgentResponse = (req) => {
+  agentHandler: (req: AgentRequest) => AgentResponse | Promise<AgentResponse> = (req) => {
     const last = [...req.input].reverse().find((i) => 'role' in i && i.role === 'user') as { content: string } | undefined;
     return { text: `(fake agent) got: ${last?.content ?? ''}`, calls: [] };
   };
