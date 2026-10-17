@@ -1,0 +1,19 @@
+{
+  "name": "mixr",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "start": "TZ=America/Los_Angeles node src/server.ts",
+    "chat": "TZ=America/Los_Angeles TRANSPORT=console node scripts/chat.ts",
+    "seed": "TZ=America/Los_Angeles node scripts/seed.ts",
+    "test": "DB_PATH=:memory: LLM=fake TRANSPORT=console TZ=America/Los_Angeles node --test 'test/**/*.test.ts'",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.5",
+    "typescript": "^7.0.2"
+  }
+}

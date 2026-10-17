@@ -1,0 +1,13 @@
+export type Category = 'sport' | 'talk' | 'other';
+export type Interest = { label: string; kind: 'does' | 'wants_to_try'; level: 'new' | 'casual' | 'experienced'; category: Category };
+export type Profile = { summary: string; interests: Interest[]; vibe: string; constraints: string[]; question?: string };
+export type MeetupKind = 'pair' | 'group';
+export type Query = { label: string; vector: Float32Array };
+export type Criteria = { query: Query[]; kind: MeetupKind; slot?: string; excludeUserIds?: number[]; limit?: number };
+export type Candidate = { userId: number; name: string; score: number; label: string; vector: Float32Array; reason: string };
+export type ProposalDetails = { kind: MeetupKind; activity: string; category: Category; vector: Float32Array; slot: string; userIds: number[]; visibility: 'public' | 'private'; hostUserId?: number; reason?: string };
+export type Meetup = { id: number; kind: MeetupKind; activity: string; category: Category; placeId: string; slot: string; minSize: number; maxSize: number; deadline: string; visibility: 'public' | 'private'; state: 'proposed' | 'confirmed' | 'expired' | 'cancelled' | 'done' };
+export type Reply = 'yes' | 'pass' | 'cancel';
+export type ResponseResult = { outcome: 'accepted' | 'confirmed' | 'declined' | 'cancelled' | 'full' | 'closed' | 'not_invited' };
+export type SendResult = 'sent' | 'duplicate' | 'failed' | 'opted_out';
+export type Inbound = { from: string; text: string; providerId: string };
