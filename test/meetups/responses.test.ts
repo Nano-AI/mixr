@@ -3,7 +3,9 @@ import assert from 'node:assert/strict';
 import { db, fromBlob, reset } from '../../src/db.ts';
 import { createProposal } from '../../src/meetups/proposals.ts';
 import { recordResponse, openInvitations } from '../../src/meetups/responses.ts';
+import { tick } from '../../src/meetups/scheduler.ts';
 import { cosine } from '../../src/matching/vectors.ts';
+import { placeOf } from '../../src/meetups/places.ts';
 import { makeUser, axis } from '../helpers.ts';
 import type { ProposalDetails } from '../../src/types.ts';
 
@@ -23,6 +25,8 @@ const inv = (id: number, u: number) => (db.prepare('SELECT * FROM invitations WH
 const meetup = (id: number) => db.prepare('SELECT * FROM meetups WHERE id = ?').get(id) as any;
 const jobs = (like: string) => db.prepare('SELECT * FROM message_jobs WHERE dedupe_key LIKE ?').all(like) as any[];
 const count = (id: number, state: string) => (db.prepare('SELECT COUNT(*) c FROM invitations WHERE meetup_id = ? AND state = ?').get(id, state) as any).c;
+const CLOSED = "That one closed. I'll find you another.";
+const reply = (tag: string, id: number, u: number, when = NOW) => jobs(`reply:${tag}:${id}:${u}:${when.getTime()}`)[0]?.text;
 
 test('3 of 4 yes confirms and sends one confirm job per accepted user', async () => {
   const { m, userIds } = await setup();
@@ -49,6 +53,17 @@ test('yes at max_size is full and the count stays', async () => {
   assert.equal((await recordResponse(userIds[6], m.id, 'yes', NOW)).outcome, 'full');
   assert.equal(inv(m.id, userIds[6]).state, 'full');
   assert.equal(count(m.id, 'accepted'), 6);
+  assert.equal((await recordResponse(userIds[6], m.id, 'yes', at(22, 11))).outcome, 'closed');
+  assert.equal(reply('closed', m.id, userIds[6], at(22, 11)), CLOSED);
+});
+
+test('two YES replies racing for the last seat: one gets in, one is full', async () => {
+  const { m, userIds } = await setup(7);
+  for (const u of userIds.slice(0, 5)) await recordResponse(u, m.id, 'yes', NOW);
+  const outs = (await Promise.all(userIds.slice(5).map((u) => recordResponse(u, m.id, 'yes', NOW)))).map((r) => r.outcome);
+  assert.equal(outs.filter((o) => o === 'confirmed' || o === 'accepted').length, 1);
+  assert.equal(outs.filter((o) => o === 'full').length, 1);
+  assert.equal(count(m.id, 'accepted'), meetup(m.id).max_size);
 });
 
 test('same user yes twice is a no-op', async () => {
@@ -75,6 +90,27 @@ test('not invited, pass', async () => {
   assert.equal((await recordResponse(makeUser(), m.id, 'yes', NOW)).outcome, 'not_invited');
   assert.equal((await recordResponse(userIds[0], m.id, 'pass', NOW)).outcome, 'declined');
   assert.equal(inv(m.id, userIds[0]).state, 'declined');
+});
+
+test('every reply gets an answer: cancel/pass on accepted, yes after pass, cancel on pending or declined', async () => {
+  const { m, userIds } = await setup(4);
+  const [a, b, c, d] = userIds;
+  const T = at(22, 10, 5);
+  await recordResponse(a, m.id, 'yes', NOW);
+  assert.equal((await recordResponse(a, m.id, 'cancel', T)).outcome, 'cancelled');
+  assert.equal(reply('cancel', m.id, a, T), "Got it, you're out of ultimate frisbee.");
+  await recordResponse(b, m.id, 'yes', NOW);
+  assert.equal((await recordResponse(b, m.id, 'pass', T)).outcome, 'cancelled');
+  assert.equal(inv(m.id, b).state, 'cancelled');
+  assert.equal(reply('cancel', m.id, b, T), "Got it, you're out of ultimate frisbee.");
+  await recordResponse(c, m.id, 'pass', NOW);
+  assert.equal((await recordResponse(c, m.id, 'yes', T)).outcome, 'closed');
+  assert.equal(reply('closed', m.id, c, T), CLOSED);
+  assert.equal((await recordResponse(c, m.id, 'cancel', at(22, 10, 6))).outcome, 'closed');
+  assert.equal(reply('closed', m.id, c, at(22, 10, 6)), CLOSED);
+  assert.equal((await recordResponse(d, m.id, 'cancel', T)).outcome, 'closed');
+  assert.equal(inv(m.id, d).state, 'pending');
+  assert.equal(reply('closed', m.id, d, T), CLOSED);
 });
 
 async function confirmed() {
@@ -122,10 +158,44 @@ test('bias moves the meetup embedding toward accepted members', async () => {
 test('openInvitations', async () => {
   const { m, userIds } = await setup();
   await recordResponse(userIds[0], m.id, 'yes', NOW);
-  assert.deepEqual(openInvitations(userIds[0], 'yes'), []);
-  assert.deepEqual(openInvitations(userIds[0], 'cancel'), [m.id]);
-  assert.deepEqual(openInvitations(userIds[1], 'yes'), [m.id]);
-  assert.deepEqual(openInvitations(userIds[1], 'pass'), [m.id]);
+  assert.deepEqual(openInvitations(userIds[0], 'yes', NOW), []);
+  assert.deepEqual(openInvitations(userIds[0], 'cancel', NOW), [m.id]);
+  assert.deepEqual(openInvitations(userIds[1], 'yes', NOW), [m.id]);
+  assert.deepEqual(openInvitations(userIds[1], 'pass', NOW), [m.id]);
+});
+
+test('openInvitations skips started, done, expired and cancelled meetups', async () => {
+  const { m, userIds } = await setup();
+  await recordResponse(userIds[0], m.id, 'yes', NOW);
+  const set = (state: string) => db.prepare('UPDATE meetups SET state = ? WHERE id = ?').run(state, m.id);
+  assert.deepEqual(openInvitations(userIds[0], 'cancel', at(22, 17)), []);
+  assert.deepEqual(openInvitations(userIds[1], 'yes', at(22, 17)), []);
+  for (const state of ['done', 'expired', 'cancelled']) {
+    set(state);
+    assert.deepEqual(openInvitations(userIds[0], 'cancel', NOW), [], state);
+    assert.deepEqual(openInvitations(userIds[1], 'yes', NOW), [], state);
+  }
+});
+
+test('after the slot starts YES is closed and changes nothing', async () => {
+  const { m, userIds } = await setup(4);
+  for (const u of userIds.slice(0, 3)) await recordResponse(u, m.id, 'yes', NOW);
+  assert.equal((await recordResponse(userIds[3], m.id, 'yes', at(22, 17))).outcome, 'closed');
+  assert.equal(inv(m.id, userIds[3]).state, 'pending');
+  assert.equal(reply('closed', m.id, userIds[3], at(22, 17)), CLOSED);
+});
+
+test('CANCEL after the slot starts only releases the seat; the meetup still ends with feedback', async () => {
+  const { m, userIds } = await confirmed();
+  const t = at(22, 17, 30);
+  assert.equal((await recordResponse(userIds[0], m.id, 'cancel', t)).outcome, 'cancelled');
+  assert.equal(inv(m.id, userIds[0]).state, 'cancelled');
+  assert.equal(meetup(m.id).state, 'confirmed');
+  assert.equal(jobs('cancel:%').length + jobs('off:%').length, 0);
+  assert.equal(reply('cancel', m.id, userIds[0], t), "Got it, you're out of ultimate frisbee.");
+  await tick(at(22, 19), async () => 0);
+  assert.equal(meetup(m.id).state, 'done');
+  assert.deepEqual(db.prepare('SELECT user_id FROM feedback WHERE meetup_id = ? ORDER BY user_id').all(m.id).map((r: any) => r.user_id), userIds.slice(1));
 });
 
 test('location votes: majority place wins at confirmation', async () => {
@@ -145,7 +215,7 @@ test('unrecognized suggestion is accepted but stores nothing', async () => {
   assert.equal(inv(m.id, userIds[0]).state, 'accepted');
   assert.equal(inv(m.id, userIds[0]).place_suggestion, null);
   assert.equal(meetup(m.id).place_id, place);
-  assert.match(jobs(`%${m.id}:${userIds[0]}%`).at(-1).text, /I don't know that spot, so I'll stick to campus spots I know\./);
+  assert.equal(jobs(`%${m.id}:${userIds[0]}%`).at(-1).text, "You're in. I'll confirm once 2 more say yes.");
 });
 
 test('suggestion on a confirmed meetup is ignored', async () => {
@@ -168,6 +238,18 @@ test('re-confirmation after a reopen reaches old and new members', async () => {
     assert.equal(sent.length, u === spare ? 1 : 2);
     assert.match(sent.at(-1).text, new RegExp(`Going: .*User${spare}`.replace(/User(\d+)/, (_, n) => (db.prepare('SELECT name FROM users WHERE id = ?').get(spare) as any).name)));
   }
+});
+
+test('a reopened meetup keeps the place it first confirmed at', async () => {
+  const { m, userIds } = await setup(3, { category: 'talk' });
+  for (const u of userIds) await recordResponse(u, m.id, 'yes', NOW);
+  const place = meetup(m.id).place_id;
+  const spare = makeUser();
+  await recordResponse(userIds[0], m.id, 'cancel', at(22, 12));
+  await recordResponse(spare, m.id, 'yes', at(22, 12, 30), 'cafe allegro');
+  assert.equal(meetup(m.id).state, 'confirmed');
+  assert.equal(meetup(m.id).place_id, place);
+  assert.match(jobs(`confirm:${m.id}:${spare}:%`)[0].text, new RegExp(`at ${placeOf(place).name}\\.`));
 });
 
 test('cancel on a proposed meetup below min re-evaluates and backfills', async () => {

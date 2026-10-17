@@ -51,18 +51,24 @@ export async function recordResponse(userId: number, proposalId: number, reply: 
     if (!inv) return { outcome: 'not_invited' };
     const m = meetupRow(proposalId);
     const say = (text: string, tag: string) => msgs.push([userId, text, `reply:${tag}:${proposalId}:${userId}:${now.getTime()}`]);
-
-    if (['expired', 'cancelled', 'done'].includes(m.state) || (m.state === 'proposed' && now.toISOString() > m.deadline)) {
+    const closed = (): ResponseResult => {
       say("That one closed. I'll find you another.", 'closed');
       return { outcome: 'closed' };
-    }
+    };
+    const started = now.getTime() >= new Date(m.slot).getTime();
+
+    if (['expired', 'cancelled', 'done'].includes(m.state) || (m.state === 'proposed' && now.toISOString() > m.deadline) || (reply === 'yes' && started)) return closed();
     const set = (state: string, place?: string | null) =>
       db.prepare('UPDATE invitations SET state = ?, responded_at = ?, place_suggestion = COALESCE(?, place_suggestion) WHERE meetup_id = ? AND user_id = ?').run(state, now.toISOString(), place ?? null, proposalId, userId);
     const name = first((db.prepare('SELECT name FROM users WHERE id = ?').get(userId) as Row).name);
 
-    if (reply === 'cancel') {
-      if (inv.state !== 'accepted') return { outcome: 'closed' };
+    // PASS on an accepted invite means the same as CANCEL.
+    if (reply === 'cancel' || (reply === 'pass' && inv.state === 'accepted')) {
+      if (inv.state !== 'accepted') return closed();
       set('cancelled');
+      say(`Got it, you're out of ${m.activity}.`, 'cancel');
+      // Already under way: release the seat only. No re-evaluation, so the meetup still reaches done with feedback.
+      if (started) return { outcome: 'cancelled' };
       const left = accepted(proposalId);
       for (const u of left) msgs.push([u.id, `${name} can't make it.`, `cancel:${proposalId}:${userId}:${u.id}`]);
       if (left.length < m.min_size) {
@@ -77,7 +83,8 @@ export async function recordResponse(userId: number, proposalId: number, reply: 
       return { outcome: 'cancelled' };
     }
 
-    if (inv.state !== 'pending') return { outcome: inv.state === 'accepted' && reply === 'yes' ? (m.state === 'confirmed' ? 'confirmed' : 'accepted') : 'closed' };
+    // A repeat YES stays silent (dedupes replays); everything else here is closed.
+    if (inv.state !== 'pending') return inv.state === 'accepted' && reply === 'yes' ? { outcome: m.state === 'confirmed' ? 'confirmed' : 'accepted' } : closed();
     if (reply === 'pass') {
       set('declined');
       say('No worries.', 'pass');
@@ -89,7 +96,9 @@ export async function recordResponse(userId: number, proposalId: number, reply: 
       say("It filled up, you're first in line next time.", 'full');
       return { outcome: 'full' };
     }
-    const spot = m.state === 'proposed' && suggestion?.trim() ? findPlace(suggestion) : undefined;
+    // The place locks at the first confirmation; a reopened meetup keeps it.
+    const locked = !!db.prepare('SELECT 1 FROM message_jobs WHERE dedupe_key LIKE ?').get(`confirm:${proposalId}:%`);
+    const spot = m.state === 'proposed' && !locked && suggestion?.trim() ? findPlace(suggestion) : undefined;
     set('accepted', spot?.id);
     const members = accepted(proposalId);
     rebias(m, members);
@@ -100,13 +109,12 @@ export async function recordResponse(userId: number, proposalId: number, reply: 
       return { outcome: 'confirmed' };
     }
     if (members.length >= m.min_size) {
-      m.place_id = tallyPlace(m, members);
+      if (!locked) m.place_id = tallyPlace(m, members);
       db.prepare("UPDATE meetups SET state = 'confirmed', place_id = ? WHERE id = ?").run(m.place_id, proposalId);
       for (const u of members) msgs.push([u.id, confirmText(m, members), `confirm:${proposalId}:${u.id}:${userId}`]);
       return { outcome: 'confirmed' };
     }
-    const note = spot ? ` Noted your vote for ${spot.name}.` : suggestion?.trim() ? " I don't know that spot, so I'll stick to campus spots I know." : '';
-    say(`You're in. I'll confirm once ${m.min_size - members.length} more say yes.${note}`, 'yes');
+    say(`You're in. I'll confirm once ${m.min_size - members.length} more say yes.${spot ? ` Noted your vote for ${spot.name}.` : ''}`, 'yes');
     return { outcome: 'accepted' };
   });
   // Sent after commit, never inside the transaction.
@@ -134,8 +142,11 @@ export async function backfill(meetupId: number, now = new Date()): Promise<void
   for (const [u, text, key] of msgs) await sendMessage(u, text, key);
 }
 
-// Meetup ids the user can answer: `pending` invitations for yes/pass, `accepted` for cancel.
-export function openInvitations(userId: number, reply: Reply): number[] {
+// Meetup ids the user can answer: `pending` invitations for yes/pass, `accepted` for cancel, on live meetups that haven't started.
+export function openInvitations(userId: number, reply: Reply, now = new Date()): number[] {
   const state = reply === 'cancel' ? 'accepted' : 'pending';
-  return (db.prepare('SELECT meetup_id FROM invitations WHERE user_id = ? AND state = ? ORDER BY meetup_id').all(userId, state) as Row[]).map((r) => r.meetup_id);
+  return (db.prepare(
+    `SELECT i.meetup_id FROM invitations i JOIN meetups m ON m.id = i.meetup_id
+     WHERE i.user_id = ? AND i.state = ? AND m.state IN ('proposed', 'confirmed') AND m.slot > ? ORDER BY i.meetup_id`,
+  ).all(userId, state, now.toISOString()) as Row[]).map((r) => r.meetup_id);
 }
