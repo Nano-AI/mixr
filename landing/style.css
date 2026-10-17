@@ -1,4 +1,10 @@
+/* registered so the page can fade from black to light instead of snapping */
+@property --bg { syntax: "<color>"; inherits: true; initial-value: #000; }
+@property --fg { syntax: "<color>"; inherits: true; initial-value: #f5f6fb; }
+:root.lit { --bg: var(--page); --fg: var(--ink); }
+
 :root {
+  transition: --bg .7s ease, --fg .7s ease;
   --page: #f5f6fb;
   --ink: #22272b;         /* the logo wordmark's ink */
   --bg: #000;             /* animated: black until the unlock, then the color burst lands on --page */
