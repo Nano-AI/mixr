@@ -83,3 +83,53 @@ test('tick calls the plan function with now', async () => {
   await tick(NOW, async (n) => { got = n; return 0; });
   assert.equal(got, NOW);
 });
+
+test('crash after commit: expired meetup with no messages is still told, once', async () => {
+  const { m } = await setup(2);
+  db.prepare("UPDATE meetups SET state = 'expired' WHERE id = ?").run(m.id);
+  db.prepare('DELETE FROM message_jobs').run();
+  const t = afterDeadline(m.deadline);
+  await tick(t, noPlan);
+  assert.equal(jobs('expire').length, 2);
+  await tick(t, noPlan);
+  assert.equal(jobs('expire').length, 2);
+});
+
+test('crash after commit: done meetup with outstanding feedback rows is still asked, once', async () => {
+  const { m, users } = await setup(3);
+  db.prepare("UPDATE meetups SET state = 'done' WHERE id = ?").run(m.id);
+  for (const u of users) db.prepare('INSERT INTO feedback (meetup_id, user_id) VALUES (?, ?)').run(m.id, u);
+  db.prepare('DELETE FROM message_jobs').run();
+  await tick(at(22, 19), noPlan);
+  assert.equal(jobs('feedback').length, 3);
+  await tick(at(22, 19), noPlan);
+  assert.equal(jobs('feedback').length, 3);
+});
+
+test('feedback retry stops once the slot is more than 24h old', async () => {
+  const { m, users } = await setup(3);
+  db.prepare("UPDATE meetups SET state = 'done' WHERE id = ?").run(m.id);
+  for (const u of users) db.prepare('INSERT INTO feedback (meetup_id, user_id) VALUES (?, ?)').run(m.id, u);
+  db.prepare('DELETE FROM message_jobs').run();
+  await tick(at(24, 19), noPlan);
+  assert.equal(jobs('feedback').length, 0);
+});
+
+test('a failing send does not stop the rest of tick, and is retried next tick', async () => {
+  const { m } = await setup(3);
+  const orig = console.error;
+  console.error = () => {};
+  db.exec("CREATE TRIGGER boom BEFORE INSERT ON message_jobs WHEN NEW.dedupe_key LIKE 'remind:%' BEGIN SELECT RAISE(ABORT, 'boom'); END");
+  let planned = false;
+  try {
+    await tick(at(22, 15), async () => { planned = true; return 0; });
+  } finally {
+    db.exec('DROP TRIGGER boom');
+    console.error = orig;
+  }
+  assert.ok(planned);
+  assert.equal(jobs('remind').length, 0);
+  await tick(at(22, 15, 1), noPlan);
+  assert.equal(jobs('remind').length, 3);
+  assert.equal(state(m.id), 'confirmed');
+});
