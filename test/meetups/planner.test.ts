@@ -7,7 +7,7 @@ import { makeUser, axis } from '../helpers.ts';
 import type { Candidate, Criteria } from '../../src/types.ts';
 
 // Oct 22 2026 is a Thursday. Tests run with TZ=America/Los_Angeles.
-const at = (d: number, h: number) => new Date(2026, 9, d, h);
+const at = (d: number, h: number, m = 0) => new Date(2026, 9, d, h, m);
 const NOW = at(22, 10);
 const SLOT = at(22, 17).toISOString();
 const MIN_SIM = 0.45; // mirrors J3's floor
@@ -96,4 +96,40 @@ test('a user with axis(0) and axis(5) interests lands in an axis(5) group', asyn
   const [m] = meetups();
   assert.deepEqual([m.kind, m.activity, m.category], ['group', 'chess', 'talk']);
   assert.deepEqual(invites(m.id), [multi, ...others]);
+});
+
+// An old meetup created at `created`, with each user's invitation in the given state.
+const history = (state: string, created: Date, invs: [number, string][]) => {
+  const m = db.prepare(
+    "INSERT INTO meetups (kind, activity, category, place_id, slot, min_size, max_size, deadline, visibility, seed_embedding, embedding, state, created_at) VALUES ('group','x','sport','p',?,3,6,?,'public',x'00',x'00',?,datetime(?))",
+  ).run(at(21, 17).toISOString(), at(21, 15).toISOString(), state, created.toISOString());
+  for (const [u, s] of invs) db.prepare('INSERT INTO invitations (meetup_id, user_id, state) VALUES (?, ?, ?)').run(m.lastInsertRowid, u, s);
+};
+
+test('cooldown: declined, expired, or on an expired meetup in the last 24h means skipped', async () => {
+  reset();
+  const ids = [0, 1, 2, 3].map(() => like(axis(0)));
+  history('cancelled', at(21, 11), [[ids[0], 'declined'], [ids[1], 'expired']]);
+  history('expired', at(21, 11), [[ids[2], 'accepted']]);
+  assert.equal(await plan(), 0);
+  db.prepare('UPDATE meetups SET created_at = datetime(?)').run(at(21, 9).toISOString());
+  assert.equal(await plan(), 1);
+  assert.deepEqual(invites(meetups().at(-1).id), ids);
+});
+
+test('quiet hours: nothing is planned before 8 AM or from 10 PM', async () => {
+  reset();
+  [0, 1, 2].map(() => like(axis(0)));
+  assert.equal(await planMeetups(at(22, 7, 59), fakeFind), 0);
+  assert.equal(await planMeetups(at(21, 22), fakeFind), 0);
+  assert.equal(meetups().length, 0);
+  assert.equal(await planMeetups(at(22, 8), fakeFind), 1);
+});
+
+test('a proposer with no interests is skipped, not a crash', async () => {
+  reset();
+  makeUser({ slots: [SLOT] });
+  const other = like(axis(0));
+  const find = (c: Criteria): Candidate[] => (c.excludeUserIds ?? []).includes(other) ? [] : [{ userId: other, name: 'x', score: 1, label: 'frisbee', vector: axis(0), reason: 'r' }];
+  assert.equal(await planMeetups(NOW, find), 0);
 });

@@ -2,21 +2,27 @@ import { db, fromBlob } from '../db.ts';
 import { findCandidates } from '../matching/candidates.ts';
 import { cosine, mean } from '../matching/vectors.ts';
 import { createProposal } from './proposals.ts';
-import { upcomingSlots } from './slots.ts';
+import { HOUR, upcomingSlots } from './slots.ts';
 import type { Candidate, Category, Query } from '../types.ts';
 
 export const GROUP_MIN_SIM = 0.5; // tune: candidate vs. running group centroid
 const GROUP_MAX = 6;
 const GROUP_MIN = 3;
+const COOLDOWN_H = 24; // tune: after a decline or an expiry, leave the user alone this long
+const QUIET_END_H = 8; // tune: local hour planning starts
+const QUIET_START_H = 22; // tune: local hour planning stops
 
 type Interest = Query & { category: Category };
 
 // Greedy pass over unbusy users, oldest first. Idempotent: invited users count as busy.
+// Users who declined, or whose invite or meetup expired, sit out COOLDOWN_H. Nothing is sent in quiet hours.
 export async function planMeetups(now: Date, find = findCandidates): Promise<number> {
+  if (now.getHours() < QUIET_END_H || now.getHours() >= QUIET_START_H) return 0;
   const busy = new Set((db.prepare(
     `SELECT DISTINCT i.user_id FROM invitations i JOIN meetups m ON m.id = i.meetup_id
-     WHERE i.state IN ('pending','accepted') AND m.state IN ('proposed','confirmed') AND m.slot > ?`,
-  ).all(now.toISOString()) as { user_id: number }[]).map((r) => r.user_id));
+     WHERE (i.state IN ('pending','accepted') AND m.state IN ('proposed','confirmed') AND m.slot > ?)
+        OR ((i.state IN ('declined','expired') OR m.state = 'expired') AND m.created_at > datetime(?))`,
+  ).all(now.toISOString(), new Date(now.getTime() - COOLDOWN_H * HOUR).toISOString()) as { user_id: number }[]).map((r) => r.user_id));
   const users = db.prepare(
     `SELECT u.id, u.mode FROM users u JOIN profiles p ON p.user_id = u.id
      WHERE u.step = 'active' AND u.opted_out = 0 AND p.confirmed = 1 ORDER BY u.id`,
@@ -26,10 +32,11 @@ export async function planMeetups(now: Date, find = findCandidates): Promise<num
 
   for (const u of users) {
     if (busy.has(u.id)) continue;
-    const have = new Set((db.prepare('SELECT slot FROM availability WHERE user_id = ?').all(u.id) as { slot: string }[]).map((r) => r.slot));
-    const slots = upcoming.filter((s) => have.has(s));
     const interests = (db.prepare('SELECT label, category, embedding FROM interests WHERE user_id = ?').all(u.id) as { label: string; category: Category; embedding: Uint8Array }[])
       .map((r): Interest => ({ label: r.label, category: r.category, vector: fromBlob(r.embedding) }));
+    if (!interests.length) continue;
+    const have = new Set((db.prepare('SELECT slot FROM availability WHERE user_id = ?').all(u.id) as { slot: string }[]).map((r) => r.slot));
+    const slots = upcoming.filter((s) => have.has(s));
     const exclude = () => [u.id, ...busy];
     const propose = async (userIds: number[], d: { kind: 'pair' | 'group'; activity: string; category: Category; vector: Float32Array; slot: string; reason: string }) => {
       await createProposal({ ...d, userIds, visibility: d.kind === 'group' ? 'public' : 'private' }, now);
