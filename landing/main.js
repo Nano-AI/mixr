@@ -59,46 +59,69 @@ for (const [k, sub] of KEYS) {
 let digits = '';
 let busy = false;
 let kbOn = false;
+const num = $('#num'); // real (visually hidden) input: keyboard, paste and autofill all land here
 // (425) 340-5583, built as you type
 const fmt = (d) => (d.length < 4 ? (d ? `(${d}` : '') : d.length < 7 ? `(${d.slice(0, 3)}) ${d.slice(3)}` : `(${d.slice(0, 3)}) ${d.slice(3, 6)}-${d.slice(6)}`);
 const render = () => {
+  num.value = digits;
   typed.textContent = fmt(digits);
   typed.toggleAttribute('data-empty', !digits);
   sendBtn.disabled = digits.length !== 10;
 };
 
-function press(k) {
+function flash(k) {
   const btn = keypad.querySelector(`[data-k="${k}"]`);
+  if (!btn) return;
   btn.classList.add('down');
   setTimeout(() => btn.classList.remove('down'), 150);
   if (!reduced) animate(btn, { scale: [0.9, 1], duration: 260, ease: 'outBack(2)' });
-  if (k === 'del') digits = digits.slice(0, -1);
-  else if (!digits && (k === '0' || k === '1')) {
+}
+const shake = () => !reduced && animate('.field', { x: [0, -6, 6, -3, 0], duration: 300 });
+
+// every change goes through here, whether it came from the pad, the keyboard or autofill
+function setDigits(next) {
+  if (busy) return render();
+  let d = next.replace(/\D/g, '');
+  if (d.length === 11 && d[0] === '1') d = d.slice(1); // pasted or autofilled +1
+  if (/^[01]/.test(d)) {
     // US area codes never start with 0 or 1
-    if (!reduced) animate('.field', { x: [0, -6, 6, -3, 0], duration: 300 });
-    return;
-  } else if (digits.length < 10) digits += k;
+    shake();
+    d = d.replace(/^[01]+/, '');
+  }
+  d = d.slice(0, 10);
+  if (d.length > digits.length) flash(d.at(-1));
+  else if (d.length < digits.length) flash('del');
+  digits = d;
   render();
 }
 
+keypad.addEventListener('mousedown', (e) => e.preventDefault()); // keep focus in the input
 keypad.addEventListener('click', (e) => {
   const k = e.target.closest('.key')?.dataset.k;
-  if (k && !busy) press(k);
+  if (!k) return;
+  setDigits(k === 'del' ? digits.slice(0, -1) : digits + k);
+  num.focus({ preventScroll: true });
 });
-addEventListener('keydown', (e) => {
-  if (busy || e.metaKey || e.ctrlKey || e.altKey) return;
-  // typing a digit anywhere jumps to the phone and opens the pad, so the keyboard always works
-  if (/^\d$/.test(e.key) && !kbOn) {
-    const end = $('#scroll');
-    scrollTo({ top: end.offsetTop + end.offsetHeight - innerHeight, behavior: reduced ? 'auto' : 'smooth' });
-    openKeypad();
+compose.addEventListener('click', () => {
+  openKeypad();
+  num.focus({ preventScroll: true });
+});
+num.addEventListener('input', () => setDigits(num.value));
+num.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    compose.requestSubmit();
   }
-  if (!kbOn) return;
-  if (/^\d$/.test(e.key)) press(e.key);
-  else if (e.key === 'Backspace') press('del');
-  else if (e.key === 'Enter') compose.requestSubmit();
-  else return;
+});
+// a digit typed anywhere on the page jumps to the phone and starts the number
+addEventListener('keydown', (e) => {
+  if (e.target === num || e.metaKey || e.ctrlKey || e.altKey || !/^\d$/.test(e.key)) return;
   e.preventDefault();
+  const end = $('#scroll');
+  if (scrollY < end.offsetTop + end.offsetHeight * 0.6) scrollTo({ top: end.offsetTop + end.offsetHeight - innerHeight, behavior: reduced ? 'auto' : 'smooth' });
+  openKeypad();
+  num.focus({ preventScroll: true });
+  setDigits(digits + e.key);
 });
 
 function openKeypad() {
@@ -107,12 +130,14 @@ function openKeypad() {
   chatView.classList.add('kb');
   keypad.style.height = 'auto';
   const h = keypad.offsetHeight;
-  if (reduced) return;
-  keypad.style.height = '0px';
-  animate(keypad, { height: [0, h], duration: 480, ease: 'outQuart' });
+  if (!reduced) {
+    keypad.style.height = '0px';
+    animate(keypad, { height: [0, h], duration: 480, ease: 'outQuart' });
+  }
 }
 function closeKeypad() {
   kbOn = false;
+  num.blur();
   const done = () => chatView.classList.remove('kb');
   if (reduced) return (keypad.style.height = '0px'), done();
   animate(keypad, { height: 0, duration: 380, ease: 'inOutQuad', onComplete: done });
@@ -124,11 +149,15 @@ const steps = [...rail.querySelectorAll('[data-step]')];
 const shown = steps.map((el) => parseFloat(getComputedStyle(el).marginTop));
 const hidden = steps.map((el) => -el.offsetHeight);
 const origin = (el) => (el.classList.contains('me') || el.classList.contains('receipt') ? '100% 100%' : '0% 100%');
+const root = document.documentElement;
 
 if (reduced) {
   utils.set(['.off', '.lock', '.lede'], { opacity: 0 });
   utils.set('.statusbar', { color: '#000' });
   utils.set(['.homebar', '#hint'], { opacity: 1 });
+  utils.set('.burst', { scale: 1 });
+  root.style.setProperty('--bg', '#f5f6fb');
+  root.style.setProperty('--fg', '#22272b');
   steps.filter((el) => el.hasAttribute('data-typing')).forEach((el) => el.remove());
   openKeypad();
 } else {
@@ -137,7 +166,7 @@ if (reduced) {
     utils.set(el, { opacity: 0, marginTop: hidden[i], scale: 0.6 });
   });
   utils.set('[data-notif]', { opacity: 0, y: -40, scale: 0.94 });
-  utils.set('.statusbar', { opacity: 0 });
+  utils.set(['.statusbar', '.touch'], { opacity: 0 });
 
   // the conversation only moves forward: bubbles that appeared stay, even when you scroll back up
   const chat = createTimeline({ autoplay: false });
@@ -152,29 +181,37 @@ if (reduced) {
     defaults: { ease: 'outQuad', duration: 60 },
     autoplay: onScroll({ target: '#scroll', enter: 'top top', leave: 'bottom bottom', sync: 0.25 }),
     onUpdate: (self) => {
-      const p = utils.clamp((self.currentTime - 510) / 440, 0, 1);
+      const p = utils.clamp((self.currentTime - 540) / 410, 0, 1);
       if (p <= reached) return;
       reached = p;
       chat.seek(p * chat.duration);
       if (p === 1) openKeypad();
     },
   })
-    // pick the phone up off the table
-    .add(phone, { rotateX: [62, 0], rotateZ: [-24, 0], rotateY: [14, 0], y: [110, 0], duration: 300, ease: 'inOutCubic' }, 0)
-    .add('.lede', { opacity: [1, 0], y: [0, -50], duration: 180 }, 0)
+    // the phone turns over from its back and pulls away
+    .add(phone, { rotateY: [200, 0], rotateX: [16, 0], rotateZ: [-8, 0], duration: 300, ease: 'inOutCubic' }, 0)
+    .add(phone, { scale: [1.3, 0.82], y: [420, 100], duration: 300, ease: 'inOutCubic' }, 0)
     .add('.screen', { '--sheen': ['-60%', '60%'], duration: 520, ease: 'linear' }, 0)
     // wake, notify, swipe up to unlock
-    .add('.off', { opacity: [1, 0], duration: 50 }, 260)
-    .add('.statusbar', { opacity: [0, 1], duration: 40 }, 260)
+    .add('.off', { opacity: [1, 0], duration: 50 }, 270)
+    .add('.statusbar', { opacity: [0, 1], duration: 40 }, 270)
     .add('[data-notif]', { opacity: [0, 1], y: [-40, 0], scale: [0.94, 1], duration: 70, ease: 'outBack' }, 320)
-    .add('.swipe-text', { opacity: [0.85, 0.35, 0.85], duration: 60, ease: 'inOutSine' }, 390)
-    .add('.touch', { opacity: [0, 1], scale: [1.3, 1], y: [-40, -40], duration: 25 }, 420)
-    .add('.touch', { y: [-40, -520], opacity: [1, 0], duration: 70, ease: 'inQuad' }, 445)
-    .add('.lock', { y: ['0%', '-100%'], duration: 70, ease: 'inOutQuad' }, 445)
-    .add('.chat', { scale: [0.92, 1], opacity: [0.4, 1], duration: 70, ease: 'outQuad' }, 450)
-    .add('.statusbar', { color: ['#fff', '#000'], duration: 20 }, 490)
-    .add('.homebar', { opacity: [0, 1], duration: 20 }, 495)
-    .add('#hint', { opacity: [0, 1], y: [10, 0], duration: 40 }, 950);
+    .add('.swipe-text', { opacity: [0.85, 0.35, 0.85], duration: 60, ease: 'inOutSine' }, 380)
+    .add('.touch', { opacity: [0, 1], scale: [1.3, 1], duration: 25 }, 410)
+    .add('.touch', { y: [-40, -520], opacity: [1, 0], duration: 70, ease: 'inQuad' }, 440)
+    .add('.lock', { y: ['0%', '-100%'], duration: 70, ease: 'inOutQuad' }, 440)
+    .add('.statusbar', { color: ['#fff', '#000'], duration: 20 }, 485)
+    .add('.homebar', { opacity: [0, 1], duration: 20 }, 490)
+    // color bursts out of the phone; the page goes from black to light and the type follows
+    .add('.burst', { scale: [0, 1], duration: 110, ease: 'outCubic' }, 450)
+    .add('.lede', { '--fg': ['#f5f6fb', '#22272b'], duration: 30, ease: 'linear' }, 452)
+    .add('.lede', { opacity: [1, 0], y: [0, -40], duration: 40 }, 505)
+    // once the burst covers the page, the page itself settles to light underneath it
+    .add(root, { '--bg': ['#000000', '#f5f6fb'], '--fg': ['#f5f6fb', '#22272b'], duration: 20, ease: 'linear' }, 545)
+    .add(phone, { scale: [0.82, 1], y: [100, 0], duration: 90, ease: 'inOutQuad' }, 540)
+    .add('#hint', { opacity: [0, 1], y: [10, 0], duration: 40 }, 960)
+    // hold the finished phone on screen before the page moves on
+    .add('#hint', { opacity: [1, 1], duration: 340, ease: 'linear' }, 1000);
 }
 
 // ── the real sign-up ──
@@ -217,10 +254,14 @@ compose.addEventListener('submit', async (e) => {
     });
     ok = res.ok;
     reply = ok
-      ? 'Just texted you. Reply YES there to get started.'
-      : (await res.json().catch(() => ({}))).error ?? "That didn't go through. Try again in a minute.";
+      ? 'just texted you. reply there and we\'ll get started'
+      : res.status === 429
+        ? "that's a lot of tries. give it a few minutes"
+        : res.status === 400
+          ? "hm, that number didn't work. try it again?"
+          : "something broke on my end. try again in a minute";
   } catch {
-    reply = "I can't reach my phone right now. Try again in a minute.";
+    reply = "I can't reach my phone right now. try again in a minute";
   }
   if (ok) {
     bubble('receipt', 'Delivered');

@@ -1,6 +1,8 @@
 :root {
   --page: #f5f6fb;
   --ink: #22272b;         /* the logo wordmark's ink */
+  --bg: #000;             /* animated: black until the unlock, then the color burst lands on --page */
+  --fg: #f5f6fb;          /* animated: white on black, then ink */
   --muted: #86868b;
   --blue: #0a7cff;        /* iMessage sent */
   --gray: #e9e9eb;        /* iMessage received */
@@ -15,8 +17,8 @@
 * { box-sizing: border-box; margin: 0; }
 html { -webkit-text-size-adjust: 100%; }
 body {
-  background: var(--page);
-  color: var(--ink);
+  background: var(--bg);
+  color: var(--fg);
   font: 17px/1.4 var(--sf);
   -webkit-font-smoothing: antialiased;
   overflow-x: hidden;
@@ -27,33 +29,34 @@ a { color: inherit; }
 /* page chrome */
 .top { position: absolute; inset: 0 0 auto; padding: 20px 24px; z-index: 5; pointer-events: none; }
 .brand { display: inline-flex; align-items: center; gap: 10px; text-decoration: none; pointer-events: auto; }
-.wordmark { height: 17px; width: auto; fill: var(--ink); }
+.wordmark { height: 17px; width: auto; fill: var(--fg); }
 .brand img { border-radius: 22.4%; }
 
-.scroll { height: 520vh; position: relative; }
+.scroll { height: 640vh; position: relative; }
 .stage {
   position: sticky; top: 0; height: 100vh; height: 100svh;
   overflow: hidden;
   perspective: 2200px;
   perspective-origin: 50% 40%;
 }
-/* brand glow behind the phone, taken from the icon's glass */
-.stage::before {
-  content: ""; position: absolute; left: 50%; top: 52%; width: 900px; height: 900px;
-  translate: -50% -50%;
-  background:
-    radial-gradient(closest-side at 35% 40%, #bccbff, transparent),
-    radial-gradient(closest-side at 68% 55%, #ffd2ee, transparent),
-    radial-gradient(closest-side at 50% 75%, #ffe6cf, transparent);
-  opacity: .75; filter: blur(40px);
-  pointer-events: none;
+/* the unlock: the icon's glass colors burst out from behind the phone */
+.burst-wrap {
+  position: absolute; inset: 0; overflow: hidden; pointer-events: none;
+  /* fade the color out before the footer so the section has no hard bottom edge */
+  -webkit-mask-image: linear-gradient(#000 72%, transparent); mask-image: linear-gradient(#000 72%, transparent);
+}
+.burst {
+  position: absolute; left: 50%; top: 50%; width: 180vmax; height: 180vmax; margin: -90vmax 0 0 -90vmax;
+  border-radius: 50%; pointer-events: none;
+  background: radial-gradient(closest-side, #ffe6cf 0%, #ffd2ee 18%, #c9c4f6 34%, #bccbff 46%, #f5f6fb 70%, rgb(245 246 251 / 0) 100%);
+  transform: scale(0);
 }
 
 .lede, .hint {
   position: absolute; left: 0; right: 0; text-align: center; padding: 0 24px;
   font-family: var(--serif); font-optical-sizing: auto;
 }
-.lede { top: 12svh; font-size: clamp(40px, 6.6vw, 88px); font-weight: 350; line-height: 1; letter-spacing: -.025em; }
+.lede { top: 11svh; color: var(--fg); font-size: clamp(40px, 6.6vw, 88px); font-weight: 350; line-height: 1; letter-spacing: -.025em; }
 .hint { bottom: 3.5svh; font-size: 21px; font-weight: 400; letter-spacing: -.01em; color: #6b6f78; opacity: 0; }
 
 .foot { font-family: var(--serif); font-size: 15px; max-width: 34rem; margin: 0 auto; padding: 0 24px 56px; line-height: 1.5; color: #6b6f78; text-align: center; }
@@ -77,6 +80,17 @@ a { color: inherit; }
 .layer.back {
   background: radial-gradient(120% 80% at 30% 20%, #f6f5f1, #e2dfd8 60%, #cfcbc3);
 }
+/* camera plateau, on the back so it shows before the phone flips */
+.cam {
+  position: absolute; right: 24px; top: 24px; width: 196px; height: 196px; border-radius: 56px;
+  background: linear-gradient(145deg, #f3f1ec, #d9d6cf);
+  box-shadow: inset 0 0 0 1.5px rgba(255,255,255,.7), 0 2px 6px rgba(0,0,0,.15);
+  transform: translateZ(calc(var(--thick) * -1 - 2px)) rotateY(180deg);
+}
+.cam b { position: absolute; width: 74px; height: 74px; border-radius: 50%; background: radial-gradient(circle, #1d2433 0 28%, #0b0d12 30% 58%, #3a3d44 60% 66%, #c9c6bf 68%); box-shadow: 0 2px 4px rgba(0,0,0,.35); }
+.cam b:nth-child(1) { left: 14px; top: 14px; }
+.cam b:nth-child(2) { left: 14px; bottom: 14px; }
+.cam b:nth-child(3) { right: 14px; top: 61px; }
 .btn { position: absolute; width: 5px; border-radius: 3px; background: linear-gradient(90deg, var(--ti-3), var(--ti-1)); transform: translateZ(calc(var(--thick) / -2)); }
 .btn.action   { left: -4px; top: 168px; height: 52px; }
 .btn.vol-up   { left: -4px; top: 250px; height: 86px; }
@@ -86,7 +100,7 @@ a { color: inherit; }
 .face {
   padding: 4px;
   background: linear-gradient(135deg, #fbfaf7, var(--ti-2) 40%, #efede8 60%, var(--ti-3));
-  box-shadow: 0 60px 120px -40px rgba(60, 60, 110, .45);
+  box-shadow: 0 60px 120px -40px rgba(40, 40, 80, .4);
 }
 .screen {
   position: relative; height: 100%;
