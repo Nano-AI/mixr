@@ -1,0 +1,17 @@
+{
+  "tool": "Built-in image_gen",
+  "variants": [
+    {
+      "name": "rounded",
+      "prompt": "Create a single square PNG contact icon for Mixr. Use the reference only for the purple and gold palette; completely redesign the mascot as a minimal sculptural letter M. No face, eyes, chat tails, words, labels, decorative objects or mockup. One large centered recognizable M with generous safe margin for circular contact cropping. Premium translucent glass with controlled refraction, soft studio highlights, smooth bevels, minimal detail, strong small-size readability. Straight-on view, restrained depth. Entire square filled by a quiet background; no outer rounded app-icon frame. A single continuous rounded uppercase M made from thick clear lavender glass. Broad strokes, softly rounded corners, a clean central V notch. Tiny warm champagne-gold light reflection along one lower edge, predominantly lavender. Deep aubergine background, luminous edges but no neon glow. Simplest and most iconic of the set."
+    },
+    {
+      "name": "ribbon",
+      "prompt": "Create a single square PNG contact icon for Mixr. Use a purple and champagne-gold palette and a minimal sculptural letter M. No face, eyes, chat tails, words, labels, decorative objects or mockup. One large centered recognizable M with generous safe margin for circular contact cropping. Premium translucent glass with controlled refraction, soft studio highlights, smooth bevels, minimal detail, strong small-size readability. Straight-on view, restrained depth. Entire square filled by a quiet background; no outer rounded app-icon frame. An uppercase M constructed from one wide folded ribbon of transparent glass, crisp geometric silhouette with subtly rounded edges. Alternating violet and pale champagne faces created by the folds, clean precise center notch, no loops or extra strokes. Very pale warm ivory background, subtle short soft shadow. Elegant and minimal."
+    },
+    {
+      "name": "arches",
+      "prompt": "Create a single square PNG contact icon for Mixr. Use the reference only for the purple and gold palette; completely redesign the mascot as a minimal sculptural letter M. No face, eyes, chat tails, words, labels, decorative objects or mockup. One large centered recognizable M with generous safe margin for circular contact cropping. Premium translucent glass with controlled refraction, soft studio highlights, smooth bevels, minimal detail, strong small-size readability. Straight-on view, restrained depth. Entire square filled by a quiet background; no outer rounded app-icon frame. A friendly lowercase m silhouette formed by two joined rounded arches of substantial translucent glass, three vertical stems and two distinct clear counters. Left arch lavender, right arch pale champagne gold; slight overlap at central stem. Flat front-facing composition, polished edges and restrained reflections. Deep muted purple background. No eyes or face. Simple, balanced, contemporary."
+    }
+  ]
+}
