@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { db, fromBlob, reset } from '../../src/db.ts';
 import { upcomingSlots, formatSlot } from '../../src/meetups/slots.ts';
-import { PLACES, pickPlace, findPlace } from '../../src/meetups/places.ts';
+import { PLACES, pickPlace, findPlace, placeOf } from '../../src/meetups/places.ts';
 import { createProposal } from '../../src/meetups/proposals.ts';
 import { makeUser, axis } from '../helpers.ts';
 import type { ProposalDetails } from '../../src/types.ts';
@@ -35,6 +35,20 @@ test('findPlace matches names and aliases, case-insensitive', () => {
   assert.equal(findPlace('the CSE2 atrium')?.id, 'gates-center');
   assert.equal(findPlace('the moon'), undefined);
   assert.equal(findPlace('animal crossing'), undefined); // 'ima' must not match inside a word
+});
+
+test('pickPlace: HUB is the first talk and other place; WAC is reachable only by name', () => {
+  reset();
+  const slot = at(22, 17).toISOString();
+  assert.equal(pickPlace('talk', slot), 'hub');
+  assert.equal(pickPlace('other', slot), 'hub');
+  assert.ok(PLACES.filter((p) => p.categories.includes('sport')).every((p) => p.id !== 'wac'));
+  assert.equal(findPlace('kayak at the wac')?.id, 'wac');
+});
+
+test('placeOf: known id, and a safe fallback for an unknown one', () => {
+  assert.equal(placeOf('hub').meetSpot, 'the 1st floor lounge');
+  assert.deepEqual([placeOf('gone').name, placeOf('gone').meetSpot], ['gone', 'the meeting spot']);
 });
 
 test('pickPlace avoids a place already used in the same slot', async () => {
@@ -71,7 +85,7 @@ test('createProposal: one pending invite and one invite message per user', async
   assert.deepEqual(invites, d.userIds);
   const jobs = db.prepare('SELECT dedupe_key AS k, text FROM message_jobs ORDER BY id').all() as { k: string; text: string }[];
   assert.deepEqual(jobs.map((j) => j.k), d.userIds.map((u) => `invite:${m.id}:${u}`));
-  const place = PLACES.find((p) => p.id === m.placeId)!;
+  const place = placeOf(m.placeId);
   for (const s of ['ultimate frisbee', place.name, 'Thu 5 PM', '3:00 PM', `YES ${m.id}`, `PASS ${m.id}`]) assert.ok(jobs[0].text.includes(s), `missing "${s}" in: ${jobs[0].text}`);
 });
 

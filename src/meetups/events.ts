@@ -1,7 +1,7 @@
 import { db, fromBlob } from '../db.ts';
 import { sendMessage } from '../messaging/send.ts';
 import { cosine } from '../matching/vectors.ts';
-import { PLACES } from './places.ts';
+import { placeOf } from './places.ts';
 import { recordResponse } from './responses.ts';
 import { formatSlot } from './slots.ts';
 import type { ResponseResult } from '../types.ts';
@@ -28,7 +28,7 @@ export async function listPublicEvents(userId: number, now = new Date(), dedupeK
     .map(({ m }) => m);
 
   const text = top.length
-    ? [...top.map((m) => `${m.id}) ${m.activity}, ${formatSlot(m.slot)} at ${PLACES.find((p) => p.id === m.place_id)!.name} (${m.n}/${m.max_size})`), `Reply JOIN ${top[0].id}`].join('\n')
+    ? [...top.map((m) => `${m.id}) ${m.activity}, ${formatSlot(m.slot)} at ${placeOf(m.place_id).name} (${m.n}/${m.max_size})`), `Reply JOIN ${top[0].id}`].join('\n')
     : "No open events match your interests right now. I'll text you when one comes up.";
   await sendMessage(userId, text, dedupeKey);
 }

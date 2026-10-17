@@ -2,10 +2,12 @@ const SLOT_HOURS = [12, 17]; // tune:
 const MIN_LEAD_H = 4; // tune:
 const COUNT = 6;
 
+export const HOUR = 3600_000;
+
 // Next weekday slots (local time) at least MIN_LEAD_H out, as ISO strings.
 export function upcomingSlots(now: Date): string[] {
   const out: string[] = [];
-  const earliest = now.getTime() + MIN_LEAD_H * 3600_000;
+  const earliest = now.getTime() + MIN_LEAD_H * HOUR;
   for (const day = new Date(now.getFullYear(), now.getMonth(), now.getDate()); out.length < COUNT; day.setDate(day.getDate() + 1)) {
     if (day.getDay() === 0 || day.getDay() === 6) continue;
     for (const h of SLOT_HOURS) {

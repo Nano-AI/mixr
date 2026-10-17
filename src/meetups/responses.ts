@@ -2,19 +2,17 @@ import { db, tx, fromBlob, toBlob } from '../db.ts';
 import { sendMessage } from '../messaging/send.ts';
 import { findCandidates } from '../matching/candidates.ts';
 import { cosine, mean, normalize } from '../matching/vectors.ts';
-import { PLACES, findPlace } from './places.ts';
+import { findPlace, placeOf } from './places.ts';
 import { CLOSE_BEFORE_H, DEADLINE_H } from './proposals.ts';
-import { formatSlot } from './slots.ts';
+import { formatSlot, HOUR } from './slots.ts';
 import type { Reply, ResponseResult } from '../types.ts';
 
 const EVENT_BIAS = 0.5; // tune: weight of accepted members' interests vs the original seed
 
-const H = 3600_000;
 type Row = Record<string, any>;
 type Msg = [userId: number, text: string, key: string];
 
 const first = (name: string | null) => (name ?? 'Someone').split(' ')[0];
-const placeOf = (id: string) => PLACES.find((p) => p.id === id)!;
 const meetupRow = (id: number) => db.prepare('SELECT * FROM meetups WHERE id = ?').get(id) as Row;
 const accepted = (id: number) =>
   db.prepare("SELECT u.id, u.name, i.place_suggestion FROM invitations i JOIN users u ON u.id = i.user_id WHERE i.meetup_id = ? AND i.state = 'accepted' ORDER BY i.responded_at, u.id").all(id) as Row[];
@@ -68,9 +66,9 @@ export async function recordResponse(userId: number, proposalId: number, reply: 
       const left = accepted(proposalId);
       for (const u of left) msgs.push([u.id, `${name} can't make it.`, `cancel:${proposalId}:${userId}:${u.id}`]);
       if (left.length < m.min_size) {
-        if (now.getTime() < new Date(m.slot).getTime() - CLOSE_BEFORE_H * H) {
+        if (now.getTime() < new Date(m.slot).getTime() - CLOSE_BEFORE_H * HOUR) {
           reopened = true;
-          db.prepare("UPDATE meetups SET state = 'proposed', deadline = ? WHERE id = ?").run(new Date(Math.min(now.getTime() + DEADLINE_H * H, new Date(m.slot).getTime() - CLOSE_BEFORE_H * H)).toISOString(), proposalId);
+          db.prepare("UPDATE meetups SET state = 'proposed', deadline = ? WHERE id = ?").run(new Date(Math.min(now.getTime() + DEADLINE_H * HOUR, new Date(m.slot).getTime() - CLOSE_BEFORE_H * HOUR)).toISOString(), proposalId);
         } else {
           db.prepare("UPDATE meetups SET state = 'cancelled' WHERE id = ?").run(proposalId);
           for (const u of left) msgs.push([u.id, `Not enough people for ${m.activity} anymore, so it's off. I'll find you another.`, `off:${proposalId}:${u.id}`]);

@@ -1,14 +1,13 @@
 import { db, tx } from '../db.ts';
 import { sendMessage } from '../messaging/send.ts';
-import { PLACES } from './places.ts';
+import { placeOf } from './places.ts';
 import { planMeetups } from './planner.ts';
-import { formatSlot } from './slots.ts';
+import { formatSlot, HOUR } from './slots.ts';
 
 export const REMIND_BEFORE_H = 2; // tune:
 export const FEEDBACK_AFTER_H = 2; // tune:
 export const RETRY_WINDOW_H = 24; // tune: how long after the slot unsent expire/feedback messages are retried
 
-const H = 3600_000;
 
 type Row = { id: number; activity: string; slot: string; place_id: string };
 type Msg = [userId: number, text: string, key: string];
@@ -27,7 +26,7 @@ async function send(msgs: Msg[]): Promise<void> {
 // so a crash or failed send is retried on the next tick and re-running is safe.
 export async function tick(now: Date, plan = planMeetups): Promise<void> {
   const iso = now.toISOString();
-  const recent = new Date(now.getTime() - RETRY_WINDOW_H * H).toISOString();
+  const recent = new Date(now.getTime() - RETRY_WINDOW_H * HOUR).toISOString();
 
   // 1. Expire proposals that missed their deadline, then (re)send to accepted invitees of recently expired ones.
   tx(() => {
@@ -44,9 +43,9 @@ export async function tick(now: Date, plan = planMeetups): Promise<void> {
 
   // 2. Remind confirmed meetups starting within REMIND_BEFORE_H.
   const soon = db.prepare("SELECT id, activity, slot, place_id FROM meetups WHERE state = 'confirmed' AND slot <= ? AND slot > ?")
-    .all(new Date(now.getTime() + REMIND_BEFORE_H * H).toISOString(), iso) as Row[];
+    .all(new Date(now.getTime() + REMIND_BEFORE_H * HOUR).toISOString(), iso) as Row[];
   for (const m of soon) {
-    const spot = PLACES.find((p) => p.id === m.place_id)?.meetSpot ?? 'the meeting spot';
+    const spot = placeOf(m.place_id).meetSpot;
     const text = `Today ${formatSlot(m.slot)}: ${m.activity} at ${spot}. Still in? CANCEL ${m.id} if not. Anything you're hoping to talk about?`;
     await send(accepted(m.id).map((u): Msg => [u, text, `remind:${m.id}:${u}`]));
   }
@@ -54,7 +53,7 @@ export async function tick(now: Date, plan = planMeetups): Promise<void> {
   // 3. Mark done and create feedback rows, then (re)send to every outstanding feedback row of recent done meetups.
   tx(() => {
     const over = db.prepare("SELECT id FROM meetups WHERE state = 'confirmed' AND slot <= ?")
-      .all(new Date(now.getTime() - FEEDBACK_AFTER_H * H).toISOString()) as { id: number }[];
+      .all(new Date(now.getTime() - FEEDBACK_AFTER_H * HOUR).toISOString()) as { id: number }[];
     for (const { id } of over) {
       db.prepare("UPDATE meetups SET state = 'done' WHERE id = ?").run(id);
       for (const u of accepted(id)) db.prepare('INSERT OR IGNORE INTO feedback (meetup_id, user_id) VALUES (?, ?)').run(id, u);

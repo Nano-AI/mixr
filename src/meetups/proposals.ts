@@ -1,20 +1,19 @@
 import { db, tx, toBlob } from '../db.ts';
 import { sendMessage } from '../messaging/send.ts';
-import { PLACES, pickPlace } from './places.ts';
-import { formatSlot } from './slots.ts';
+import { pickPlace, placeOf } from './places.ts';
+import { formatSlot, HOUR } from './slots.ts';
 import type { Meetup, ProposalDetails } from '../types.ts';
 
 export const DEADLINE_H = 6; // tune:
 export const CLOSE_BEFORE_H = 2; // tune: replies close this long before the slot
 
-const H = 3600_000;
 const time = (iso: string) => new Date(iso).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
 
 export async function createProposal(d: ProposalDetails, now = new Date()): Promise<Meetup> {
-  const closeAt = new Date(d.slot).getTime() - CLOSE_BEFORE_H * H;
+  const closeAt = new Date(d.slot).getTime() - CLOSE_BEFORE_H * HOUR;
   if (closeAt <= now.getTime()) throw new Error(`createProposal: slot ${d.slot} is less than ${CLOSE_BEFORE_H}h away`);
   const [minSize, maxSize] = d.kind === 'pair' ? [2, 2] : [3, 6];
-  const deadline = new Date(Math.min(now.getTime() + DEADLINE_H * H, closeAt)).toISOString();
+  const deadline = new Date(Math.min(now.getTime() + DEADLINE_H * HOUR, closeAt)).toISOString();
   const placeId = pickPlace(d.category, d.slot);
   const vec = toBlob(d.vector);
 
@@ -29,7 +28,7 @@ export async function createProposal(d: ProposalDetails, now = new Date()): Prom
   });
 
   // Sent after commit, never inside the transaction.
-  const place = PLACES.find((p) => p.id === placeId)!.name;
+  const place = placeOf(placeId).name;
   const when = formatSlot(d.slot);
   const reason = d.reason ?? d.activity;
   const suggest = `Rather meet somewhere else? Reply YES ${id} + a spot.`;

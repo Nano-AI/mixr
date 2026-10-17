@@ -3,15 +3,18 @@ import type { Category } from '../types.ts';
 
 export type Place = { id: string; name: string; meetSpot: string; categories: Category[]; aliases?: string[] };
 
-// UW Seattle spots, hard-coded. Order matters: pickPlace takes the first free one per category.
+// UW Seattle spots, hard-coded. Order matters: pickPlace takes the first free one per category,
+// so HUB leads talk and other.
 // ponytail: meet spots are best-guess, walk past each before the demo.
 export const PLACES: Place[] = [
+  { id: 'hub', name: 'HUB', meetSpot: 'the 1st floor lounge', categories: ['talk', 'other'], aliases: ['hub', 'husky union'] },
   // Sport
   { id: 'denny-field', name: 'Denny Field', meetSpot: 'the field entrance off Stevens Way', categories: ['sport'] },
   { id: 'ima-fields', name: 'IMA Fields', meetSpot: 'the field gate by the IMA', categories: ['sport'], aliases: ['ima field', 'intramural fields'] },
   { id: 'ima', name: 'IMA (Intramural Activities Building)', meetSpot: 'the front desk', categories: ['sport'], aliases: ['ima', 'intramural', 'gym'] },
   { id: 'husky-track', name: 'Husky Track', meetSpot: 'the track entrance', categories: ['sport'], aliases: ['track'] },
-  { id: 'wac', name: 'Waterfront Activities Center', meetSpot: 'the boat rental counter', categories: ['sport'], aliases: ['wac', 'kayak', 'canoe'] },
+  // Not auto-picked (needs a boat rental); reachable by name or alias only.
+  { id: 'wac', name: 'Waterfront Activities Center', meetSpot: 'the boat rental counter', categories: [], aliases: ['wac', 'kayak', 'canoe'] },
   { id: 'quad', name: 'The Quad', meetSpot: 'under the cherry trees', categories: ['sport', 'talk'], aliases: ['quad', 'liberal arts quad'] },
   { id: 'rainier-vista', name: 'Rainier Vista', meetSpot: 'the top of the steps facing Drumheller', categories: ['sport', 'talk'] },
   // Computer science
@@ -22,7 +25,6 @@ export const PLACES: Place[] = [
   { id: 'suzzallo', name: 'Suzzallo Library', meetSpot: 'the Reading Room entrance', categories: ['talk', 'other'], aliases: ['suzz', 'suzzallo', 'reading room'] },
   { id: 'mary-gates-hall', name: 'Mary Gates Hall', meetSpot: 'the commons atrium', categories: ['other', 'talk'], aliases: ['mgh', 'mary gates'] },
   // Social spaces
-  { id: 'hub', name: 'HUB', meetSpot: 'the 1st floor lounge', categories: ['talk', 'other'], aliases: ['hub', 'husky union'] },
   { id: 'husky-den', name: 'Husky Den (HUB)', meetSpot: 'the HUB lower level food court', categories: ['talk'], aliases: ['husky den'] },
   { id: 'red-square', name: 'Red Square', meetSpot: 'the Broken Obelisk', categories: ['talk'], aliases: ['red square'] },
   { id: 'drumheller', name: 'Drumheller Fountain', meetSpot: 'the fountain edge', categories: ['talk'], aliases: ['drumheller', 'frosh pond'] },
@@ -33,6 +35,9 @@ export const PLACES: Place[] = [
   { id: 'cafe-allegro', name: 'Cafe Allegro', meetSpot: 'the alley entrance off the Ave', categories: ['talk'], aliases: ['allegro'] },
   { id: 'cafe-solstice', name: 'Cafe Solstice', meetSpot: 'the front counter', categories: ['talk'], aliases: ['solstice'] },
 ];
+
+export const placeOf = (id: string): Place =>
+  PLACES.find((p) => p.id === id) ?? { id, name: id, meetSpot: 'the meeting spot', categories: [] };
 
 // First place for the category not already taken by an open meetup in that slot.
 export function pickPlace(category: Category, slot: string): string {
