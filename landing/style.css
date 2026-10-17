@@ -50,36 +50,20 @@ a { color: inherit; }
 .lede {
   position: absolute; left: 0; right: 0; z-index: 2; top: 24svh; padding: 0 24px; text-align: center;
   font-family: var(--serif); font-optical-sizing: auto;
-  font-size: clamp(44px, 7.4vw, 108px); font-weight: 350; line-height: .98; letter-spacing: -.03em;
+  font-size: clamp(40px, 6.2vw, 96px); font-weight: 350; line-height: .98; letter-spacing: -.03em;
   /* white over the black page, inverted where it crosses the white phone */
   color: #fff; mix-blend-mode: difference;
   pointer-events: none;
 }
 
-/* "your turn": beside the phone on wide screens, under it on narrow ones */
+/* appears under the phone once the keypad is up */
 .hint {
-  position: absolute; z-index: 2; top: 50%; translate: 0 -50%;
-  right: calc(50% + var(--pw, 340px) / 2 + 56px); width: min(320px, calc(50% - var(--pw, 340px) / 2 - 80px));
-  font-family: var(--serif); font-optical-sizing: auto; color: var(--ink);
-  visibility: hidden;
+  position: absolute; left: 0; right: 0; bottom: 3svh; z-index: 2; text-align: center;
+  font: 400 21px/1.2 var(--serif); font-optical-sizing: auto; letter-spacing: -.01em; color: var(--ink);
+  opacity: 0; translate: 0 8px; transition: opacity .5s, translate .5s cubic-bezier(.2, .8, .2, 1);
+  pointer-events: none;
 }
-.hint.on { visibility: visible; }
-.hint-big { font-size: clamp(36px, 4vw, 56px); font-weight: 350; line-height: 1; letter-spacing: -.03em; }
-.hint-body { margin-top: 14px; font-size: 18px; line-height: 1.45; color: #4a4f57; }
-.hint-keys { margin-top: 22px; display: flex; flex-wrap: wrap; gap: 10px 18px; font: 14px/1 var(--sf); color: #6b6f78; }
-.hint-keys span { display: inline-flex; align-items: center; gap: 6px; }
-kbd {
-  display: inline-grid; place-items: center; min-width: 28px; height: 28px; padding: 0 7px;
-  border-radius: 7px; background: #fff; color: var(--ink);
-  font: 500 13px/1 var(--sf);
-  box-shadow: 0 1px 0 1px rgba(34, 39, 43, .14), 0 3px 8px -4px rgba(34, 39, 43, .3);
-  transition: background .25s, color .25s, translate .25s;
-}
-kbd.down { background: var(--blue); color: #fff; translate: 0 1px; transition: none; }
-/* narrow screens: the phone fills the view and its last bubble already asks for the number */
-@media (max-width: 999px) { .hint { display: none; } }
-/* no physical keyboard: skip the key legend */
-@media (hover: none) { .hint-keys { display: none; } }
+.hint.on { opacity: 1; translate: 0 0; }
 
 .foot { font-family: var(--serif); font-size: 15px; max-width: 34rem; margin: 0 auto; padding: 0 24px 56px; line-height: 1.5; color: #6b6f78; text-align: center; }
 .foot p + p { margin-top: 10px; }

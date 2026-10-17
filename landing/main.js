@@ -1,4 +1,4 @@
-import { animate, createTimeline, onScroll, stagger, utils } from 'https://cdn.jsdelivr.net/npm/animejs@4.5.0/dist/bundles/anime.esm.min.js';
+import { animate, createTimeline, onScroll, utils } from 'https://cdn.jsdelivr.net/npm/animejs@4.5.0/dist/bundles/anime.esm.min.js';
 import { startGlow } from './glow.js';
 
 const API = location.hostname.endsWith('joinmixr.club') ? 'https://api.joinmixr.club' : 'http://localhost:3000';
@@ -78,9 +78,7 @@ const down = (el) => {
   el.classList.add('down');
   setTimeout(() => el.classList.remove('down'), 150);
 };
-// light the phone key and the matching keycap in the "your turn" legend
 function flash(k) {
-  document.querySelectorAll(`[data-cap="${k === 'del' || k === 'enter' ? k : 'digit'}"]`).forEach(down);
   const btn = keypad.querySelector(`[data-k="${k}"]`);
   if (!btn) return;
   down(btn);
@@ -120,7 +118,6 @@ num.addEventListener('input', () => setDigits(num.value));
 num.addEventListener('keydown', (e) => {
   if (e.key === 'Enter') {
     e.preventDefault();
-    flash('enter');
     compose.requestSubmit();
   }
 });
@@ -163,6 +160,7 @@ const hidden = steps.map((el) => -el.offsetHeight);
 const origin = (el) => (el.classList.contains('me') || el.classList.contains('receipt') ? '100% 100%' : '0% 100%');
 const root = document.documentElement;
 const hint = $('#hint');
+const hold = { t: 0 };
 
 // background: 0 = black with a faint aura, 1 = the full living color field
 const reveal = { v: reduced ? 1 : 0 };
@@ -170,11 +168,6 @@ const glowEl = $('#glow');
 const hasGL = startGlow($('#bg'), reveal, reduced);
 if (!hasGL) glowEl.classList.add('nogl');
 const paintReveal = () => !hasGL && (glowEl.style.opacity = reveal.v);
-
-const showHint = () => {
-  hint.classList.add('on');
-  if (!reduced) animate(hint.children, { opacity: [0, 1], y: [14, 0], delay: stagger(120), duration: 700, ease: 'outQuart' });
-};
 
 if (reduced) {
   utils.set(['.off', '.lock', '.lede'], { opacity: 0 });
@@ -185,7 +178,7 @@ if (reduced) {
   paintReveal();
   steps.filter((el) => el.hasAttribute('data-typing')).forEach((el) => el.remove());
   openKeypad();
-  showHint();
+  hint.classList.add('on');
 } else {
   steps.forEach((el, i) => {
     el.style.transformOrigin = origin(el);
@@ -193,32 +186,48 @@ if (reduced) {
   });
   utils.set('[data-notif]', { opacity: 0, y: -40, scale: 0.94 });
   utils.set(['.statusbar', '.touch'], { opacity: 0 });
-  utils.set(hint.children, { opacity: 0 });
 
-  // the conversation runs on a clock, like real texts, once the phone unlocks; scrolling can't rush or rewind it
-  const chat = createTimeline({ autoplay: false, onComplete: () => (openKeypad(), showHint()) });
+  // The conversation follows the scroll, but its playhead can only chase the scroll position at
+  // a capped speed and never goes backward: scroll fast and the texts still land one at a time.
+  const chat = createTimeline({ autoplay: false });
   const at = [0, 1100, 1800, 2900, 3700, 4800, 5100, 5700, 6900, 7900];
   steps.forEach((el, i) => {
     chat.add(el, { opacity: [0, 1], marginTop: [hidden[i], shown[i]], scale: [0.6, 1], duration: 420, ease: 'outBack(1.4)' }, at[i]);
     if (el.hasAttribute('data-typing')) chat.add(el, { opacity: [1, 0], marginTop: [shown[i], hidden[i]], duration: 260, ease: 'outQuad' }, at[i + 1] - 140);
   });
-  let started = false;
-  const hold = { t: 0 };
+  const CHAT_FROM = 450; // scroll-timeline time where the thread starts
+  const CHAT_TO = 880; // ...and where it has fully played
+  let target = 0;
+  let head = 0;
+  let scrollT = 0;
+  let last = 0;
+  const chase = (now) => {
+    const dt = last ? Math.min(now - last, 50) : 16;
+    last = now;
+    if (head < target) {
+      head = Math.min(target, head + dt * 3); // at most 3x real texting speed
+      chat.seek(head);
+      if (head >= chat.duration) openKeypad();
+    }
+    hint.classList.toggle('on', kbOn && scrollT > CHAT_TO);
+    requestAnimationFrame(chase);
+  };
+  requestAnimationFrame(chase);
 
   createTimeline({
     defaults: { ease: 'outQuad', duration: 60 },
     autoplay: onScroll({ target: '#scroll', enter: 'top top', leave: 'bottom bottom', sync: 0.25 }),
     onUpdate: (self) => {
       paintReveal();
-      if (!started && self.currentTime > 440) {
-        started = true;
-        chat.play();
-      }
+      const p = utils.clamp((self.currentTime - CHAT_FROM) / (CHAT_TO - CHAT_FROM), 0, 1);
+      target = Math.max(target, p * chat.duration);
+      scrollT = self.currentTime;
     },
   })
     // the phone turns over from its back and pulls away
     .add(phone, { rotateY: [200, 0], rotateX: [16, 0], rotateZ: [-8, 0], duration: 300, ease: 'inOutCubic' }, 0)
     .add(phone, { scale: [1.3, 0.82], y: [420, 100], duration: 300, ease: 'inOutCubic' }, 0)
+    .add('.lede', { opacity: [1, 0], y: [0, -40], duration: 50 }, 230)
     .add('.screen', { '--sheen': ['-60%', '60%'], duration: 520, ease: 'linear' }, 0)
     // wake, notify, swipe up to unlock
     .add('.off', { opacity: [1, 0], duration: 50 }, 270)
@@ -228,15 +237,14 @@ if (reduced) {
     .add('.touch', { opacity: [0, 1], scale: [1.3, 1], duration: 25 }, 410)
     .add('.touch', { y: [-40, -520], opacity: [1, 0], duration: 70, ease: 'inQuad' }, 440)
     .add('.lock', { y: ['0%', '-100%'], duration: 70, ease: 'inOutQuad' }, 440)
-    .add('.lede', { opacity: [1, 0], y: [0, -40], duration: 50 }, 230)
     .add('.statusbar', { color: ['#fff', '#000'], duration: 20 }, 485)
     .add('.homebar', { opacity: [0, 1], duration: 20 }, 490)
     // color grows out of the black behind the phone; the page settles to light under it
     .add(reveal, { v: [0, 1], duration: 170, ease: 'inOutSine' }, 445)
     .add(root, { '--bg': ['#000000', '#f5f6fb'], '--fg': ['#f5f6fb', '#22272b'], duration: 20, ease: 'linear' }, 590)
     .add(phone, { scale: [0.82, 1], y: [100, 0], duration: 90, ease: 'inOutQuad' }, 520)
-    // hold the phone on screen while the conversation plays
-    .add(hold, { t: [0, 1], duration: 390, ease: 'linear' }, 610);
+    // hold the finished phone before the footer
+    .add(hold, { t: [0, 1], duration: 120, ease: 'linear' }, 880);
 }
 
 // ── the real sign-up ──
