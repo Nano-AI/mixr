@@ -7,40 +7,27 @@
 ## The loop (MVP)
 
 ```mermaid
-flowchart TD
-    A["Text 'hi'"] --> B["Opt in + @uw.edu email"]
-    B --> C["Braindump interests"]
-    C --> D["Confirm summary"]
-    D --> E["Pick free slots"]
-    E --> F["Planner finds 2 (pair) or 3–6 (group)<br/>compatible + available people"]
-    F --> G["Invite: '4 students want beginner ultimate,<br/>Thu 5 PM at Denny Field. YES 12 / PASS 12'"]
-    G --> H{"Min headcount<br/>said YES?"}
-    H -- "yes" --> I["CONFIRMED<br/>first names + meet spot"]
-    H -- "deadline passed" --> X["Expired → try again later"]
-    I --> J["Reminder 2h before"]
-    J --> K["'WENT or MISSED?' → Elo reliability"]
+flowchart LR
+    A["Text 'hi'"] --> B["Opt in +<br/>@uw.edu"] --> C["Braindump"] --> D["Confirm +<br/>free slots"]
+    D --> F["Planner: 2 or 3–6<br/>matching people"] --> G["Invite<br/>YES 12 / PASS 12"] --> H{"Min<br/>YES?"}
+    H -- yes --> I["Confirmed<br/>names + spot"] --> J["Reminder"] --> K["WENT / MISSED<br/>→ Elo"]
+    H -- deadline --> X["Expired<br/>retry later"]
 ```
 
 ## Architecture
 
 ```mermaid
 flowchart LR
-    Phone(["Student phone"]) <--> Photon["Photon v2<br/>iMessage / SMS"]
-    Photon <--> MSG
-
-    subgraph App["One Node/TS process"]
-        MSG["messaging/ (Wayne)<br/>webhook · router · onboarding · sendMessage"]
-        MAT["matching/ (John)<br/>buildProfile · findCandidates"]
-        MEET["meetups/ (Aditya)<br/>createProposal · recordResponse · planner · tick()"]
-        DB[("SQLite<br/>mixr.db")]
-
-        MSG -- "buildProfile" --> MAT
+    Phone(["Phone"]) <--> Photon["Photon v2<br/>iMessage / SMS"] <--> MSG
+    subgraph App["One Node/TS process · shared SQLite (mixr.db)"]
+        direction LR
+        MSG["messaging/ · Wayne<br/>webhook · router<br/>onboarding · sendMessage"]
+        MEET["meetups/ · Aditya<br/>createProposal · recordResponse<br/>planner · tick()"]
+        MAT["matching/ · John<br/>buildProfile<br/>findCandidates"]
         MSG -- "recordResponse" --> MEET
-        MEET -- "findCandidates" --> MAT
         MEET -- "sendMessage" --> MSG
-        MSG --- DB
-        MAT --- DB
-        MEET --- DB
+        MEET -- "findCandidates" --> MAT
+        MSG -. "buildProfile" .-> MAT
     end
 ```
 
