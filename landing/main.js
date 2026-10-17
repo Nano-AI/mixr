@@ -64,6 +64,7 @@ for (const [k, sub] of KEYS) {
 let digits = '';
 let busy = false;
 let kbOn = false;
+let nudged = false;
 const num = $('#num'); // real (visually hidden) input: keyboard, paste and autofill all land here
 // (425) 340-5583, built as you type
 const fmt = (d) => (d.length < 4 ? (d ? `(${d}` : '') : d.length < 7 ? `(${d.slice(0, 3)}) ${d.slice(3)}` : `(${d.slice(0, 3)}) ${d.slice(3, 6)}-${d.slice(6)}`);
@@ -137,6 +138,11 @@ function openKeypad() {
   kbOn = true;
   chatView.classList.add('kb');
   num.focus({ preventScroll: true }); // ready to type, no click needed
+  // if nothing gets typed for a while, mixr starts typing again, like someone waiting on the other end
+  if (!nudged) {
+    nudged = true;
+    setTimeout(() => !digits && !busy && kbOn && say("just the 10 digits. I'll text you right after"), 9000);
+  }
   keypad.style.height = 'auto';
   const h = keypad.offsetHeight;
   if (!reduced) {
@@ -160,10 +166,9 @@ const hidden = steps.map((el) => -el.offsetHeight);
 const origin = (el) => (el.classList.contains('me') || el.classList.contains('receipt') ? '100% 100%' : '0% 100%');
 const root = document.documentElement;
 const hint = $('#hint');
-const hold = { t: 0 };
 
 // background: 0 = black with a faint aura, 1 = the full living color field
-const reveal = { v: reduced ? 1 : 0 };
+const reveal = { v: reduced ? 1 : 0, goal: reduced ? 1 : 0 };
 const glowEl = $('#glow');
 const hasGL = startGlow($('#bg'), reveal, reduced);
 if (!hasGL) glowEl.classList.add('nogl');
@@ -173,8 +178,7 @@ if (reduced) {
   utils.set(['.off', '.lock', '.lede'], { opacity: 0 });
   utils.set('.statusbar', { color: '#000' });
   utils.set('.homebar', { opacity: 1 });
-  root.style.setProperty('--bg', '#f5f6fb');
-  root.style.setProperty('--fg', '#22272b');
+  root.classList.add('lit');
   paintReveal();
   steps.filter((el) => el.hasAttribute('data-typing')).forEach((el) => el.remove());
   openKeypad();
@@ -190,26 +194,37 @@ if (reduced) {
   // The conversation follows the scroll, but its playhead can only chase the scroll position at
   // a capped speed and never goes backward: scroll fast and the texts still land one at a time.
   const chat = createTimeline({ autoplay: false });
-  const at = [0, 1100, 1800, 2900, 3700, 4800, 5100, 5700, 6900, 7900];
+  const at = [0, 1100, 1800, 2900, 3700, 4800, 5100, 5700, 6900, 7500, 8500];
   steps.forEach((el, i) => {
     chat.add(el, { opacity: [0, 1], marginTop: [hidden[i], shown[i]], scale: [0.6, 1], duration: 420, ease: 'outBack(1.4)' }, at[i]);
     if (el.hasAttribute('data-typing')) chat.add(el, { opacity: [1, 0], marginTop: [shown[i], hidden[i]], duration: 260, ease: 'outQuad' }, at[i + 1] - 140);
   });
-  const CHAT_FROM = 450; // scroll-timeline time where the thread starts
+  const CHAT_FROM = 450; // scroll position (0..1000 through the section) where the thread starts
   const CHAT_TO = 880; // ...and where it has fully played
+  const section = $('#scroll');
+  const scrollPos = () => utils.clamp((scrollY - section.offsetTop) / (section.offsetHeight - innerHeight), 0, 1) * 1000;
+  let unlocked = false; // once the phone has been unlocked, the thread keeps what it has shown
   let target = 0;
   let head = 0;
-  let scrollT = 0;
   let last = 0;
   const chase = (now) => {
     const dt = last ? Math.min(now - last, 50) : 16;
     last = now;
+    const sp = scrollPos();
+    // color on past the unlock, off only once clearly back before it: the gap stops a scroll that
+    // hovers near the line (or the observer's own jitter) from flicking it on and off
+    if (sp > 470) reveal.goal = 1;
+    else if (sp < 420) reveal.goal = 0;
+    if (reveal.goal) unlocked = true;
+    if (unlocked) target = Math.max(target, utils.clamp((sp - CHAT_FROM) / (CHAT_TO - CHAT_FROM), 0, 1) * chat.duration);
     if (head < target) {
       head = Math.min(target, head + dt * 3); // at most 3x real texting speed
       chat.seek(head);
       if (head >= chat.duration) openKeypad();
     }
-    const on = kbOn && scrollT > CHAT_TO;
+    // the page fades light once the color has spread, and back to black when it drains
+    root.classList.toggle('lit', hasGL ? reveal.cover > 0.45 : reveal.v > 0.6);
+    const on = kbOn && sp > CHAT_TO;
     if (on) {
       const r = compose.querySelector('.field').getBoundingClientRect();
       root.style.setProperty('--hint-y', `${r.top + r.height / 2}px`);
@@ -222,12 +237,7 @@ if (reduced) {
   createTimeline({
     defaults: { ease: 'outQuad', duration: 60 },
     autoplay: onScroll({ target: '#scroll', enter: 'top top', leave: 'bottom bottom', sync: 0.25 }),
-    onUpdate: (self) => {
-      paintReveal();
-      const p = utils.clamp((self.currentTime - CHAT_FROM) / (CHAT_TO - CHAT_FROM), 0, 1);
-      target = Math.max(target, p * chat.duration);
-      scrollT = self.currentTime;
-    },
+    onUpdate: paintReveal,
   })
     // the phone turns over from its back and pulls away
     .add(phone, { rotateY: [200, 0], rotateX: [16, 0], rotateZ: [-8, 0], duration: 300, ease: 'inOutCubic' }, 0)
@@ -246,10 +256,9 @@ if (reduced) {
     .add('.homebar', { opacity: [0, 1], duration: 20 }, 490)
     // color grows out of the black behind the phone; the page settles to light under it
     .add(reveal, { v: [0, 1], duration: 170, ease: 'inOutSine' }, 445)
-    .add(root, { '--bg': ['#000000', '#f5f6fb'], '--fg': ['#f5f6fb', '#22272b'], duration: 20, ease: 'linear' }, 590)
     .add(phone, { scale: [0.82, 1], y: [100, 0], duration: 90, ease: 'inOutQuad' }, 520)
-    // hold the finished phone before the footer
-    .add(hold, { t: [0, 1], duration: 120, ease: 'linear' }, 880);
+    // keeps the timeline exactly 1000 long, so its time matches scrollPos() and the CHAT_* marks
+    .add({ t: 0 }, { t: 1, duration: 1 }, 999);
 }
 
 // ── the real sign-up ──

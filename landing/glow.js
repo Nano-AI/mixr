@@ -1,8 +1,8 @@
 // Living background. A small Navier-Stokes fluid (velocity + ink) runs at low resolution;
 // the icon's color field is drawn on top of it, pushed around by the flow, so the page swirls
-// on its own and stirs when the cursor moves. While `reveal.v` (0..1, from the scroll timeline)
-// rises, the phone's center jets velocity and a "reveal dye" into the fluid; the color shows
-// wherever that dye has been carried, so the unlock blooms out as fluid, not as a shape.
+// on its own and stirs when the cursor moves. When `reveal.goal` flips to 1 (scroll passed the unlock),
+// a shockwave from behind the phone shoves the fluid and a "reveal dye" out to every edge; the color
+// shows wherever that dye is carried. When it flips back to 0, the wave runs inward and drains it.
 
 const VERT = `#version 300 es
 void main() {
@@ -18,10 +18,15 @@ uniform vec2 uRes;
 uniform float uTime;
 uniform vec2 uMouse;
 uniform vec2 uMouseVel;
-uniform float uEmit;
+uniform float uCover;
+uniform float uDir;
 out vec4 o;
 #define T(q) texture(uState, (q) / uRes)
 #define DT 0.15
+// wavefront radius in fluid pixels: fast out of the phone, easing as it passes the corners
+float waveR(vec2 res, float b) {
+  return length(res * 0.5) * 1.7 * (1.0 - pow(1.0 - clamp(b, 0.0, 1.0), 3.0)); // well past the corners
+}
 
 void main() {
   vec2 p = gl_FragCoord.xy;
@@ -58,12 +63,20 @@ void main() {
   c.xy += DT * k2 * vec2(-cos(t * 0.4), sin(t * 0.6)) * 1.4;
   c.w += DT * (k1 + k2) * 0.5;
 
-  // the unlock: an outward jet with a twist, from behind the phone
+  // the unlock: a shockwave from behind the phone out past every edge (uDir = 1), or back in
+  // when scrolled back (uDir = -1). It shoves the fluid with uneven strength around the ring,
+  // so the front tears into tendrils.
   vec2 fromC = p - uRes * 0.5;
-  float kc = exp(-dot(fromC, fromC) / (r2 * 1.6));
-  vec2 dir = normalize(fromC + 1e-3);
-  c.xy += uEmit * kc * (dir * (3.2 + 1.6 * sin(atan(fromC.y, fromC.x) * 7.0 - t * 2.0)) + vec2(-dir.y, dir.x) * 3.0 * sin(atan(fromC.y, fromC.x) * 5.0 + t));
-  c.w += uEmit * kc * 0.8;
+  float dist = length(fromC);
+  if (uDir != 0.0) {
+    vec2 dir = fromC / max(dist, 1e-3);
+    float ang = atan(fromC.y, fromC.x);
+    float R = waveR(uRes, uCover);
+    float band = exp(-pow((dist - R) / (uRes.y * 0.09), 2.0));
+    float wob = 1.0 + 0.45 * sin(ang * 7.0 + t * 2.0) + 0.3 * sin(ang * 13.0 - t * 3.0);
+    c.xy += band * (uDir * dir * 4.5 * wob + vec2(-dir.y, dir.x) * 2.5 * sin(ang * 5.0 + t));
+    c.w += band * 0.35;
+  }
 
   // the cursor stirs it
   float km = exp(-dot(p - uMouse, p - uMouse) / (r2 * 0.3));
@@ -75,23 +88,34 @@ void main() {
   o = clamp(c, vec4(-5.0, -5.0, 0.5, 0.0), vec4(5.0, 5.0, 3.0, 5.0));
 }`;
 
-// reveal dye: carried by the fluid's velocity, fed at the center during the unlock, cleared when scrolled back
+// reveal dye: carried by the fluid's velocity, filled in behind the shockwave, cleared when scrolled back
 const DYE = `#version 300 es
 precision highp float;
 uniform sampler2D uState;
 uniform sampler2D uDye;
 uniform vec2 uRes;
-uniform float uEmit;
-uniform float uReveal;
+uniform float uCover;
+uniform float uDir;
 out vec4 o;
 #define DT 0.15
+// wavefront radius in fluid pixels: fast out of the phone, easing as it passes the corners
+float waveR(vec2 res, float b) {
+  return length(res * 0.5) * 1.7 * (1.0 - pow(1.0 - clamp(b, 0.0, 1.0), 3.0)); // well past the corners
+}
 void main() {
   vec2 p = gl_FragCoord.xy;
   vec2 vel = texture(uState, p / uRes).xy;
-  float d = texture(uDye, (p - DT * vel * 2.5) / uRes).x;
-  vec2 fromC = p - uRes * 0.5;
-  d += uEmit * exp(-dot(fromC, fromC) / pow(uRes.y * 0.1, 2.0)) * 0.12;
-  o = vec4(uReveal < 0.01 ? 0.0 : min(d, 1.5), 0.0, 0.0, 1.0);
+  float d = texture(uDye, (p - DT * vel * 4.0) / uRes).x;
+  // going out: fill well behind the wavefront, the front itself is whatever the flow carried ahead.
+  // coming back: erase outside the shrinking wave, so the color drains inward with the flow.
+  float R = waveR(uRes, uCover);
+  // the boundary is bent by the flow itself and by an uneven ring, so it splashes instead of expanding
+  vec2 fromC = p - uRes * 0.5 - vel * 4.0;
+  float ang = atan(fromC.y, fromC.x);
+  float lumpy = 1.0 + 0.12 * sin(ang * 5.0 + R * 0.05) + 0.07 * sin(ang * 11.0 - R * 0.08);
+  float inside = smoothstep(R * 0.8, R * 0.5, length(fromC) * lumpy);
+  d = uDir < 0.0 ? d * inside : max(d, inside);
+  o = vec4(uCover <= 0.0 ? 0.0 : min(d, 1.5), 0.0, 0.0, 1.0);
 }`;
 
 const VIEW = `#version 300 es
@@ -100,7 +124,7 @@ uniform sampler2D uState;
 uniform sampler2D uDye;
 uniform vec2 uRes;
 uniform float uTime;
-uniform float uReveal;
+uniform float uCover;
 out vec4 fragColor;
 
 float hash(vec2 p) {
@@ -160,10 +184,11 @@ void main() {
 
   // reveal: color shows wherever the fluid has carried the dye; the end of the scroll fills the rest
   float dye = texture(uDye, uv).x;
-  float m = max(smoothstep(0.02, 0.55, dye), smoothstep(0.82, 1.0, uReveal));
-  float aura = smoothstep(1.2, 0.0, length(p0)) * (0.10 + 0.07 * breathe) * (1.0 - uReveal);
+  // the last stretch of the wave fills whatever is left (the corners) as a fade, not a jitter
+  float m = max(smoothstep(0.02, 0.55, dye), smoothstep(0.8, 1.0, uCover));
+  float aura = smoothstep(1.2, 0.0, length(p0)) * (0.10 + 0.07 * breathe) * (1.0 - uCover);
   // the dye's leading edge glows, shifting between the icon's pink and blue
-  float rim = smoothstep(0.0, 0.05, dye) * (1.0 - smoothstep(0.05, 0.35, dye)) * (1.0 - smoothstep(0.8, 1.0, uReveal));
+  float rim = smoothstep(0.0, 0.05, dye) * (1.0 - smoothstep(0.05, 0.35, dye)) * (1.0 - smoothstep(0.85, 1.0, uCover));
   vec3 rimCol = mix(vec3(1.0, 0.45, 0.76), vec3(0.40, 0.52, 1.0), 0.5 + 0.5 * sin(atan(p0.y, p0.x) * 2.0 + t * 3.0));
   vec3 c = mix(col * aura, col, m) + rim * rimCol * 0.7;
   // settle into the page color at the bottom of the section, where the footer begins
@@ -183,7 +208,7 @@ function program(gl, frag) {
   gl.linkProgram(prog);
   if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) throw Error(gl.getProgramInfoLog(prog));
   const u = {};
-  for (const name of ['uState', 'uDye', 'uRes', 'uTime', 'uReveal', 'uMouse', 'uMouseVel', 'uEmit']) u[name] = gl.getUniformLocation(prog, name);
+  for (const name of ['uState', 'uDye', 'uRes', 'uTime', 'uMouse', 'uMouseVel', 'uCover', 'uDir']) u[name] = gl.getUniformLocation(prog, name);
   return { prog, u };
 }
 
@@ -244,10 +269,19 @@ export function startGlow(canvas, reveal, still) {
   let visible = true;
   new IntersectionObserver(([e]) => (visible = e.isIntersecting)).observe(canvas);
   const t0 = performance.now();
+  reveal.cover = still ? 1 : 0;
+  const BURST_MS = 1600;
+  let prev = performance.now();
   const frame = (now) => {
     const time = still ? 12 : (now - t0) / 1000;
-    // emit while the unlock is under way
-    const emit = reveal.v > 0.01 && reveal.v < 0.85 ? 1 : 0;
+    // coverage runs on its own clock toward "unlocked" or "locked", so the wave always reaches the
+    // edges (or drains all the way back) however fast you scroll
+    const goal = still || reveal.goal ? 1 : 0;
+    const step = (now - prev) / BURST_MS;
+    prev = now;
+    const before = reveal.cover;
+    reveal.cover = goal > before ? Math.min(1, before + step) : goal < before ? Math.max(0, before - step) : before;
+    const dir = reveal.cover > before ? 1 : reveal.cover < before ? -1 : 0;
     if (fluid()) {
       const clamp = (v) => Math.max(-20, Math.min(20, v));
       const vx = mouse.px === null ? 0 : clamp(mouse.x - mouse.px);
@@ -263,7 +297,8 @@ export function startGlow(canvas, reveal, still) {
       gl.uniform1f(sim.u.uTime, time);
       gl.uniform2f(sim.u.uMouse, mouse.x, mouse.y);
       gl.uniform2f(sim.u.uMouseVel, vx, vy);
-      gl.uniform1f(sim.u.uEmit, emit);
+      gl.uniform1f(sim.u.uCover, reveal.cover);
+      gl.uniform1f(sim.u.uDir, dir);
       gl.drawArrays(gl.TRIANGLES, 0, 3);
       bufs.reverse();
 
@@ -276,8 +311,8 @@ export function startGlow(canvas, reveal, still) {
       gl.uniform1i(dyeProg.u.uState, 0);
       gl.uniform1i(dyeProg.u.uDye, 1);
       gl.uniform2f(dyeProg.u.uRes, sw, sh);
-      gl.uniform1f(dyeProg.u.uEmit, emit);
-      gl.uniform1f(dyeProg.u.uReveal, reveal.v);
+      gl.uniform1f(dyeProg.u.uCover, reveal.cover);
+      gl.uniform1f(dyeProg.u.uDir, dir);
       gl.drawArrays(gl.TRIANGLES, 0, 3);
       dyes.reverse();
       gl.activeTexture(gl.TEXTURE0);
@@ -294,7 +329,7 @@ export function startGlow(canvas, reveal, still) {
     gl.uniform1i(view.u.uDye, 1);
     gl.uniform2f(view.u.uRes, canvas.width, canvas.height);
     gl.uniform1f(view.u.uTime, time);
-    gl.uniform1f(view.u.uReveal, reveal.v);
+    gl.uniform1f(view.u.uCover, reveal.cover);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
   };
   const loop = (now) => {
