@@ -6,14 +6,20 @@
     "node": ">=24"
   },
   "scripts": {
-    "start": "TZ=America/Los_Angeles node src/server.ts",
-    "chat": "TZ=America/Los_Angeles TRANSPORT=console node scripts/chat.ts",
+    "spectrum": "node --env-file=.env src/spectrum.ts",
+    "start": "TZ=America/Los_Angeles node --env-file-if-exists=.env src/server.ts",
+    "chat": "TZ=America/Los_Angeles TRANSPORT=console node --env-file-if-exists=.env scripts/chat.ts",
     "seed": "TZ=America/Los_Angeles node scripts/seed.ts",
     "test": "DB_PATH=:memory: LLM=fake TRANSPORT=console TZ=America/Los_Angeles node --test 'test/**/*.test.ts'",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
     "@types/node": "^26.6.5",
+    "@types/nodemailer": "^8.0.2",
     "typescript": "^7.0.2"
+  },
+  "dependencies": {
+    "nodemailer": "^10.1.2",
+    "spectrum-ts": "^12.11.0"
   }
 }

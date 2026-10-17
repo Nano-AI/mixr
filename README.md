@@ -58,6 +58,37 @@ npm run seed -- 1000      # synthetic users + matching benchmark
 npm start                 # server: POST /webhook/photon, GET /health
 ```
 
+## Messaging application
+
+Run `npm start` for the onboarding and meetup-message router. See
+[Messaging operations](docs/messaging-operations.md) for environment setup,
+team integration contracts, delivery recovery, and container deployment.
+The current Person 2/3 implementations remain stubs; verification requires
+a configured email sender.
+
+## Spectrum iMessage connection check
+
+`npm run spectrum` runs a standalone iMessage echo agent using `src/spectrum.ts`.
+It preserves the existing Mixr application entry points and does not yet route
+messages into onboarding or meetup matching. It replies with
+`Photon Spectrum is connected. You said: <message>`.
+
+Use Node 24 or later. On this development machine, Node 24 is installed locally:
+
+```bash
+PATH="$HOME/.local/node_modules/.bin:$PATH" npm run spectrum
+```
+
+The ignored `.env` needs `PROJECT_ID` and `PROJECT_SECRET` from Photon.
+Only start after the sender is registered on Free/Pro (text the user's assigned
+number), or a healthy dedicated line is selected on Business. Stop with Ctrl-C.
+Operational logs report receipt and reply acceptance without printing message text.
+Reply acceptance does not itself prove device delivery.
+
+Type checking uses `skipLibCheck`, matching Photon's project template, because
+the SDK's published declaration bundle contains type errors. Application source
+still receives strict type checking.
+
 ## Privacy & consent
 
 - **Opt-in only.** Students join via a shared number or QR code. We don't scrape the UW directory: it prohibits commercial use and it's a spam/legal risk.
