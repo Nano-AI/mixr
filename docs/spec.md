@@ -45,6 +45,14 @@ Foundation (done, shared, don't change without coordination): `config.ts`, `type
 - `editProfile(userId, change)`: LLM `edit_profile` → `{profile_text}` (add/remove/modify slots). Fallback: append a slot.
 - `evolveFromRsvp(userId, eventId)` (job `evolve_profile`): LLM `evolve_profile` → `{action: 'no_update'|'refine'|'append', profile_text, note}` given current profile, the event, and the user's past YES events. Rules: topic already covered → no_update (prevents frequent board-game nights diluting jazz); event reveals skill/context → refine that slot; genuinely new interest → append an equal-weight slot. Fallback: no-op. Trace before/after.
 
+## Hard exclusions (`src/safety/`)
+
+"Don't invite nate", "never match me with my ex": these are **never** left to an LLM. `exclusions(owner, name_pattern, event_id)` rows (event_id NULL = always and mutual; set = that event only) resolve through the `exclusion_matches` / `block_pairs` views (whole-word name prefix, so "nate" = every Nate but not Nathan; also catches people who join later).
+- Stage 1 of every funnel drops them in SQL: `recall(v, {shield: {people, eventId}})` excludes anyone blocked with `people` (for event waves: everyone going, host included) or excluded from the event; waves re-check the pool, so the reranker never sees an excluded person.
+- Also enforced at: discover (event hidden), join / RSVP yes (refused, invite → `withdrawn`), waitlist promotion (skipped), intros (refused).
+- Creating an exclusion withdraws now-forbidden pending invites silently; the excluded person is never told.
+- Agent: `exclude_person {name, scope: always|event, event_id|null}`, called as soon as asked. `create_event` rejects titles/descriptions that name other students or contain exclusion wording (guests can read them).
+
 ## Matching (`src/matching/`, `src/relay/`)
 
 - `recall(vector, {exclude, limit=40})`: `state='active' AND embedding IS NOT NULL AND (snoozed_until IS NULL OR snoozed_until <= clock)`, `ORDER BY embedding <=> v`. `similarity = 1 - distance`. Trace `recall` (top hits, no vectors).

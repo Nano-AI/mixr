@@ -12,6 +12,7 @@ import { hydeProfile } from './hyde.ts';
 import { recomputeEt } from './rocchio.ts';
 import { goingCount, goingNames, loadEvent, rowToEvent, setStatus, toEventRow, userName, type EventFull } from './store.ts';
 import { closeEvent, maybeEarlyWave, roundTimeout, runWave, triggerWaveNow } from './waves.ts';
+import { allowedAt } from '../safety/index.ts';
 
 export { setMatchingDeps } from './deps.ts';
 
@@ -55,10 +56,12 @@ async function releaseSeat(ev: EventFull, userId: number): Promise<void> {
   const t = await now();
   if (t.getTime() >= ev.startsAt.getTime()) return;
   // Offer the seat to whoever got waitlisted first; otherwise go find someone new right away.
-  const wait = await one<{ user_id: number }>(
-    `SELECT user_id FROM event_invites WHERE event_id = $1 AND status = 'waitlisted' ORDER BY responded_at, user_id LIMIT 1`,
+  const waiting = await q<{ user_id: number }>(
+    `SELECT user_id FROM event_invites WHERE event_id = $1 AND status = 'waitlisted' ORDER BY responded_at, user_id`,
     [ev.id],
   );
+  let wait: { user_id: number } | undefined;
+  for (const w of waiting) if (await allowedAt(w.user_id, ev.id)) { wait = w; break; }
   const fresh = (await loadEvent(ev.id))!;
   if (wait) {
     await q(`UPDATE event_invites SET status = 'invited', invited_at = $3, responded_at = NULL WHERE event_id = $1 AND user_id = $2`, [
@@ -93,6 +96,11 @@ export async function respondToInvite(userId: number, eventId: number, response:
   let result: RsvpResult;
   if (response === 'yes') {
     if (inv.status === 'yes') return { outcome: 'accepted', detail: copy.guestAlreadyIn(c) };
+    // A hard exclusion (block with someone going, or "not this event") wins over any invite, old or new.
+    if (!(await allowedAt(userId, eventId))) {
+      await setInvite('withdrawn');
+      return { outcome: 'closed', detail: copy.guestClosed(ev.title) };
+    }
     // Claim a seat in one statement: the capacity check and the write can't interleave with another RSVP.
     const claimed = await q(
       `UPDATE event_invites SET status = 'yes', responded_at = $3
@@ -223,6 +231,9 @@ export async function discoverEvents(userId: number, query?: string): Promise<Ev
        FROM (${SUMMARY_SQL}
          WHERE e.status = 'open' AND e.starts_at > $1 AND e.host_id <> $2
            AND NOT EXISTS (SELECT 1 FROM event_invites x WHERE x.event_id = e.id AND x.user_id = $2 AND x.status = 'yes')
+           -- hard exclusions: never surface an event where they're blocked with someone going, or excluded from it
+           AND NOT EXISTS (SELECT 1 FROM event_attendees a JOIN block_pairs bp ON bp.a = a.user_id AND bp.b = $2 WHERE a.event_id = e.id)
+           AND NOT EXISTS (SELECT 1 FROM exclusion_matches xm WHERE xm.event_id = e.id AND xm.user_id = $2)
        ) sm JOIN events ev ON ev.id = sm.id
      ) s WHERE s.going < s.capacity ORDER BY ${qv ? 's.fit DESC' : 's.starts_at'} LIMIT 3`,
     qv ? [t, userId, toVec(qv)] : [t, userId],
@@ -282,7 +293,7 @@ export async function joinEvent(userId: number, eventId: number): Promise<RsvpRe
   const ev = await loadEvent(eventId);
   if (!ev) return { outcome: 'closed', detail: "i couldn't find that event" };
   if (ev.hostId === userId) return { outcome: 'closed', detail: "that's your own event — you're already going!" };
-  if (!accepting(ev, await now())) return { outcome: 'closed', detail: copy.guestClosed(ev.title) };
+  if (!accepting(ev, await now()) || !(await allowedAt(userId, eventId))) return { outcome: 'closed', detail: copy.guestClosed(ev.title) };
   await q(
     `INSERT INTO event_invites (event_id, user_id, wave, pitch, invited_at, source) VALUES ($1, $2, $3, 'joined via discover', $4, 'discover')
      ON CONFLICT (event_id, user_id) DO NOTHING`,

@@ -3,10 +3,10 @@ import { useEffect, useRef, useSyncExternalStore } from 'react';
 
 // ---- Domain types (mirror src/types.ts + the /api/state JSON shape) ----
 
-export type TraceKind = 'recall' | 'rerank' | 'wave' | 'rocchio' | 'profile_update' | 'agent' | 'llm' | 'embed' | 'job' | 'hyde';
-export const TRACE_KINDS: TraceKind[] = ['recall', 'rerank', 'wave', 'rocchio', 'profile_update', 'agent', 'llm', 'embed', 'job', 'hyde'];
+export type TraceKind = 'recall' | 'rerank' | 'wave' | 'rocchio' | 'profile_update' | 'agent' | 'llm' | 'embed' | 'job' | 'hyde' | 'safety';
+export const TRACE_KINDS: TraceKind[] = ['recall', 'rerank', 'wave', 'rocchio', 'profile_update', 'agent', 'llm', 'embed', 'job', 'hyde', 'safety'];
 
-export type InviteStatus = 'invited' | 'yes' | 'no_busy' | 'no_vibe' | 'expired' | 'waitlisted' | 'cancelled';
+export type InviteStatus = 'invited' | 'yes' | 'no_busy' | 'no_vibe' | 'expired' | 'waitlisted' | 'cancelled' | 'withdrawn';
 export type EventStatus = 'open' | 'full' | 'closed' | 'cancelled';
 export type IntroStatus = 'proposed' | 'target_asked' | 'connected' | 'declined' | 'expired';
 

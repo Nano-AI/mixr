@@ -45,14 +45,17 @@ CREATE TABLE IF NOT EXISTS event_invites (
   wave INTEGER NOT NULL,
   pitch TEXT NOT NULL,
   status TEXT NOT NULL DEFAULT 'invited'
-    CHECK (status IN ('invited', 'yes', 'no_busy', 'no_vibe', 'expired', 'waitlisted', 'cancelled')),
+    CHECK (status IN ('invited', 'yes', 'no_busy', 'no_vibe', 'expired', 'waitlisted', 'cancelled', 'withdrawn')),
   invited_at TIMESTAMPTZ NOT NULL,
   responded_at TIMESTAMPTZ,
   source TEXT NOT NULL DEFAULT 'invite' CHECK (source IN ('invite', 'discover')),  -- how they got on the list
   PRIMARY KEY (event_id, user_id)
 );
--- Databases created before `source` existed.
+-- Databases created before `source` / 'withdrawn' existed.
 ALTER TABLE event_invites ADD COLUMN IF NOT EXISTS source TEXT NOT NULL DEFAULT 'invite';
+ALTER TABLE event_invites DROP CONSTRAINT IF EXISTS event_invites_status_check;
+ALTER TABLE event_invites ADD CONSTRAINT event_invites_status_check
+  CHECK (status IN ('invited', 'yes', 'no_busy', 'no_vibe', 'expired', 'waitlisted', 'cancelled', 'withdrawn'));
 
 -- Who is going to each event: the host plus every guest whose RSVP is 'yes'. Derived from events + event_invites
 -- (the stored source of truth), so it can never disagree with seat counting.
@@ -63,6 +66,31 @@ CREATE OR REPLACE VIEW event_attendees AS
   SELECT i.event_id, i.user_id, 'guest' AS role, i.responded_at AS joined_at, i.source
   FROM event_invites i
   WHERE i.status = 'yes';
+
+-- People a user never wants to be matched with. Enforced as a hard filter in recall (stage 1 of recall → rerank),
+-- never left to the LLM. event_id NULL = always and mutual (no shared invites, events, or intros either way);
+-- event_id set = keep them off that one event. name_pattern is the lowercased name the user gave ("nate sullivan",
+-- or just "nate" = every Nate); it also catches someone who joins later.
+CREATE TABLE IF NOT EXISTS exclusions (
+  id SERIAL PRIMARY KEY,
+  owner_id INTEGER NOT NULL REFERENCES users(id),
+  name_pattern TEXT NOT NULL,
+  event_id INTEGER REFERENCES events(id),
+  created_at TIMESTAMPTZ NOT NULL
+);
+
+-- Exclusions resolved to the users they currently match (whole-word prefix of the name, never the owner).
+CREATE OR REPLACE VIEW exclusion_matches AS
+  SELECT x.id AS exclusion_id, x.owner_id, x.event_id, u.id AS user_id
+  FROM exclusions x
+  JOIN users u ON u.id <> x.owner_id AND u.name IS NOT NULL
+   AND (lower(u.name) = x.name_pattern OR lower(u.name) LIKE x.name_pattern || ' %');
+
+-- Every blocked pair, both directions: a and b must never be put together.
+CREATE OR REPLACE VIEW block_pairs AS
+  SELECT owner_id AS a, user_id AS b FROM exclusion_matches WHERE event_id IS NULL
+  UNION
+  SELECT user_id AS a, owner_id AS b FROM exclusion_matches WHERE event_id IS NULL;
 
 CREATE TABLE IF NOT EXISTS intros (
   id SERIAL PRIMARY KEY,

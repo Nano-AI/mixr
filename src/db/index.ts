@@ -34,7 +34,7 @@ export async function one<T = Record<string, any>>(sql: string, params: unknown[
 // Children before parents so foreign keys hold. Keeps the embedding cache (it's free money).
 export async function reset(): Promise<void> {
   await (await db()).exec(
-    `TRUNCATE traces, jobs, intros, event_invites, events, messages, users RESTART IDENTITY CASCADE;
+    `TRUNCATE traces, jobs, intros, exclusions, event_invites, events, messages, users RESTART IDENTITY CASCADE;
      UPDATE clock SET now = now();`,
   );
 }

@@ -9,6 +9,7 @@ const INVITE_LABEL: Record<InviteStatus, string> = {
   expired: 'expired',
   waitlisted: 'waitlisted',
   cancelled: 'cancelled',
+  withdrawn: 'withdrawn',
 };
 
 export const INVITE_STATUSES = Object.keys(INVITE_LABEL) as InviteStatus[];

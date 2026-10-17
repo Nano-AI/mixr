@@ -35,7 +35,7 @@ export type NewEvent = {
   capacity: number;
 };
 
-export type InviteStatus = 'invited' | 'yes' | 'no_busy' | 'no_vibe' | 'expired' | 'waitlisted' | 'cancelled';
+export type InviteStatus = 'invited' | 'yes' | 'no_busy' | 'no_vibe' | 'expired' | 'waitlisted' | 'cancelled' | 'withdrawn';
 export type RsvpResponse = 'yes' | 'no_busy' | 'no_vibe' | 'cancel';
 export type RsvpResult = { outcome: 'accepted' | 'waitlisted' | 'declined' | 'cancelled' | 'closed' | 'not_invited'; detail: string };
 
@@ -65,7 +65,7 @@ export type PersonMatch = { userId: number; name: string; reason: string };
 export type IntroStatus = 'proposed' | 'target_asked' | 'connected' | 'declined' | 'expired';
 export type Intro = { id: number; requesterId: number; targetId: number; reason: string; status: IntroStatus; targetMessage: string | null };
 
-export type TraceKind = 'recall' | 'rerank' | 'wave' | 'rocchio' | 'profile_update' | 'agent' | 'llm' | 'embed' | 'job' | 'hyde';
+export type TraceKind = 'recall' | 'rerank' | 'wave' | 'rocchio' | 'profile_update' | 'agent' | 'llm' | 'embed' | 'job' | 'hyde' | 'safety';
 
 // Server-sent events to the dashboard.
 export type BusEvent =

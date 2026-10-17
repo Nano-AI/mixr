@@ -5,6 +5,7 @@ import { embedOne } from '../llm/embed.ts';
 import { llm, pipelineLlm } from '../llm/index.ts';
 import { trace } from '../trace.ts';
 import { profileSlots } from '../profiles/index.ts';
+import { shieldedIds } from '../safety/index.ts';
 import { RERANK_SCHEMA, RERANK_SYSTEM } from './prompts.ts';
 
 // tune: stage-1 recall size (cheap, tolerant of polymaths' diluted vectors).
@@ -16,7 +17,9 @@ const PEOPLE_K = 3;
 // tune: max words of a profile slot quoted in a fallback pitch.
 const PITCH_WORDS = 8;
 
-export type RecallOpts = { exclude?: number[]; limit?: number; refId?: number | null; label?: string };
+// shield: whose exclusions apply (e.g. everyone going to the event) and which event. Shielded users are dropped in
+// SQL here, before ranking, so the reranker never sees them.
+export type RecallOpts = { exclude?: number[]; limit?: number; refId?: number | null; label?: string; shield?: { people: number[]; eventId?: number | null } };
 
 const r3 = (x: number) => Math.round(x * 1000) / 1000;
 export const firstName = (name: string | null | undefined): string => (name ?? '').trim().split(/\s+/)[0] || 'someone';
@@ -24,7 +27,8 @@ export const firstName = (name: string | null | undefined): string => (name ?? '
 // Stage 1: pgvector cosine top-N over active, non-snoozed users with an embedding.
 export async function recall(vector: number[], opts: RecallOpts = {}): Promise<RecallHit[]> {
   const limit = opts.limit ?? RECALL_LIMIT;
-  const exclude = opts.exclude ?? [];
+  const shielded = opts.shield ? await shieldedIds(opts.shield.people, opts.shield.eventId) : [];
+  const exclude = [...(opts.exclude ?? []), ...shielded];
   const t = await now();
   const rows = await q<{ id: number; name: string | null; canonical_profile: string | null; similarity: number }>(
     `SELECT id, name, canonical_profile, 1 - (embedding <=> $1::vector) AS similarity
@@ -46,6 +50,7 @@ export async function recall(vector: number[], opts: RecallOpts = {}): Promise<R
     label: opts.label ?? null,
     limit,
     excluded: exclude.length,
+    shielded: shielded.length, // hard exclusions (blocks / "don't invite X"), dropped before ranking
     count: hits.length,
     hits: hits.slice(0, TRACE_HITS).map((h) => ({ userId: h.userId, name: h.name, similarity: r3(h.similarity) })),
   });
@@ -142,7 +147,7 @@ export async function findPeople(userId: number, request?: string, k?: number): 
     [userId],
   );
   const exclude = [userId, ...linked.map((r) => r.other)];
-  const candidates = await recall(vector, { exclude, refId: userId, label: ask ? `people: ${ask}` : 'people' });
+  const candidates = await recall(vector, { exclude, shield: { people: [userId] }, refId: userId, label: ask ? `people: ${ask}` : 'people' });
 
   const target = [
     ask ? `Looking for: ${ask}` : 'Looking for: people who share their interests',

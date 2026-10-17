@@ -4,6 +4,7 @@ import { buildProfile, editProfile } from '../profiles/index.ts';
 import { createEvent, discoverEvents, joinEvent, manageEvent, respondToInvite, type ManageAction } from '../events/index.ts';
 import { findPeople } from '../matching/index.ts';
 import { pendingIntrosFor, requestIntro, respondToIntro } from '../relay/index.ts';
+import { blockedBetween, excludePerson } from '../safety/index.ts';
 import type { AgentTool } from '../llm/index.ts';
 import type { RsvpResponse, User } from '../types.ts';
 import { firstName } from './context.ts';
@@ -61,6 +62,18 @@ function parseIso(v: unknown, field: string): Date {
   return d;
 }
 
+// Event titles/descriptions are shown to invitees. Keep other students' names and exclusion requests out of them.
+async function assertShareable(hostId: number, text: string): Promise<void> {
+  if (/\b(don'?t|do not|never|not|no)\s+(be\s+|get\s+)?(invit|includ|add|ask|tell)\w*/i.test(text) || /\b(exclude|keep\s+\w+\s+(off|out|away))\b/i.test(text)) {
+    throw new ToolError('the description must not say who to exclude (guests can read it). call exclude_person for that, then create the event without it');
+  }
+  const named = await one<{ name: string }>(
+    `SELECT name FROM users WHERE id <> $1 AND name LIKE '% %' AND position(lower(name) in lower($2)) > 0 LIMIT 1`,
+    [hostId, text],
+  );
+  if (named) throw new ToolError("the title/description must not name other students (guests can read it). leave people's names out; if they asked to keep someone out, use exclude_person");
+}
+
 const eventView = (e: { id: number; title: string; startsAt: string | Date; location: string }) => ({
   event_id: e.id,
   title: e.title,
@@ -112,9 +125,12 @@ export const TOOLS: ToolDef[] = [
       if (!u.name) throw new ToolError("ask for the host's first name first");
       const startsAt = parseIso(a.starts_at, 'starts_at');
       if (startsAt <= (await now())) throw new ToolError('starts_at is in the past. check the current time in the context block.');
+      const title = nonEmpty(a.title, 'title');
+      const description = nonEmpty(a.description, 'description');
+      await assertShareable(u.id, `${title}\n${description}`);
       const e = await createEvent(u.id, {
-        title: nonEmpty(a.title, 'title'),
-        description: nonEmpty(a.description, 'description'),
+        title,
+        description,
         startsAt,
         location: nonEmpty(a.location, 'location'),
         capacity: posInt(a.capacity, 'capacity', MAX_CAPACITY),
@@ -220,6 +236,7 @@ export const TOOLS: ToolDef[] = [
         [u.id, t.id],
       );
       if (dup) throw new ToolError(`there is already an intro between them and ${firstName(t.name)}`);
+      if (await blockedBetween(u.id, t.id)) throw new ToolError("can't set up that intro. tell the user simply that it didn't work out and offer to look for someone else");
       const intro = await requestIntro(u.id, t.id, nonEmpty(a.reason, 'reason'));
       return { ok: true, intro_id: intro.id, status: intro.status, target: firstName(t.name) };
     },
@@ -240,6 +257,34 @@ export const TOOLS: ToolDef[] = [
       const message = typeof a.message === 'string' && a.message.trim() ? a.message.trim() : undefined;
       const intro = await respondToIntro(u.id, a.intro_id, a.accept, message);
       return { ok: true, status: intro.status };
+    },
+  },
+  {
+    name: 'exclude_person',
+    description:
+      'Keep someone away from this user, enforced as a hard filter (never left to chance). scope "always": the two are never invited to the same events and never suggested or introduced to each other (an ex, someone they are uncomfortable around, anyone they say never). scope "event": just keep that person off one event this user hosts. Call it as soon as they ask, even before the event exists (use always). Silent: the other person is never told.',
+    parameters: obj({
+      name: str('The person as the user named them, e.g. "nate sullivan". A first name alone excludes everyone with that first name.'),
+      scope: { type: 'string', enum: ['always', 'event'] },
+      event_id: { type: ['integer', 'null'], description: 'For scope "event": an event this user hosts (see context). Else null.' },
+    }),
+    run: async (ctx, a) => {
+      const u = await me(ctx);
+      const name = nonEmpty(a.name, 'name');
+      if (a.scope !== 'always' && a.scope !== 'event') throw new ToolError('scope must be always or event');
+      let eventId: number | null = null;
+      if (a.scope === 'event') {
+        const ev = await one<{ host_id: number }>('SELECT host_id FROM events WHERE id = $1', [a.event_id]);
+        if (!ev || ev.host_id !== u.id) throw new ToolError('scope "event" needs an event_id this user hosts; use scope "always" otherwise');
+        eventId = a.event_id;
+      }
+      try {
+        await excludePerson(u.id, name, eventId);
+      } catch (e) {
+        throw new ToolError(e instanceof Error ? e.message : String(e));
+      }
+      // Nothing about whether that person uses mixr or had an invite comes back, so it can't leak into a reply.
+      return { ok: true, scope: a.scope, note: "done. confirm briefly; don't say whether that person uses mixr or was invited" };
     },
   },
   {
