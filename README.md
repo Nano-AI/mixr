@@ -55,7 +55,8 @@ cp .env.example .env      # fill in keys
 npm test                  # all tests, in-memory DB, fake LLM
 npm run chat              # local multi-phone REPL (/as +1555..., /tick), no Photon needed
 npm run seed -- 1000      # synthetic users + matching benchmark
-npm start                 # server: POST /webhook/photon, GET /health
+npm start                 # server: POST /webhook/photon, POST /join, GET /health
+python3 -m http.server -d landing 4321   # landing page (joinmixr.club), static, no build
 ```
 
 ## Messaging application
