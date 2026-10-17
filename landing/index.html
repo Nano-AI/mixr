@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>mixr</title>
   <meta name="description" content="mixr is a campus organizer you can text. Tell it what you're into and it plans a meetup with UW students who want the same thing.">
-  <meta name="theme-color" content="#f5f6fb">
+  <meta name="theme-color" content="#000000">
   <link rel="icon" href="brand/mixr-icon.svg" type="image/svg+xml">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -21,11 +21,12 @@
   <main>
     <section class="scroll" id="scroll">
       <div class="stage">
+        <div class="burst-wrap" aria-hidden="true"><div class="burst"></div></div>
         <p class="lede">The campus organizer you text.</p>
 
         <div class="phone" id="phone">
           <div class="body">
-            <i class="btn action"></i><i class="btn vol-up"></i><i class="btn vol-down"></i><i class="btn power"></i>
+            <i class="cam"><b></b><b></b><b></b></i><i class="btn action"></i><i class="btn vol-up"></i><i class="btn vol-down"></i><i class="btn power"></i>
           </div>
 
           <div class="face">
@@ -50,7 +51,7 @@
                   <span class="notif-icon"><img src="brand/mixr-icon.svg" alt=""><i class="msg-badge"></i></span>
                   <span class="notif-text">
                     <span class="notif-head"><b>mixr</b><span>now</span></span>
-                    <span>hey, I'm mixr 👋 tell me what you're into and I'll find people at UW who are into it too.</span>
+                    <span>hey, it's mixr. what have you been wanting to do more of?</span>
                   </span>
                 </div>
                 <span class="lock-btn left"><svg viewBox="0 0 16 26" width="14"><path d="M3 1h10v5l-2.5 4v14H5.5V10L3 6Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg></span>
@@ -73,23 +74,24 @@
                 <div class="thread" id="thread" role="log" aria-live="polite" aria-label="Conversation with mixr">
                   <div class="rail" id="rail">
                     <p class="stamp"><b>iMessage</b><br>Today <span data-clock>9:41</span></p>
-                    <p class="b them" data-step>hey, I'm mixr 👋 tell me what you're into and I'll find people at UW who are into it too.</p>
-                    <p class="b me" data-step>pickup soccer, pho on the ave, and I need a study group for CSE 332</p>
+                    <p class="b them" data-step>hey, it's mixr. what have you been wanting to do more of?</p>
+                    <p class="b me" data-step>pickup soccer mostly. also need people to study for 332 with</p>
                     <p class="typing them" data-step data-typing><i></i><i></i><i></i></p>
-                    <p class="b them" data-step>Found 3 people into pickup soccer who are free Thursday.</p>
-                    <p class="b them" data-step>Thu 5:00pm at IMA Field 2. Reply YES or PASS.</p>
-                    <p class="b me" data-step>YES</p>
+                    <p class="b them" data-step>found 3 people who want to play thursday</p>
+                    <p class="b them" data-step>5pm at the IMA fields work for you?</p>
+                    <p class="b me" data-step>yeah I'm down</p>
                     <p class="receipt" data-step>Delivered</p>
                     <p class="typing them" data-step data-typing><i></i><i></i><i></i></p>
-                    <p class="b them" data-step>You're on. Maya, Jordan, Priya and you. I'll text a reminder an hour before.</p>
-                    <p class="b them" data-step>Want in? Type your number below and I'll text you.</p>
+                    <p class="b them" data-step>you're in with maya, jordan and priya. I'll text you an hour before, and I'm still looking for your 332 people</p>
+                    <p class="b them" data-step>your turn. what's your number?</p>
                   </div>
                 </div>
 
                 <form class="compose" id="compose" novalidate>
                   <span class="plus" aria-hidden="true"><svg viewBox="0 0 14 14" width="13"><path d="M7 1v12M1 7h12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></span>
                   <div class="field">
-                    <span class="typed" id="typed" role="textbox" aria-label="Your phone number" aria-readonly="true" data-empty></span>
+                    <input id="num" class="sr" type="tel" inputmode="none" autocomplete="tel-national" enterkeyhint="send" aria-label="Your phone number">
+                    <span class="typed" id="typed" aria-hidden="true" data-empty></span>
                     <button class="send" type="submit" aria-label="Send" disabled>
                       <svg viewBox="0 0 24 24" width="24"><circle cx="12" cy="12" r="12"/><path d="M12 17.5V7m0 0-4.5 4.5M12 7l4.5 4.5" fill="none" stroke="#fff" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
                     </button>
