@@ -60,14 +60,18 @@ test('onboarding requires consent and email verification, accepts corrections an
   await c.say(c.code());
   assert.equal(user().email_verified, 1);
   await c.say('frisbee');
+  assert.equal(user().step, 'braindump');
+  await c.say('PROFILE');
   await c.say('also philosophy');
   assert.match(c.extracted.at(-1)!, /frisbee.*\nCorrection: also philosophy/);
   await c.say('YES');
+  assert.equal(user().step, 'active');
+  assert.equal(db.prepare('SELECT count(*) AS n FROM availability').get()!.n, 0);
+  await c.say('FREE');
   assert.equal(user().step, 'availability');
   await c.say('1 99');
   assert.equal(user().step, 'availability');
   await c.say('1 2');
-  await c.say('3');
   assert.equal(user().step, 'active');
   assert.equal(
     db.prepare('SELECT count(*) AS n FROM availability').get()!.n,
@@ -142,7 +146,7 @@ test('completed students can cancel existing invites while editing availability'
   const c = conversation();
   for (const t of ['hi', 'YES', 'Ana', 'ana@uw.edu']) await c.say(t);
   await c.say(c.code());
-  for (const t of ['frisbee', 'OK', '1', '3', 'FREE']) await c.say(t);
+  for (const t of ['frisbee', 'PROFILE', 'OK', 'FREE']) await c.say(t);
   let cancelled = false;
   const route = createRouter({
     recordResponse: async () => {
