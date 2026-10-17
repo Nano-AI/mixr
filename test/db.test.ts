@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { db, tx, toBlob, fromBlob, reset } from '../src/db.ts';
+import { DatabaseSync } from 'node:sqlite';
+import { db, tx, toBlob, fromBlob, reset, migrate } from '../src/db.ts';
 import { makeUser, axis, blend } from './helpers.ts';
 
 test('makeUser returns an id and stores a readable embedding', () => {
@@ -29,4 +30,14 @@ test('tx rolls back when fn throws', () => {
   reset();
   assert.throws(() => tx(() => { makeUser(); throw new Error('boom'); }), /boom/);
   assert.equal(db.prepare('SELECT count(*) AS n FROM users').get()!.n, 0);
+});
+
+test('migrate adds invitations.place_suggestion to an older database, idempotently', () => {
+  const old = new DatabaseSync(':memory:');
+  old.exec("CREATE TABLE invitations (meetup_id INTEGER NOT NULL, user_id INTEGER NOT NULL, state TEXT NOT NULL DEFAULT 'pending', responded_at TEXT, PRIMARY KEY (meetup_id, user_id))");
+  migrate(old);
+  migrate(old);
+  const cols = (old.prepare('PRAGMA table_info(invitations)').all() as { name: string }[]).map((c) => c.name);
+  assert.ok(cols.includes('place_suggestion'));
+  old.close();
 });
