@@ -4,9 +4,9 @@ import { buildProfile, editProfile } from '../profiles/index.ts';
 import { createEvent, discoverEvents, joinEvent, manageEvent, respondToInvite, type ManageAction } from '../events/index.ts';
 import { findPeople } from '../matching/index.ts';
 import { pendingIntrosFor, requestIntro, respondToIntro } from '../relay/index.ts';
-import { blockedBetween, excludePerson } from '../safety/index.ts';
+import { addRequirement, blockedEitherWay, blockPerson, removeRequirement, RequirementError, unblockPerson, validate } from '../requirements/index.ts';
 import type { AgentTool } from '../llm/index.ts';
-import type { RsvpResponse, User } from '../types.ts';
+import type { RequirementSpec, RsvpResponse, User } from '../types.ts';
 import { firstName } from './context.ts';
 import { laHuman } from './time.ts';
 
@@ -30,6 +30,33 @@ const obj = (properties: Record<string, unknown>) => ({
 const str = (description: string) => ({ type: 'string', description });
 const nstr = (description: string) => ({ type: ['string', 'null'], description });
 const int = (description: string) => ({ type: 'integer', description });
+
+// A special request, as the agent passes it. person: keep someone off one event. text: who qualifies, judged only
+// from what people wrote in their own profiles. Gender and protected traits are refused.
+const requirementSchema = obj({
+  kind: { type: 'string', enum: ['person', 'text'] },
+  person: nstr('kind person: the name as the user said it ("sam lee"; a first name alone covers everyone with it). Else null.'),
+  criterion: nstr(
+    'kind text: who qualifies, about interests, skill, vibe, or communities people mention about themselves (e.g. "advanced tennis, 4.0+", "queer folks", "beginners welcome / new to climbing"). Never gender, race, religion, disability, nationality. Else null.',
+  ),
+  strength: { type: 'string', enum: ['must', 'prefer'], description: 'must = only people who meet it; prefer = "if possible"' },
+  said: str("The user's words for this request, brief."),
+});
+
+function toSpec(a: any): RequirementSpec {
+  if (a?.kind === 'person') return { kind: 'person', person: String(a.person ?? ''), strength: a.strength, said: String(a.said ?? '') };
+  return { kind: 'text', criterion: String(a?.criterion ?? ''), strength: a?.strength, said: String(a?.said ?? '') };
+}
+
+// RequirementError carries an agent-facing message; surface it as a ToolError.
+async function asTool<T>(fn: () => Promise<T> | T): Promise<T> {
+  try {
+    return await fn();
+  } catch (e) {
+    if (e instanceof RequirementError) throw new ToolError(e.message);
+    throw e;
+  }
+}
 
 async function me(ctx: Ctx): Promise<User> {
   const u = await getUser(ctx.userId);
@@ -65,13 +92,13 @@ function parseIso(v: unknown, field: string): Date {
 // Event titles/descriptions are shown to invitees. Keep other students' names and exclusion requests out of them.
 async function assertShareable(hostId: number, text: string): Promise<void> {
   if (/\b(don'?t|do not|never|not|no)\s+(be\s+|get\s+)?(invit|includ|add|ask|tell)\w*/i.test(text) || /\b(exclude|keep\s+\w+\s+(off|out|away))\b/i.test(text)) {
-    throw new ToolError('the description must not say who to exclude (guests can read it). call exclude_person for that, then create the event without it');
+    throw new ToolError('the description must not say who to keep out (guests can read it). put that in requirements (kind person) or use block_person, and leave it out of the text');
   }
   const named = await one<{ name: string }>(
     `SELECT name FROM users WHERE id <> $1 AND name LIKE '% %' AND position(lower(name) in lower($2)) > 0 LIMIT 1`,
     [hostId, text],
   );
-  if (named) throw new ToolError("the title/description must not name other students (guests can read it). leave people's names out; if they asked to keep someone out, use exclude_person");
+  if (named) throw new ToolError("the title/description must not name other students (guests can read it). leave people's names out; to keep someone out use requirements (kind person) or block_person");
 }
 
 const eventView = (e: { id: number; title: string; startsAt: string | Date; location: string }) => ({
@@ -119,6 +146,7 @@ export const TOOLS: ToolDef[] = [
       starts_at: str('Start time as ISO 8601 with the America/Los_Angeles UTC offset, e.g. 2026-10-23T19:00:00-07:00. Resolve relative times against the current time in the context block.'),
       location: str('Where it happens.'),
       capacity: int('Number of guest spots, excluding the host.'),
+      requirements: { type: 'array', items: requirementSchema, description: 'Special requests for who gets invited (empty array if none). Enforced by the system.' },
     }),
     run: async (ctx, a) => {
       const u = await me(ctx);
@@ -128,7 +156,10 @@ export const TOOLS: ToolDef[] = [
       const title = nonEmpty(a.title, 'title');
       const description = nonEmpty(a.description, 'description');
       await assertShareable(u.id, `${title}\n${description}`);
+      const requirements = (Array.isArray(a.requirements) ? a.requirements : []).map(toSpec);
+      for (const r of requirements) await asTool(() => validate(r, 0));
       const e = await createEvent(u.id, {
+        requirements,
         title,
         description,
         startsAt,
@@ -190,6 +221,8 @@ export const TOOLS: ToolDef[] = [
           going: e.goingCount,
           spots_left: e.spotsLeft,
           fit: e.fit ?? null,
+          for_who: e.forWho ?? [], // the host's requirements, safe to mention
+          heads_up: e.headsUp ?? [], // people this user blocked who are going: mention before they join
         })),
       };
     },
@@ -236,7 +269,7 @@ export const TOOLS: ToolDef[] = [
         [u.id, t.id],
       );
       if (dup) throw new ToolError(`there is already an intro between them and ${firstName(t.name)}`);
-      if (await blockedBetween(u.id, t.id)) throw new ToolError("can't set up that intro. tell the user simply that it didn't work out and offer to look for someone else");
+      if (await blockedEitherWay(u.id, t.id)) throw new ToolError("can't set up that intro. tell the user simply that it didn't work out and offer to look for someone else");
       const intro = await requestIntro(u.id, t.id, nonEmpty(a.reason, 'reason'));
       return { ok: true, intro_id: intro.id, status: intro.status, target: firstName(t.name) };
     },
@@ -260,31 +293,60 @@ export const TOOLS: ToolDef[] = [
     },
   },
   {
-    name: 'exclude_person',
+    name: 'block_person',
     description:
-      'Keep someone away from this user, enforced as a hard filter (never left to chance). scope "always": the two are never invited to the same events and never suggested or introduced to each other (an ex, someone they are uncomfortable around, anyone they say never). scope "event": just keep that person off one event this user hosts. Call it as soon as they ask, even before the event exists (use always). Silent: the other person is never told.',
+      "Block someone the user doesn't want around (an ex, someone they don't like or feel unsafe with). Effects: they never get invited to (or see) events this user hosts and vice versa, people-matching never pairs them, and if they end up at the same event anyway this user gets a heads-up. The blocked person is never told. Returns heads_up: upcoming events where that person is already going alongside this user.",
+    parameters: obj({ name: str('The person as the user named them, e.g. "nate sullivan". A first name alone blocks everyone with that first name.') }),
+    run: async (ctx, a) => {
+      const u = await me(ctx);
+      const { headsUp } = await asTool(() => blockPerson(u.id, nonEmpty(a.name, 'name')));
+      return {
+        ok: true,
+        heads_up: headsUp.map((h) => ({ event_id: h.eventId, title: h.title, when: laHuman(h.startsAt), name: h.name })),
+        note: "confirm briefly; never say whether that person uses mixr unless it's in heads_up",
+      };
+    },
+  },
+  {
+    name: 'unblock_person',
+    description: 'Undo a block, using the same name they blocked (see their blocks in the context block).',
+    parameters: obj({ name: str('The blocked name exactly as listed in the context block.') }),
+    run: async (ctx, a) => {
+      const u = await me(ctx);
+      const n = await unblockPerson(u.id, nonEmpty(a.name, 'name'));
+      if (!n) throw new ToolError('no active block with that name; check the blocks listed in the context block');
+      return { ok: true };
+    },
+  },
+  {
+    name: 'add_requirement',
+    description:
+      'Add a special request. scope "event": who gets invited to an event this user hosts (kind person = keep someone off it; kind text = who qualifies). scope "standing": a lasting preference for who they get matched with when finding people (kind text only; use block_person to keep a person away everywhere). Enforced by the system, never by wording in a description.',
     parameters: obj({
-      name: str('The person as the user named them, e.g. "nate sullivan". A first name alone excludes everyone with that first name.'),
-      scope: { type: 'string', enum: ['always', 'event'] },
+      scope: { type: 'string', enum: ['event', 'standing'] },
       event_id: { type: ['integer', 'null'], description: 'For scope "event": an event this user hosts (see context). Else null.' },
+      requirement: requirementSchema,
     }),
     run: async (ctx, a) => {
       const u = await me(ctx);
-      const name = nonEmpty(a.name, 'name');
-      if (a.scope !== 'always' && a.scope !== 'event') throw new ToolError('scope must be always or event');
       let eventId: number | null = null;
       if (a.scope === 'event') {
         const ev = await one<{ host_id: number }>('SELECT host_id FROM events WHERE id = $1', [a.event_id]);
-        if (!ev || ev.host_id !== u.id) throw new ToolError('scope "event" needs an event_id this user hosts; use scope "always" otherwise');
+        if (!ev || ev.host_id !== u.id) throw new ToolError('scope "event" needs an event_id this user hosts');
         eventId = a.event_id;
-      }
-      try {
-        await excludePerson(u.id, name, eventId);
-      } catch (e) {
-        throw new ToolError(e instanceof Error ? e.message : String(e));
-      }
-      // Nothing about whether that person uses mixr or had an invite comes back, so it can't leak into a reply.
-      return { ok: true, scope: a.scope, note: "done. confirm briefly; don't say whether that person uses mixr or was invited" };
+      } else if (a.scope !== 'standing') throw new ToolError('scope must be event or standing');
+      const r = await asTool(() => addRequirement(u.id, toSpec(a.requirement), eventId));
+      return { ok: true, requirement_id: r.id };
+    },
+  },
+  {
+    name: 'remove_requirement',
+    description: 'Drop a special request they set earlier (requirement_id from the context block).',
+    parameters: obj({ requirement_id: int('requirement_id from the context block.') }),
+    run: async (ctx, a) => {
+      const u = await me(ctx);
+      if (!(await removeRequirement(u.id, a.requirement_id))) throw new ToolError('no active requirement with that id for this user');
+      return { ok: true };
     },
   },
   {

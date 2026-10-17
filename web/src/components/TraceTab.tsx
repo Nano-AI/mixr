@@ -22,7 +22,8 @@ const KIND_LABEL: Record<TraceKind, string> = {
   embed: 'embed',
   job: 'job',
   hyde: 'hyde',
-  safety: 'safety',
+  requirement: 'request',
+  block: 'block',
 };
 
 const PAGE = 120;

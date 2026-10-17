@@ -48,3 +48,11 @@ export const guestSpotOpened = (e: EventCopy): string =>
 
 export const guestEventCancelled = (host: string, e: EventCopy): string =>
   `heads up: ${host} cancelled ${e.title} (${e.when}). sorry!`;
+
+// Appended to a confirmation when people this user blocked are going. Empty when there's nobody.
+export const headsUp = (names: string[]): string =>
+  names.length ? ` heads up: ${names.join(' and ')} ${names.length === 1 ? 'is' : 'are'} going too.` : '';
+
+// Self-serve join refused because the host asked for something specific (text rules only; safe to say).
+export const guestNotForYou = (title: string, criterion: string): string =>
+  `the host set ${title} up for ${criterion}, so i can't add you to that one. want me to look for something similar?`;

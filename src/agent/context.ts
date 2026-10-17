@@ -3,6 +3,7 @@ import { HOUR } from '../clock.ts';
 import { history } from '../transport/index.ts';
 import { hostedEventsFor, openInvitesFor, plansFor } from '../events/index.ts';
 import { pendingIntrosFor } from '../relay/index.ts';
+import { blocksOf, requirementsOwnedBy } from '../requirements/index.ts';
 import type { AgentInputItem } from '../llm/index.ts';
 import type { User } from '../types.ts';
 import { laHuman, laIso, laLong, TZ } from './time.ts';
@@ -53,13 +54,15 @@ async function recentResults(userId: number, now: Date): Promise<Recent> {
 }
 
 export async function contextBlock(user: User, now: Date): Promise<string> {
-  const [allInvites, intros, hosted, plans, recent, texts] = await Promise.all([
+  const [allInvites, intros, hosted, plans, recent, texts, blocks, reqs] = await Promise.all([
     safe(() => openInvitesFor(user.id)),
     safe(() => pendingIntrosFor(user.id)),
     safe(() => hostedEventsFor(user.id)),
     safe(() => plansFor(user.id)),
     recentResults(user.id, now),
     q<{ n: number }>(`SELECT count(*)::int AS n FROM messages WHERE user_id = $1 AND direction = 'in'`, [user.id]),
+    safe(() => blocksOf(user.id)),
+    safe(() => requirementsOwnedBy(user.id)),
   ]);
   // Accepted invites show up under plans (with the roster); here only the ones still waiting on them.
   const invites = allInvites.filter((e) => e.inviteStatus !== 'yes');
@@ -84,7 +87,9 @@ export async function contextBlock(user: User, now: Date): Promise<string> {
     L.push('invites waiting on THEIR answer (event_id for respond_to_invite):');
     for (const e of invites) {
       L.push(
-        `- event_id ${e.id}: "${e.title}" on ${laHuman(e.startsAt)} at ${e.location} | host ${firstName(e.hostName)} | ${e.goingCount} going, ${e.spotsLeft} spot(s) left | their status: ${e.inviteStatus}`,
+        `- event_id ${e.id}: "${e.title}" on ${laHuman(e.startsAt)} at ${e.location} | host ${firstName(e.hostName)} | ${e.goingCount} going, ${e.spotsLeft} spot(s) left | their status: ${e.inviteStatus}${
+          e.headsUp?.length ? ` | HEADS UP: someone they blocked is going: ${e.headsUp.join(', ')}` : ''
+        }`,
       );
       if (e.description) L.push(`  details: ${e.description}`);
     }
@@ -97,7 +102,9 @@ export async function contextBlock(user: User, now: Date): Promise<string> {
       const others = e.attendees.filter((a) => a.userId !== user.id);
       const who = others.length ? others.map((a) => `${firstName(a.name)}${a.role === 'host' ? ' (host)' : ''}`).join(', ') : 'nobody else yet';
       L.push(
-        `- event_id ${e.id}: "${e.title}" on ${laHuman(e.startsAt)} at ${e.location} | they are the ${e.role} | going: ${who} | ${e.spotsLeft} spot(s) left`,
+        `- event_id ${e.id}: "${e.title}" on ${laHuman(e.startsAt)} at ${e.location} | they are the ${e.role} | going: ${who} | ${e.spotsLeft} spot(s) left${
+          e.headsUp?.length ? ` | HEADS UP: going includes someone they blocked: ${e.headsUp.join(', ')}` : ''
+        }`,
       );
     }
   } else L.push('their plans: nothing upcoming');
@@ -118,6 +125,17 @@ export async function contextBlock(user: User, now: Date): Promise<string> {
       L.push(`- event_id ${e.id}: "${e.title}" on ${laHuman(e.startsAt)} at ${e.location} | status ${e.status} | ${e.goingCount} going, ${e.spotsLeft} spot(s) left`);
     }
   } else L.push('events they host: none');
+
+  L.push('');
+  L.push(blocks.length ? `their blocks (names as they gave them): ${blocks.join(', ')}` : 'their blocks: none');
+  if (reqs.length) {
+    L.push('special requests they set (requirement_id for remove_requirement):');
+    for (const r of reqs) {
+      const where = r.eventId === null ? 'standing (finding people)' : `event_id ${r.eventId}`;
+      const what = r.kind === 'person' ? `keep off: ${r.person}` : r.criterion;
+      L.push(`- requirement_id ${r.id}: ${where} | ${r.strength} | ${what}`);
+    }
+  } else L.push('special requests they set: none');
 
   if (recent.people.length) {
     L.push('');

@@ -18,6 +18,7 @@ Rules:
 - If the level of a skill-gated activity is genuinely unknown, use the neutral wording for that activity and (Level: Unspecified). Never invent a level the person did not imply.
 - Third-person noun phrases only: no first person ("I", "my"), no filler ("really", "love to", "enjoys", "passionate about"), no slang, no emoji, no hedging. Normalize slang into standard terms ("hoop" -> "pickup basketball").
 - Only include interests the person actually expressed. No personality traits, no availability, no contact details, no names.
+- Communities or identities the person volunteers about themselves and wants to connect over (e.g. queer community, LGBTQ+ friend groups, first-gen students) are kept, in their words, inside the related slot or as their own slot. Never infer or add one they didn't state. Never record gender, race, religion, disability or nationality.
 - Each slot ends with a period.`;
 
 export const CANONICALIZE_SYSTEM = `You convert a college student's free-form braindump about themselves into a canonical interest profile used for semantic matching with other students and events. The text is embedded as a single vector, so consistent, specific, equal-weight wording matters more than prose quality.

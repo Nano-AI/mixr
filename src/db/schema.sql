@@ -67,30 +67,63 @@ CREATE OR REPLACE VIEW event_attendees AS
   FROM event_invites i
   WHERE i.status = 'yes';
 
--- People a user never wants to be matched with. Enforced as a hard filter in recall (stage 1 of recall → rerank),
--- never left to the LLM. event_id NULL = always and mutual (no shared invites, events, or intros either way);
--- event_id set = keep them off that one event. name_pattern is the lowercased name the user gave ("nate sullivan",
--- or just "nate" = every Nate); it also catches someone who joins later.
-CREATE TABLE IF NOT EXISTS exclusions (
+-- Blocks: someone a user doesn't want around. Name as the blocker gave it ("nate sullivan"; "nate" = every Nate),
+-- which also covers someone who joins later. Effects (src/requirements):
+--   - the blocked person is never invited to (or shown) events the blocker hosts, and vice versa
+--   - people-matching never pairs them, in either direction; no intros
+--   - if they end up at the same event anyway, the blocker gets a heads-up
+--   - the blocked person is never told
+CREATE TABLE IF NOT EXISTS blocks (
   id SERIAL PRIMARY KEY,
-  owner_id INTEGER NOT NULL REFERENCES users(id),
+  blocker_id INTEGER NOT NULL REFERENCES users(id),
   name_pattern TEXT NOT NULL,
-  event_id INTEGER REFERENCES events(id),
+  active BOOLEAN NOT NULL DEFAULT true,
   created_at TIMESTAMPTZ NOT NULL
 );
 
--- Exclusions resolved to the users they currently match (whole-word prefix of the name, never the owner).
-CREATE OR REPLACE VIEW exclusion_matches AS
-  SELECT x.id AS exclusion_id, x.owner_id, x.event_id, u.id AS user_id
-  FROM exclusions x
-  JOIN users u ON u.id <> x.owner_id AND u.name IS NOT NULL
-   AND (lower(u.name) = x.name_pattern OR lower(u.name) LIKE x.name_pattern || ' %');
+-- Blocks resolved to the users they currently match (whole-word name prefix, never the blocker).
+CREATE OR REPLACE VIEW block_matches AS
+  SELECT b.id AS block_id, b.blocker_id, u.id AS blocked_id
+  FROM blocks b
+  JOIN users u ON b.active AND u.id <> b.blocker_id AND u.name IS NOT NULL
+   AND (lower(u.name) = b.name_pattern OR lower(u.name) LIKE b.name_pattern || ' %');
 
--- Every blocked pair, both directions: a and b must never be put together.
-CREATE OR REPLACE VIEW block_pairs AS
-  SELECT owner_id AS a, user_id AS b FROM exclusion_matches WHERE event_id IS NULL
-  UNION
-  SELECT user_id AS a, owner_id AS b FROM exclusion_matches WHERE event_id IS NULL;
+-- Special requests as data ("keep sam off this one", "advanced players only", "queer folks if possible"). Enforced by
+-- code at the cheapest reliable stage, never left to the reranker's discretion: person rules are SQL filters before
+-- recall; text rules are judged per candidate from what people wrote in their own profiles, and code drops the fails.
+--   event_id set  = this event's invites (person or text)
+--   event_id NULL = standing preference for this user's people-matching (text only; use blocks for people)
+CREATE TABLE IF NOT EXISTS requirements (
+  id SERIAL PRIMARY KEY,
+  owner_id INTEGER NOT NULL REFERENCES users(id),
+  event_id INTEGER REFERENCES events(id),
+  kind TEXT NOT NULL CHECK (kind IN ('person', 'text')),
+  person_pattern TEXT,                -- kind person: lowercased name as given
+  criterion TEXT,                     -- kind text: who qualifies, judged from profiles
+  strength TEXT NOT NULL CHECK (strength IN ('must', 'prefer')),
+  said TEXT NOT NULL,                 -- the user's words; private to the owner and the inspector
+  active BOOLEAN NOT NULL DEFAULT true,
+  created_at TIMESTAMPTZ NOT NULL,
+  CHECK (kind <> 'person' OR event_id IS NOT NULL)
+);
+
+-- Person rules resolved to the users they currently match.
+CREATE OR REPLACE VIEW person_rule_matches AS
+  SELECT r.id AS requirement_id, r.owner_id, r.event_id, r.strength, u.id AS user_id
+  FROM requirements r
+  JOIN users u ON r.kind = 'person' AND r.active AND u.id <> r.owner_id AND u.name IS NOT NULL
+   AND (lower(u.name) = r.person_pattern OR lower(u.name) LIKE r.person_pattern || ' %');
+
+-- Verdicts from the rerank-stage judge on text rules, so later rounds don't re-check (or re-invite) people.
+CREATE TABLE IF NOT EXISTS screenings (
+  context TEXT NOT NULL,              -- 'event:12' or 'people:7'
+  user_id INTEGER NOT NULL REFERENCES users(id),
+  requirement_id INTEGER NOT NULL REFERENCES requirements(id),
+  verdict TEXT NOT NULL CHECK (verdict IN ('pass', 'fail', 'unknown')),
+  reason TEXT,
+  created_at TIMESTAMPTZ NOT NULL,
+  PRIMARY KEY (context, user_id, requirement_id)
+);
 
 CREATE TABLE IF NOT EXISTS intros (
   id SERIAL PRIMARY KEY,

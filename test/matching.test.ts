@@ -94,7 +94,7 @@ describe('rerank', () => {
     expect(req!.input).toContain('user_id: 3');
     const s: any = req!.schema;
     expect(s.additionalProperties).toBe(false);
-    expect(s.properties.picks.items.required).toEqual(['user_id', 'reason', 'pitch']);
+    expect(s.properties.picks.items.required).toEqual(['user_id', 'reason', 'pitch', 'checks']);
     const [t] = await q<{ ref_id: number; data: any }>(`SELECT ref_id, data FROM traces WHERE kind = 'rerank'`);
     expect(t.ref_id).toBe(5);
     expect(t.data.picks.map((p: any) => p.reason)).toEqual(['r3', 'r1']);

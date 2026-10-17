@@ -27,7 +27,7 @@ app.use('/api/*', cors({ origin: (o) => (/^https?:\/\/(localhost|127\.0\.0\.1)(:
 app.onError((e, c) => c.json({ ok: false, error: errMsg(e) }, 500));
 
 app.get('/api/state', async (c) => {
-  const [users, events, invites, intros, llmRows, embedRow, attendees] = await Promise.all([
+  const [users, events, invites, intros, llmRows, embedRow, attendees, reqs, blockRows, screenRows] = await Promise.all([
     q(`SELECT id, phone, name, state, canonical_profile, snoozed_until, seeded FROM users ORDER BY id`),
     q(
       `SELECT e.id, e.host_id, h.name AS host_name, e.title, e.raw_description, e.starts_at, e.location, e.capacity, e.status,
@@ -56,6 +56,15 @@ app.get('/api/state', async (c) => {
          FROM event_attendees a JOIN users u ON u.id = a.user_id
         ORDER BY a.event_id, a.role = 'guest', a.joined_at NULLS LAST, a.user_id`,
     ),
+    q(`SELECT id, owner_id, event_id, kind, person_pattern, criterion, strength, said FROM requirements WHERE active ORDER BY id`),
+    q(
+      `SELECT b.blocker_id, b.name_pattern, coalesce(array_agg(m.blocked_id) FILTER (WHERE m.blocked_id IS NOT NULL), '{}') AS matches
+         FROM blocks b LEFT JOIN block_matches m ON m.block_id = b.id WHERE b.active GROUP BY b.id ORDER BY b.id`,
+    ),
+    q(
+      `SELECT s.context, s.user_id, u.name, s.requirement_id, s.verdict, s.reason
+         FROM screenings s JOIN users u ON u.id = s.user_id ORDER BY s.context, s.created_at`,
+    ),
   ]);
 
   const invitesByEvent = new Map<number, unknown[]>();
@@ -65,6 +74,8 @@ app.get('/api/state', async (c) => {
     invitesByEvent.set(i.event_id, list);
   }
 
+  const reqView = (r: any) => ({ id: r.id, ownerId: r.owner_id, eventId: r.event_id, kind: r.kind, person: r.person_pattern, criterion: r.criterion, strength: r.strength, said: r.said });
+  const screenView = (x: any) => ({ userId: x.user_id, name: x.name, requirementId: x.requirement_id, verdict: x.verdict, reason: x.reason });
   const attendeesByEvent = new Map<number, unknown[]>();
   for (const a of attendees) {
     const list = attendeesByEvent.get(a.event_id) ?? [];
@@ -82,6 +93,8 @@ app.get('/api/state', async (c) => {
       profile: u.canonical_profile,
       snoozedUntil: iso(u.snoozed_until),
       seeded: u.seeded,
+      blocks: blockRows.filter((b) => b.blocker_id === u.id).map((b) => ({ name: b.name_pattern, matches: b.matches })),
+      requirements: reqs.filter((r) => r.owner_id === u.id && r.event_id === null).map(reqView), // standing
     })),
     events: events.map((e) => ({
       id: e.id,
@@ -100,6 +113,8 @@ app.get('/api/state', async (c) => {
       cosToE0: Number(e.cos_to_e0),
       invites: invitesByEvent.get(e.id) ?? [],
       attendees: attendeesByEvent.get(e.id) ?? [], // host + confirmed guests
+      requirements: reqs.filter((r) => r.event_id === e.id).map(reqView),
+      screenings: screenRows.filter((x) => x.context === `event:${e.id}`).map(screenView),
     })),
     intros: intros.map((x) => ({ id: x.id, requesterName: x.requester_name, targetName: x.target_name, reason: x.reason, status: x.status })),
     usage: {

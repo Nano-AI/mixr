@@ -200,6 +200,36 @@ function EventDetail({
         {(ev.attendees ?? []).every((a) => a.role === 'host') && <li className="invite muted small">No guests yet.</li>}
       </ul>
 
+      {(ev.requirements?.length ?? 0) > 0 && (
+        <>
+          <div className="section-head">
+            <h4>Special requests</h4>
+            <span className="muted small">enforced: person rules before recall, text rules judged per candidate</span>
+          </div>
+          <ul className="req-list">
+            {ev.requirements!.map((r) => {
+              const verdicts = (ev.screenings ?? []).filter((x) => x.requirementId === r.id);
+              const failed = verdicts.filter((x) => x.verdict !== 'pass');
+              return (
+                <li key={r.id} className="req">
+                  <div className="req-top">
+                    <span className="tag tag-muted">{r.strength}</span>
+                    <strong>{r.kind === 'person' ? `keep off: ${r.person}` : r.criterion}</strong>
+                    {r.kind === 'text' && (
+                      <span className="muted small">
+                        {verdicts.length - failed.length} pass · {failed.length} screened out
+                        {failed.length > 0 && `: ${failed.map((x) => x.name ?? `#${x.userId}`).join(', ')}`}
+                      </span>
+                    )}
+                  </div>
+                  <div className="req-said">“{r.said}”</div>
+                </li>
+              );
+            })}
+          </ul>
+        </>
+      )}
+
       <div className="internal">
         <div className="internal-label">internal · never shown to students</div>
         <div className="meta-grid">

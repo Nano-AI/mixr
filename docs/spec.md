@@ -45,13 +45,21 @@ Foundation (done, shared, don't change without coordination): `config.ts`, `type
 - `editProfile(userId, change)`: LLM `edit_profile` → `{profile_text}` (add/remove/modify slots). Fallback: append a slot.
 - `evolveFromRsvp(userId, eventId)` (job `evolve_profile`): LLM `evolve_profile` → `{action: 'no_update'|'refine'|'append', profile_text, note}` given current profile, the event, and the user's past YES events. Rules: topic already covered → no_update (prevents frequent board-game nights diluting jazz); event reveals skill/context → refine that slot; genuinely new interest → append an equal-weight slot. Fallback: no-op. Trace before/after.
 
-## Hard exclusions (`src/safety/`)
+## Blocks and special requests (`src/requirements/`)
 
-"Don't invite nate", "never match me with my ex": these are **never** left to an LLM. `exclusions(owner, name_pattern, event_id)` rows (event_id NULL = always and mutual; set = that event only) resolve through the `exclusion_matches` / `block_pairs` views (whole-word name prefix, so "nate" = every Nate but not Nathan; also catches people who join later).
-- Stage 1 of every funnel drops them in SQL: `recall(v, {shield: {people, eventId}})` excludes anyone blocked with `people` (for event waves: everyone going, host included) or excluded from the event; waves re-check the pool, so the reranker never sees an excluded person.
-- Also enforced at: discover (event hidden), join / RSVP yes (refused, invite → `withdrawn`), waitlist promotion (skipped), intros (refused).
-- Creating an exclusion withdraws now-forbidden pending invites silently; the excluded person is never told.
-- Agent: `exclude_person {name, scope: always|event, event_id|null}`, called as soon as asked. `create_event` rejects titles/descriptions that name other students or contain exclusion wording (guests can read them).
+Anything about who should or shouldn't be included is data, enforced by code at the cheapest reliable stage of the funnel. Never left to the reranker's discretion, never written into an event description.
+
+**Blocks** (`blocks`, resolved by the `block_matches` view; whole-word name prefix, so "nate" = every Nate but not Nathan, and it covers people who join later):
+- The blocked person is never invited to, or shown in discover, events the blocker hosts, and vice versa (stage 0, SQL, before recall).
+- People-matching never pairs them, either direction; intros are refused.
+- Someone else's event keeps nobody out: whoever blocked the other gets a heads-up instead, whether they join after the blocked person (`heads up` appended to their confirmation, flagged in discover results and agent context) or the blocked person joins after them (a text).
+- Blocking withdraws now-forbidden pending invites silently; the blocked person is never told.
+
+**Special requests** (`requirements`): `kind person` (keep someone off one event) or `kind text` (who qualifies, e.g. "advanced tennis, 4.0+", "queer folks"), each `must` or `prefer`, scoped to an event or standing (people-matching, text only).
+- Person rules: SQL filter before recall (`prefer` = ranked lower).
+- Text rules: the rerank call returns a verdict per candidate per rule (pass/fail/unknown, judged only from what people wrote in their own profiles, never inferred). Code keeps only explicit passes on `must`, orders by `prefer` passes, and stores verdicts in `screenings` so later rounds skip the fails. No judge available + a `must` text rule = nobody qualifies (fail closed). Self-serve joins are judged once too.
+- Policy: no gender filters, nothing on race, religion, disability or nationality (validated in code and stated in both prompts). Identity/community (e.g. queer) counts only when people volunteer it; onboarding never asks.
+- Agent tools: `block_person`, `unblock_person`, `add_requirement`, `remove_requirement`, and `create_event.requirements`. Guests only ever see text rules ("for: advanced tennis, 4.0+").
 
 ## Matching (`src/matching/`, `src/relay/`)
 

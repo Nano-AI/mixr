@@ -3,8 +3,8 @@ import { useEffect, useRef, useSyncExternalStore } from 'react';
 
 // ---- Domain types (mirror src/types.ts + the /api/state JSON shape) ----
 
-export type TraceKind = 'recall' | 'rerank' | 'wave' | 'rocchio' | 'profile_update' | 'agent' | 'llm' | 'embed' | 'job' | 'hyde' | 'safety';
-export const TRACE_KINDS: TraceKind[] = ['recall', 'rerank', 'wave', 'rocchio', 'profile_update', 'agent', 'llm', 'embed', 'job', 'hyde', 'safety'];
+export type TraceKind = 'recall' | 'rerank' | 'wave' | 'rocchio' | 'profile_update' | 'agent' | 'llm' | 'embed' | 'job' | 'hyde' | 'requirement' | 'block';
+export const TRACE_KINDS: TraceKind[] = ['recall', 'rerank', 'wave', 'rocchio', 'profile_update', 'agent', 'llm', 'embed', 'job', 'hyde', 'requirement', 'block'];
 
 export type InviteStatus = 'invited' | 'yes' | 'no_busy' | 'no_vibe' | 'expired' | 'waitlisted' | 'cancelled' | 'withdrawn';
 export type EventStatus = 'open' | 'full' | 'closed' | 'cancelled';
@@ -18,7 +18,22 @@ export type ApiUser = {
   profile: string | null;
   snoozedUntil: string | null;
   seeded: boolean;
+  blocks?: { name: string; matches: number[] }[];
+  requirements?: ApiRequirement[]; // standing (people-matching) preferences
 };
+
+export type ApiRequirement = {
+  id: number;
+  ownerId: number;
+  eventId: number | null;
+  kind: 'person' | 'text';
+  person: string | null;
+  criterion: string | null;
+  strength: 'must' | 'prefer';
+  said: string;
+};
+
+export type ApiScreening = { userId: number; name: string | null; requirementId: number; verdict: 'pass' | 'fail' | 'unknown'; reason: string | null };
 
 export type ApiInvite = {
   userId: number;
@@ -57,6 +72,8 @@ export type ApiEvent = {
   cosToE0: number | null;
   invites: ApiInvite[];
   attendees?: ApiAttendee[];
+  requirements?: ApiRequirement[];
+  screenings?: ApiScreening[];
 };
 
 export type ApiIntro = { id: number; requesterName: string | null; targetName: string | null; reason: string; status: IntroStatus };

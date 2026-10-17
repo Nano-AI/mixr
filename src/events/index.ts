@@ -12,7 +12,17 @@ import { hydeProfile } from './hyde.ts';
 import { recomputeEt } from './rocchio.ts';
 import { goingCount, goingNames, loadEvent, rowToEvent, setStatus, toEventRow, userName, type EventFull } from './store.ts';
 import { closeEvent, maybeEarlyWave, roundTimeout, runWave, triggerWaveNow } from './waves.ts';
-import { allowedAt } from '../safety/index.ts';
+import {
+  addRequirement,
+  eventTextRules,
+  hardEligible,
+  headsUpFor,
+  headsUpOnJoin,
+  publicLabels,
+  screeningFor,
+  validate,
+} from '../requirements/index.ts';
+import { matchingDeps } from './deps.ts';
 
 export { setMatchingDeps } from './deps.ts';
 
@@ -29,6 +39,8 @@ const eventCopy = async (ev: EventFull): Promise<copy.EventCopy> => ({
 export async function createEvent(hostId: number, d: NewEvent): Promise<EventRow> {
   const t = await now();
   const capacity = Math.max(1, Math.floor(d.capacity || 1));
+  // Reject bad requirements before anything exists (0 stands in for the event id they'll get).
+  for (const spec of d.requirements ?? []) validate(spec, 0);
   const hyde = await hydeProfile({ ...d, capacity });
   const e0 = await embedOne(hyde.text);
   const r = await one(
@@ -38,6 +50,8 @@ export async function createEvent(hostId: number, d: NewEvent): Promise<EventRow
     [hostId, d.title, d.description, d.startsAt.toISOString(), d.location, capacity, hyde.text, toVec(e0), t.toISOString()],
   );
   const ev = rowToEvent(r!);
+  // Stored before the first round is scheduled, so even the first invites respect them.
+  for (const spec of d.requirements ?? []) await addRequirement(hostId, spec, ev.id);
   await schedule('wave', { eventId: ev.id, afterWave: 0 }, t);
   await schedule('close_event', { eventId: ev.id }, ev.startsAt);
   await trace('hyde', ev.id, { title: ev.title, source: hyde.source, targetProfile: hyde.text, ...(hyde.error ? { error: hyde.error } : {}) });
@@ -61,7 +75,7 @@ async function releaseSeat(ev: EventFull, userId: number): Promise<void> {
     [ev.id],
   );
   let wait: { user_id: number } | undefined;
-  for (const w of waiting) if (await allowedAt(w.user_id, ev.id)) { wait = w; break; }
+  for (const w of waiting) if (await hardEligible(w.user_id, ev.id)) { wait = w; break; }
   const fresh = (await loadEvent(ev.id))!;
   if (wait) {
     await q(`UPDATE event_invites SET status = 'invited', invited_at = $3, responded_at = NULL WHERE event_id = $1 AND user_id = $2`, [
@@ -96,8 +110,8 @@ export async function respondToInvite(userId: number, eventId: number, response:
   let result: RsvpResult;
   if (response === 'yes') {
     if (inv.status === 'yes') return { outcome: 'accepted', detail: copy.guestAlreadyIn(c) };
-    // A hard exclusion (block with someone going, or "not this event") wins over any invite, old or new.
-    if (!(await allowedAt(userId, eventId))) {
+    // A hard rule (host block either way, "keep X off this one") wins over any invite, old or new.
+    if (!(await hardEligible(userId, eventId))) {
       await setInvite('withdrawn');
       return { outcome: 'closed', detail: copy.guestClosed(ev.title) };
     }
@@ -124,7 +138,9 @@ export async function respondToInvite(userId: number, eventId: number, response:
       await recomputeEt(eventId);
       await schedule('evolve_profile', { userId, eventId }, t);
       const host = copy.firstName(await userName(ev.hostId));
-      result = { outcome: 'accepted', detail: copy.guestAccepted(c, host) };
+      // Blocks don't keep people out of other hosts' events; they get a heads-up instead (both directions).
+      const blocked = await headsUpOnJoin(userId, eventId);
+      result = { outcome: 'accepted', detail: copy.guestAccepted(c, host) + copy.headsUp(blocked) };
     }
   } else if (response === 'cancel') {
     if (inv.status === 'yes') {
@@ -221,6 +237,9 @@ function toSummary(r: Record<string, any>): EventSummary {
   };
 }
 
+const DISCOVER_SCAN = 12; // tune: nearest open events looked at before hard rules hide some
+const DISCOVER_MAX = 3; // tune: events returned
+
 // Pull path: open events with spots, ranked for this user (optionally by a free-text query). Up to 3.
 export async function discoverEvents(userId: number, query?: string): Promise<EventSummary[]> {
   const t = (await now()).toISOString();
@@ -231,14 +250,21 @@ export async function discoverEvents(userId: number, query?: string): Promise<Ev
        FROM (${SUMMARY_SQL}
          WHERE e.status = 'open' AND e.starts_at > $1 AND e.host_id <> $2
            AND NOT EXISTS (SELECT 1 FROM event_invites x WHERE x.event_id = e.id AND x.user_id = $2 AND x.status = 'yes')
-           -- hard exclusions: never surface an event where they're blocked with someone going, or excluded from it
-           AND NOT EXISTS (SELECT 1 FROM event_attendees a JOIN block_pairs bp ON bp.a = a.user_id AND bp.b = $2 WHERE a.event_id = e.id)
-           AND NOT EXISTS (SELECT 1 FROM exclusion_matches xm WHERE xm.event_id = e.id AND xm.user_id = $2)
        ) sm JOIN events ev ON ev.id = sm.id
-     ) s WHERE s.going < s.capacity ORDER BY ${qv ? 's.fit DESC' : 's.starts_at'} LIMIT 3`,
+     ) s WHERE s.going < s.capacity ORDER BY ${qv ? 's.fit DESC' : 's.starts_at'} LIMIT ${DISCOVER_SCAN}`,
     qv ? [t, userId, toVec(qv)] : [t, userId],
   );
-  return rows.map(toSummary);
+  // Hard rules hide an event (a host who blocked them, or that they blocked; "keep X off this one"). Blocks with
+  // guests don't hide it: the result carries a heads-up instead. Text rules show up as who it's for.
+  const out: EventSummary[] = [];
+  for (const r of rows) {
+    if (out.length >= DISCOVER_MAX) break;
+    if (!(await hardEligible(userId, r.id))) continue;
+    const forWho = await publicLabels(r.id);
+    const headsUp = await headsUpFor(userId, r.id);
+    out.push({ ...toSummary(r), ...(forWho.length ? { forWho } : {}), ...(headsUp.length ? { headsUp } : {}) });
+  }
+  return out;
 }
 
 // Agent context helpers.
@@ -250,7 +276,12 @@ export async function openInvitesFor(userId: number): Promise<(EventSummary & { 
      ORDER BY s.starts_at`,
     [userId, (await now()).toISOString()],
   );
-  return rows.map((r) => ({ ...toSummary(r), inviteStatus: r.invite_status }));
+  return Promise.all(
+    rows.map(async (r) => {
+      const headsUp = await headsUpFor(userId, r.id);
+      return { ...toSummary(r), inviteStatus: r.invite_status, ...(headsUp.length ? { headsUp } : {}) };
+    }),
+  );
 }
 
 export async function hostedEventsFor(userId: number): Promise<(EventSummary & { status: string })[]> {
@@ -285,7 +316,12 @@ export async function plansFor(userId: number): Promise<Plan[]> {
      WHERE s.status IN ('open', 'full') AND s.starts_at > $2 ORDER BY s.starts_at`,
     [userId, (await now()).toISOString()],
   );
-  return Promise.all(rows.map(async (r) => ({ ...toSummary(r), role: r.role, attendees: await attendeesFor(r.id) })));
+  return Promise.all(
+    rows.map(async (r) => {
+      const headsUp = await headsUpFor(userId, r.id);
+      return { ...toSummary(r), role: r.role, attendees: await attendeesFor(r.id), ...(headsUp.length ? { headsUp } : {}) };
+    }),
+  );
 }
 
 // Join an event the user found via discover (creates the invite row, then accepts).
@@ -293,13 +329,40 @@ export async function joinEvent(userId: number, eventId: number): Promise<RsvpRe
   const ev = await loadEvent(eventId);
   if (!ev) return { outcome: 'closed', detail: "i couldn't find that event" };
   if (ev.hostId === userId) return { outcome: 'closed', detail: "that's your own event — you're already going!" };
-  if (!accepting(ev, await now()) || !(await allowedAt(userId, eventId))) return { outcome: 'closed', detail: copy.guestClosed(ev.title) };
+  if (!accepting(ev, await now()) || !(await hardEligible(userId, eventId))) return { outcome: 'closed', detail: copy.guestClosed(ev.title) };
+  // Self-serve joins still have to meet the host's 'must' text rules (judged once, then remembered).
+  const unmet = await unmetRule(userId, ev);
+  if (unmet) return { outcome: 'closed', detail: copy.guestNotForYou(ev.title, unmet) };
   await q(
     `INSERT INTO event_invites (event_id, user_id, wave, pitch, invited_at, source) VALUES ($1, $2, $3, 'joined via discover', $4, 'discover')
      ON CONFLICT (event_id, user_id) DO NOTHING`,
     [eventId, userId, ev.waveNumber, (await now()).toISOString()],
   );
   return respondToInvite(userId, eventId, 'yes');
+}
+
+// The first 'must' text rule this user doesn't meet for the event, or null. Uses earlier verdicts when there are
+// any; otherwise asks the same judge the invite rounds use, with this user as the only candidate.
+async function unmetRule(userId: number, ev: EventFull): Promise<string | null> {
+  const rules = await eventTextRules(ev.id);
+  const must = rules.filter((r) => r.strength === 'must');
+  if (!must.length) return null;
+  const context = `event:${ev.id}`;
+  let verdicts = await screeningFor(context, userId);
+  if (must.some((r) => !verdicts.has(r.id))) {
+    const u = await getUser(userId);
+    await matchingDeps().rerank({
+      purpose: 'event',
+      target: `${ev.title}\n${ev.rawDescription}\n\n${ev.hydeProfile}`,
+      candidates: [{ userId, name: u?.name ?? '', profile: u?.canonicalProfile ?? '', similarity: 1 }],
+      k: 1,
+      refId: ev.id,
+      rules,
+      context,
+    });
+    verdicts = await screeningFor(context, userId);
+  }
+  return must.find((r) => verdicts.get(r.id) !== 'pass')?.criterion ?? null;
 }
 
 // Used by the inspector/server: Et's drift from E0 without shipping vectors around.

@@ -110,6 +110,28 @@ function UserDetail({
 
       <h4>Canonical profile</h4>
       {user.profile ? <pre className="profile-text">{user.profile}</pre> : <div className="muted small">No profile yet (still onboarding).</div>}
+      {((user.blocks?.length ?? 0) > 0 || (user.requirements?.length ?? 0) > 0) && (
+        <ul className="req-list">
+          {(user.blocks ?? []).map((b) => (
+            <li key={`b-${b.name}`} className="req">
+              <div className="req-top">
+                <span className="tag tag-warn">blocked</span>
+                <strong>{b.name}</strong>
+                <span className="muted small">matches {b.matches.length} user{b.matches.length === 1 ? '' : 's'}</span>
+              </div>
+            </li>
+          ))}
+          {(user.requirements ?? []).map((r) => (
+            <li key={`r-${r.id}`} className="req">
+              <div className="req-top">
+                <span className="tag tag-muted">standing · {r.strength}</span>
+                <strong>{r.criterion}</strong>
+              </div>
+              <div className="req-said">“{r.said}”</div>
+            </li>
+          ))}
+        </ul>
+      )}
 
       {hosted.length > 0 && (
         <>

@@ -4,7 +4,7 @@ import { schedule } from '../jobs/index.ts';
 import { send } from '../transport/index.ts';
 import { trace } from '../trace.ts';
 import type { RecallHit } from '../types.ts';
-import { shieldedIds } from '../safety/index.ts';
+import { eventFilter, eventTextRules, type HardFilter } from '../requirements/index.ts';
 import { matchingDeps } from './deps.ts';
 import { fmtWhen, hostThinPool, inviteText } from './copy.ts';
 import { goingCount, loadEvent, loadVectors, pendingCount, setStatus, type EventFull } from './store.ts';
@@ -63,17 +63,15 @@ export async function maybeEarlyWave(eventId: number): Promise<void> {
 
 type Sourced = RecallHit & { source: 'Et' | 'E0' };
 
-type Shield = { people: number[]; eventId: number };
-
-async function candidates(ev: EventFull, exclude: number[], shield: Shield): Promise<Sourced[]> {
+async function candidates(ev: EventFull, exclude: number[], filter: HardFilter): Promise<Sourced[]> {
   const { recall } = matchingDeps();
   const { e0, et } = await loadVectors(ev.id);
   if (ev.waveNumber === 0) {
-    const hits = await recall(e0, { exclude, shield, limit: RECALL_FIRST, refId: ev.id, label: 'event E0' });
+    const hits = await recall(e0, { exclude, filter, limit: RECALL_FIRST, refId: ev.id, label: 'event E0' });
     return hits.map((h) => ({ ...h, source: 'E0' as const }));
   }
-  const fromEt = await recall(et, { exclude, shield, limit: RECALL_ET, refId: ev.id, label: 'event Et' });
-  const fromE0 = await recall(e0, { exclude, shield, limit: RECALL_E0, refId: ev.id, label: 'event E0 (exploration)' });
+  const fromEt = await recall(et, { exclude, filter, limit: RECALL_ET, refId: ev.id, label: 'event Et' });
+  const fromE0 = await recall(e0, { exclude, filter, limit: RECALL_E0, refId: ev.id, label: 'event E0 (exploration)' });
   const seen = new Set<number>();
   const out: Sourced[] = [];
   for (const [hits, source] of [[fromEt, 'Et'], [fromE0, 'E0']] as const)
@@ -113,12 +111,11 @@ export async function runWave(payload: { eventId: number; afterWave: number }): 
 
   const already = await q<{ user_id: number }>('SELECT user_id FROM event_invites WHERE event_id = $1', [ev.id]);
   const exclude = [ev.hostId, ...already.map((r) => r.user_id)];
-  // Hard exclusions (blocks of anyone going, host included, plus "not this event") are dropped in recall, before
-  // ranking, and checked again here so no recall implementation can leak an excluded person into a wave.
-  const attendees = await q<{ user_id: number }>('SELECT user_id FROM event_attendees WHERE event_id = $1', [ev.id]);
-  const shield = { people: attendees.map((r) => r.user_id), eventId: ev.id };
-  const shielded = new Set(await shieldedIds(shield.people, ev.id));
-  const pool = (await candidates(ev, exclude, shield)).filter((c) => !exclude.includes(c.userId) && !shielded.has(c.userId));
+  // Stage 0: hard rules (host blocks either way, "keep X off this one", earlier screen-outs) are dropped inside
+  // recall, before ranking, and checked again here so no recall implementation can leak someone into a wave.
+  const filter = await eventFilter(ev.id);
+  const hard = new Set(filter.excludeIds);
+  const pool = (await candidates(ev, exclude, filter)).filter((c) => !exclude.includes(c.userId) && !hard.has(c.userId));
   const byId = new Map(pool.map((c) => [c.userId, c]));
 
   const raw = pool.length
@@ -128,6 +125,9 @@ export async function runWave(payload: { eventId: number; afterWave: number }): 
         candidates: pool,
         k: n,
         refId: ev.id,
+        // Stage 2: the host's text rules, judged per candidate; code keeps only explicit passes on 'must'.
+        rules: await eventTextRules(ev.id),
+        context: `event:${ev.id}`,
       })
     : [];
   const picked = new Set<number>();

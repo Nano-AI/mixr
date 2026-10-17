@@ -11,6 +11,15 @@ export type User = {
   seeded: boolean;
 };
 
+// A special request as data. Person rules are SQL filters before recall (stage 0); text rules are judged per
+// candidate in the rerank call from what people wrote in their own profiles, and enforced by code.
+// 'prefer' nudges the ordering instead of filtering.
+export type Strength = 'must' | 'prefer';
+export type RequirementSpec =
+  | { kind: 'person'; person: string; strength: Strength; said: string } // keep this person off one event
+  | { kind: 'text'; criterion: string; strength: Strength; said: string }; // e.g. "advanced tennis (4.0+)", "queer folks"
+export type Requirement = RequirementSpec & { id: number; ownerId: number; eventId: number | null };
+
 export type EventStatus = 'open' | 'full' | 'closed' | 'cancelled';
 
 export type EventRow = {
@@ -33,6 +42,7 @@ export type NewEvent = {
   startsAt: Date;
   location: string;
   capacity: number;
+  requirements?: RequirementSpec[]; // stored before the first round of invites goes out
 };
 
 export type InviteStatus = 'invited' | 'yes' | 'no_busy' | 'no_vibe' | 'expired' | 'waitlisted' | 'cancelled' | 'withdrawn';
@@ -50,6 +60,8 @@ export type EventSummary = {
   goingCount: number;
   hostName: string;
   fit?: number; // discover only: cosine of the event to what they asked for (or their profile), 3dp
+  forWho?: string[]; // public-safe summary of the host's text requirements; never person rules
+  headsUp?: string[]; // first names of people this user blocked who are going
 };
 
 // One person going to an event (host included). Backed by the event_attendees view.
@@ -59,13 +71,13 @@ export type Attendee = { userId: number; name: string; role: 'host' | 'guest'; j
 export type Plan = EventSummary & { role: 'host' | 'guest'; attendees: Attendee[] };
 
 export type RecallHit = { userId: number; name: string; profile: string; similarity: number };
-export type RerankPick = { userId: number; reason: string; pitch: string };
+export type RerankPick = { userId: number; reason: string; pitch: string; checks?: { requirementId: number; verdict: 'pass' | 'fail' | 'unknown' }[] };
 export type PersonMatch = { userId: number; name: string; reason: string };
 
 export type IntroStatus = 'proposed' | 'target_asked' | 'connected' | 'declined' | 'expired';
 export type Intro = { id: number; requesterId: number; targetId: number; reason: string; status: IntroStatus; targetMessage: string | null };
 
-export type TraceKind = 'recall' | 'rerank' | 'wave' | 'rocchio' | 'profile_update' | 'agent' | 'llm' | 'embed' | 'job' | 'hyde' | 'safety';
+export type TraceKind = 'recall' | 'rerank' | 'wave' | 'rocchio' | 'profile_update' | 'agent' | 'llm' | 'embed' | 'job' | 'hyde' | 'requirement' | 'block';
 
 // Server-sent events to the dashboard.
 export type BusEvent =
