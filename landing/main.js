@@ -86,7 +86,14 @@ keypad.addEventListener('click', (e) => {
   if (k && !busy) press(k);
 });
 addEventListener('keydown', (e) => {
-  if (!kbOn || busy || e.metaKey || e.ctrlKey || e.altKey) return;
+  if (busy || e.metaKey || e.ctrlKey || e.altKey) return;
+  // typing a digit anywhere jumps to the phone and opens the pad, so the keyboard always works
+  if (/^\d$/.test(e.key) && !kbOn) {
+    const end = $('#scroll');
+    scrollTo({ top: end.offsetTop + end.offsetHeight - innerHeight, behavior: reduced ? 'auto' : 'smooth' });
+    openKeypad();
+  }
+  if (!kbOn) return;
   if (/^\d$/.test(e.key)) press(e.key);
   else if (e.key === 'Backspace') press('del');
   else if (e.key === 'Enter') compose.requestSubmit();
