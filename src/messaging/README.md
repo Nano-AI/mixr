@@ -8,6 +8,7 @@ Everything between the student's phone and the app. Plan tasks **W1–W6**.
 | `photon.ts` (+ `../server.ts`, `../../scripts/chat.ts`) | W2 | `photonSend`, `parsePhotonWebhook`, `acceptInbound` |
 | `router.ts` | W3 | `handleInbound(m: Inbound)` |
 | `onboarding.ts` | W4 | `onboardingStep(userId, text)` |
+| `http.ts` | — | `POST /join {phone}` from the landing page texts the consent message once per number (always 202; CORS via `JOIN_ORIGINS`; 5 tries/10 min per IP) |
 
 **Boundary:** you own conversation flow and transport. Call John's `buildProfile`/`confirmProfile` and Aditya's `recordResponse`/`openInvitations`/`planMeetups`. Don't implement matching or scheduling here.
 

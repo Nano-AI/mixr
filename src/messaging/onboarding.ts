@@ -12,7 +12,7 @@ const brainPrompt =
   'Braindump time: what are you into, what do you want to try, and what kind of hangouts do you like?';
 export const help =
   'YES/PASS/CANCEL <invite number>; EDIT interests; FREE availability; HELP; STOP to unsubscribe. Message frequency varies.';
-const consent =
+export const consent =
   "Hey! I'm mixr. I find UW students with shared interests and organize small meetups. Reply YES to opt in to onboarding and meetup messages. Message frequency varies. Reply STOP anytime.";
 export function setStep(id: number, step: string): void {
   db.prepare('UPDATE users SET step=? WHERE id=?').run(step, id);
