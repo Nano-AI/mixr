@@ -1,4 +1,5 @@
-import { readFileSync } from 'node:fs';
+import { mkdirSync, readFileSync } from 'node:fs';
+import { dirname } from 'node:path';
 import { PGlite } from '@electric-sql/pglite';
 import { vector } from '@electric-sql/pglite-pgvector';
 import { config } from '../config.ts';
@@ -6,15 +7,20 @@ import type { User } from '../types.ts';
 
 const SCHEMA = readFileSync(new URL('./schema.sql', import.meta.url), 'utf8');
 
-let pg: PGlite | undefined;
+// Memoize the promise, not the instance: concurrent first callers must share one PGlite (each is ~600 MB).
+let pg: Promise<PGlite> | undefined;
 
-export async function db(): Promise<PGlite> {
-  if (!pg) {
-    pg = await PGlite.create(config.dbDir, { extensions: { vector } });
-    await pg.exec(SCHEMA);
-    await pg.query(`INSERT INTO clock (id, now) VALUES (1, now()) ON CONFLICT (id) DO NOTHING`);
-  }
+export function db(): Promise<PGlite> {
+  pg ??= open();
   return pg;
+}
+
+async function open(): Promise<PGlite> {
+  if (!config.dbDir.includes('://')) mkdirSync(dirname(config.dbDir), { recursive: true });
+  const p = await PGlite.create(config.dbDir, { extensions: { vector } });
+  await p.exec(SCHEMA);
+  await p.query(`INSERT INTO clock (id, now) VALUES (1, now()) ON CONFLICT (id) DO NOTHING`);
+  return p;
 }
 
 export async function q<T = Record<string, any>>(sql: string, params: unknown[] = []): Promise<T[]> {
