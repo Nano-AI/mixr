@@ -118,6 +118,17 @@ a { color: inherit; }
 .more svg { width: 14px; }
 .more:focus-visible { outline: 2px solid #8a7cff; outline-offset: 2px; }
 .moved .more { opacity: 0; pointer-events: none; }
+.cursor-pill {
+  position: fixed; z-index: 20; top: 0; left: 0; pointer-events: none;
+  display: flex; align-items: center; gap: 8px; height: 40px; padding: 0 17px 0 14px; margin: -20px 0 0 -48px;
+  border-radius: 999px; background: #fff; color: #22272b; white-space: nowrap;
+  box-shadow: 0 8px 24px -8px rgba(20, 15, 50, .55); font: 600 15px/1 var(--sf);
+  opacity: 0; transition: opacity .2s;
+}
+.cursor-pill svg { width: 14px; }
+.cursoring .cursor-pill { opacity: 1; }
+.cursoring, .cursoring * { cursor: none; }
+.cursoring .more { opacity: 0; pointer-events: none; }
 @keyframes bob { 50% { transform: translateY(6px); } }
 
 /* tooltip pointing at the message field once the keypad is up; --hint-y is set from the field's position */

@@ -265,12 +265,28 @@ if (reduced) {
   };
 
   $('#more').addEventListener('click', () => go(slide + 1));
-  const verb = touch ? 'swipe up' : 'scroll';
+  if (touch) $('#more span').textContent = 'swipe up';
+  // Once mixr's first text is on screen the story plays itself to the number pad, 250ms after each step lands.
+  // Going back by hand stops it.
+  let auto = true;
+  let autoTimer = 0;
+  // Desktop: the cursor itself becomes a "scroll" pill until the number pad, so it's obvious what to do.
+  const cur = Object.assign(document.createElement('div'), { className: 'cursor-pill', ariaHidden: 'true' });
+  cur.innerHTML = $('#more').innerHTML;
+  if (!touch) {
+    document.body.append(cur);
+    addEventListener('mousemove', (e) => {
+      cur.style.transform = `translate(${e.clientX}px, ${e.clientY}px)`;
+      root.classList.toggle('cursoring', slide < LAST && !busyTarget(e.target));
+    }, { passive: true });
+    document.documentElement.addEventListener('mouseleave', () => root.classList.remove('cursoring'));
+  }
 
   go = (i) => {
     i = utils.clamp(i, 0, LAST);
+    if (i < slide) auto = false;
     root.classList.toggle('moved', i === LAST); // the swipe cue stays until the last slide: keep going
-    $('#more span').textContent = LAST - i > 1 ? `${i ? 'keep going' : verb} · ${LAST - i} more` : `${verb} to join`;
+    if (i === LAST) root.classList.remove('cursoring');
     if (i === slide && !move && pos.t === SLIDES[i].t) return;
     speed = Math.abs(i - slide) > 1 ? 6 : 1.5; // a jump (nav button, a dot) fast-forwards the texts
     slide = i;
@@ -311,6 +327,13 @@ if (reduced) {
       root.style.setProperty('--hint-x', `${phone.getBoundingClientRect().left}px`);
     }
     hint.classList.toggle('on', on);
+    if (auto && !autoTimer && !move && head === target && slide >= 1 && slide < LAST) {
+      const s = slide;
+      autoTimer = setTimeout(() => {
+        autoTimer = 0;
+        if (auto && slide === s) go(s + 1);
+      }, 250);
+    }
     requestAnimationFrame(chase);
   };
   requestAnimationFrame(chase);
