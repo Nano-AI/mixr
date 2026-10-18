@@ -34,7 +34,7 @@ const valid = (s: unknown): s is string => typeof s === 'string' && s.trim().len
 async function llmProfileText(name: string, system: string, input: string): Promise<string | null> {
   if (!pipelineLlm(name)) return null;
   try {
-    const r = await llm().json<{ profile_text: string }>({ name, system, input, schema: PROFILE_TEXT_SCHEMA });
+    const r = await llm().json<{ profile_text: string }>({ name, system, input, schema: PROFILE_TEXT_SCHEMA, noThinking: true });
     return valid(r?.profile_text) ? r.profile_text.trim() : null;
   } catch {
     return null;
