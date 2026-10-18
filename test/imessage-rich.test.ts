@@ -189,6 +189,44 @@ test('react: the agent tapbacks the text it is answering and sends no reply', as
   expect(sent.at(-1)).toEqual({ phone: u.phone, text: 'haha ok', content: null });
 });
 
+test('react + text: the tapback on their latest text goes first, then the reply, in one model call', async () => {
+  const fake = await fresh();
+  const sent = capture();
+  const u = await realUser();
+  let calls = 0;
+  fake.agentHandler = () => (calls++, { text: 'see you there!', calls: [{ call_id: 'c1', name: 'react', arguments: JSON.stringify({ emoji: '❤️' }) }] });
+  await processText(u.phone, 'yesss count me in! what should i bring?', 'phone', 'imessage:GUID-3');
+  expect(calls).toBe(1);
+  expect(sent).toEqual([
+    { phone: u.phone, text: '❤️', content: { kind: 'reaction', emoji: '❤️', targetId: 'imessage:GUID-3' } },
+    { phone: u.phone, text: 'see you there!', content: null },
+  ]);
+});
+
+test('react + canned reply in one round: tapback, then the canned confirmation; a second tapback is refused', async () => {
+  const fake = await fresh();
+  const sent = capture();
+  const u = await realUser();
+  const until = new Date(Date.now() + 3 * 86_400_000).toISOString();
+  let calls = 0;
+  fake.agentHandler = () => (
+    calls++,
+    {
+      text: '',
+      calls: [
+        { call_id: 'c1', name: 'react', arguments: JSON.stringify({ emoji: '😂' }) },
+        { call_id: 'c2', name: 'react', arguments: JSON.stringify({ emoji: '❤️' }) },
+        { call_id: 'c3', name: 'snooze', arguments: JSON.stringify({ until }) },
+      ],
+    }
+  );
+  await processText(u.phone, 'lmao midterms are killing me, pause texts for a few days', 'phone', 'imessage:GUID-4');
+  expect(calls).toBe(1); // react's result has no reply, the refused second react is skipped; snooze's reply is sent as-is
+  expect(sent.map((s) => s.content?.kind ?? null)).toEqual(['reaction', null]);
+  expect(sent[0].text).toBe('😂');
+  expect(sent[1].text).toMatch(/pausing texts|no texts from me/);
+});
+
 test('deliver: tapbacks and inline replies resolve their target message by provider id', async () => {
   const target = { id: 'GUID-1' };
   const s = fakeSpace({ messages: { 'GUID-1': target } });
@@ -222,11 +260,61 @@ test("accepted intro: each side gets the other's contact card (first + last name
   expect(toMaya).toEqual({
     phone: maya.phone,
     text: `Jordan's down. they said: "saturdays work". here's their number: ${jordan.phone}`,
-    content: { kind: 'contact', first: 'Jordan', last: 'de la Cruz', phone: jordan.phone, caption: `Jordan's down. they said: "saturdays work". here's their contact` },
+    content: { kind: 'contact', first: 'Jordan', last: 'de la Cruz', phone: jordan.phone, caption: `Jordan's down. they said: "saturdays work". here's their contact`, captionEffect: 'confetti' },
   });
   expect(toJordan).toEqual({
     phone: jordan.phone,
     text: `done, here's Maya's number: ${maya.phone}. have fun`,
-    content: { kind: 'contact', first: 'Maya', last: 'Lopez', phone: maya.phone, caption: "done, here's Maya's contact. have fun" },
+    content: { kind: 'contact', first: 'Maya', last: 'Lopez', phone: maya.phone, caption: "done, here's Maya's contact. have fun", captionEffect: 'confetti' },
   });
+});
+
+test('deliver: a caption with captionEffect goes out with confetti, then the card; plain caption if the effect fails', async () => {
+  const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+  const card: RichContent = { kind: 'contact', first: 'Maya', phone: '+14255550100', caption: "done, here's Maya's contact", captionEffect: 'confetti' };
+  let s = fakeSpace();
+  await deliver(s.space, "done, here's Maya's number: +14255550100", card, fakeSdk());
+  expect(s.sent.map((c) => (c as { kind: string }).kind)).toEqual(['effect', 'contact']);
+  expect(s.sent[0]).toEqual({ kind: 'effect', args: ["done, here's Maya's contact", 'confetti-id'] });
+  s = fakeSpace({ reject: ['effect'] });
+  await deliver(s.space, "done, here's Maya's number: +14255550100", card, fakeSdk());
+  expect(s.sent.map((c) => (typeof c === 'string' ? c : (c as { kind: string }).kind))).toEqual(["done, here's Maya's contact", 'contact']);
+  warn.mockRestore();
+});
+
+test("intro accepted in the target's turn: the swap carries the only effect, the agent's reply stays plain", async () => {
+  const fake = await fresh();
+  const sent = capture();
+  const maya = await realUser('Maya Lopez');
+  const jordan = await realUser('Jordan Kim');
+  const intro = await runIn(real, () => requestIntro(maya.id, jordan.id, 'tennis'));
+  let n = 0;
+  fake.agentHandler = () =>
+    ++n === 1
+      ? { text: '', calls: [{ call_id: 'c1', name: 'respond_to_intro', arguments: JSON.stringify({ intro_id: intro.id, accept: true, message: null }) }] }
+      : { text: 'courts by the IMA are open til 10', calls: [] };
+  await handleInbound(jordan.phone, 'yes! where are the courts?', 'phone');
+  const toJordan = sent.filter((s) => s.phone === jordan.phone);
+  expect(toJordan.map((s) => s.content?.captionEffect ?? (s.content?.kind === 'effect' ? 'effect' : null))).toEqual([null, 'confetti', null]);
+  expect(toJordan.at(-1)).toEqual({ phone: jordan.phone, text: 'courts by the IMA are open til 10', content: null });
+  expect(sent.find((s) => s.phone === maya.phone)?.content?.captionEffect).toBe('confetti');
+});
+
+test('confetti on the reply that finishes onboarding, not on a later profile redo or an ordinary reply', async () => {
+  const fake = await fresh();
+  const sent = capture();
+  const u = await realUser('Casey Nguyen');
+  await q(`UPDATE users SET state = 'onboarding' WHERE id = $1`, [u.id]);
+  let n = 0;
+  fake.agentHandler = () =>
+    ++n % 2 === 1
+      ? { text: '', calls: [{ call_id: `c${n}`, name: 'save_profile', arguments: JSON.stringify({ name: 'Casey Nguyen', braindump: 'tennis and catan' }) }] }
+      : { text: "you're all set. i'll text you when something fits", calls: [] };
+  await handleInbound(u.phone, 'tennis and catan, casual', 'phone');
+  expect(sent.at(-1)).toMatchObject({ phone: u.phone, content: { kind: 'effect', effect: 'confetti' } });
+  await handleInbound(u.phone, 'actually redo it, tennis and catan', 'phone'); // already active: no confetti
+  expect(sent.at(-1)!.content).toBeNull();
+  fake.agentHandler = () => ({ text: 'nice', calls: [] });
+  await handleInbound(u.phone, 'cool', 'phone');
+  expect(sent.at(-1)).toEqual({ phone: u.phone, text: 'nice', content: null });
 });

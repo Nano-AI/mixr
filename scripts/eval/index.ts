@@ -151,6 +151,8 @@ else
       ['duplicate bubbles (total)', 'conversations.dupes'],
       ['turns with >1 bubble', 'conversations.multiBubbleTurns'],
       ['turns with no reply', 'conversations.silentTurns'],
+      ['reactions per turn (mean)', 'conversations.reactions.mean'],
+      ['react-only turns (tapback, no text)', 'conversations.reactOnlyTurns'],
       ['errors', 'conversations.errors'],
     ]),
     'Transcripts side by side: [transcripts.md](transcripts.md); per revision: `out/<rev>/transcripts.md`.',

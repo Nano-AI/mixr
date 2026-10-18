@@ -180,6 +180,8 @@ if (claude || fake) {
     dupes: agent.reduce((a, t) => a + t.stats!.dupes, 0),
     multiBubbleTurns: agent.filter((t) => t.stats!.bubbles > 1).length,
     silentTurns: agent.filter((t) => !t.stats!.bubbles).length,
+    reactions: s((t) => t.stats!.reactions),
+    reactOnlyTurns: agent.filter((t) => t.stats!.reactOnly).length,
     errors: turns.filter((t) => t.error).length,
     turnMs: s((t) => t.ms),
     callsPerTurn: s((t) => t.calls),

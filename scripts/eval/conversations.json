@@ -63,5 +63,26 @@
       "anyone want to be my gym buddy?",
       "actually pause texts until monday, midterms"
     ]
+  },
+  {
+    "id": "tapback-thanks",
+    "note": "No-answer texts ('thanks!', 'lol ok', 'sounds good') should get a tapback and no text.",
+    "turns": [
+      "hey i'm maya reyes, into pickup basketball and poker, casual about both",
+      "thanks!",
+      "anyone down for poker this week?",
+      "lol ok",
+      "sounds good"
+    ]
+  },
+  {
+    "id": "tapback-excited",
+    "note": "An excited text that also needs an answer: a tapback plus a short reply.",
+    "turns": [
+      "yo i'm casey wu, i like climbing (v2, casual) and board games",
+      "can you host a board game night saturday 6pm at the hub for 4 people",
+      "yesss i'm in! should i bring catan?",
+      "sounds good"
+    ]
   }
 ]
