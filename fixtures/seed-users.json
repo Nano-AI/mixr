@@ -1,0 +1,762 @@
+[
+  {
+    "name": "Maya Chen",
+    "phone": "+12065550101",
+    "profile": "Core Interests:\n[1] Competitive tennis, varsity match play, USTA 4.5, high-pace hitting partner, tournament sets (Level: Advanced).\n[2] Tabletop board games, strategy games, Settlers of Catan, Wingspan, social game nights (Vibe: Casual).\n[3] Home cooking, Sichuan dishes, hand-pulled noodles, dumpling folding parties with friends (Vibe: Social).",
+    "onboardedDaysAgo": 14,
+    "history": [
+      {"from": "user", "text": "hi! saw the qr code at the hub"},
+      {"from": "mixr", "text": "hey, welcome! i'm mixr. you text me what you're into and i connect you with people and stuff happening on campus. what's your first name, and what are you into? braindump away: sports, games, music, hobbies, things you want to try, how serious you are"},
+      {"from": "user", "text": "omg ok im maya. tennis is basically my whole personality lol, played varsity all 4 yrs of hs and im like a 4.5 now. i want ppl who actually hit hard and play real sets, rallying with randos is not it"},
+      {"from": "user", "text": "also board games!! catan and wingspan mostly, super casual. and i cook a lot, mostly sichuan stuff, been learning hand pulled noodles and i loveee dumpling folding nights w friends 🥟"},
+      {"from": "mixr", "text": "love this. got it: competitive tennis around 4.5 with real sets, chill catan and wingspan nights, and sichuan cooking plus dumpling parties. i'll text you when something fits, and you can text me anytime to host something or find people to meet"},
+      {"from": "user", "text": "perfect ty!!"}
+    ]
+  },
+  {
+    "name": "Jordan Alvarez",
+    "phone": "+12065550102",
+    "profile": "Core Interests:\n[1] Tennis singles and doubles, USTA 3.5, consistent baseline rallies, IMA courts, practice sets (Level: Intermediate).\n[2] Distance running, Burke-Gilman Trail, 8:30 mile pace, weekend 10K long runs (Level: Intermediate).",
+    "onboardedDaysAgo": 9,
+    "history": [
+      {"from": "user", "text": "hey"},
+      {"from": "mixr", "text": "hey! i'm mixr. text me what you're into and i'll connect you with people and things to do around campus. what's your first name and what's your thing? sports, games, music, hobbies, anything you want to try"},
+      {"from": "user", "text": "jordan. tennis and running mostly"},
+      {"from": "mixr", "text": "nice jordan. how serious are you with both? like your rough tennis level and the pace you usually run"},
+      {"from": "user", "text": "tennis prob a 3.5. singles and doubles at the ima courts, mostly want ppl for rallies and practice sets. solid from the baseline, net game is meh"},
+      {"from": "user", "text": "running like 8:30 pace, i do a 10k long run on the burke gilman most weekends"},
+      {"from": "mixr", "text": "perfect. got it: 3.5 tennis at the IMA courts (singles or doubles, practice sets) and weekend 10Ks on the burke-gilman around 8:30 pace. i'll text you when something lines up, and you can hit me up anytime to host something or find people to play with"},
+      {"from": "user", "text": "cool thx"}
+    ]
+  },
+  {
+    "name": "Priya Raman",
+    "phone": "+12065550103",
+    "profile": "Core Interests:\n[1] Recreational tennis, learning fundamentals, forehand and serve basics, casual rally sessions (Level: Beginner).\n[2] Film photography, 35mm point-and-shoot, Portra 400, street photos around Capitol Hill (Vibe: Chill).\n[3] Indie music, live concerts, Neumos and Barboza shows, indie pop and bedroom pop (Vibe: Social).",
+    "onboardedDaysAgo": 6,
+    "history": [
+      {"from": "user", "text": "hi is this the campus thing? my roommate said to text this"},
+      {"from": "mixr", "text": "yep that's me! i'm mixr. you tell me what you're into and i find you people and stuff to do around campus. what's your first name, and what are you into? hobbies, sports, music, games, things you want to try, all of it"},
+      {"from": "user", "text": "hi im priya :) um i just started learning tennis, like i literally just bought a racket so very beginner. working on forehands and serving, would love ppl to just rally with no pressure"},
+      {"from": "user", "text": "and i shoot film on a little 35mm point and shoot, usually portra 400, mostly walking around cap hill taking street pics"},
+      {"from": "user", "text": "also indie music!! bedroom pop and indie pop, i go to shows at neumos and barboza but usually alone lol"},
+      {"from": "mixr", "text": "love that. got it: beginner tennis with low-pressure rallies, 35mm street photography around cap hill, and indie pop shows at neumos and barboza. i'll text you when something fits, and you can text me anytime to host something or find people to go with"},
+      {"from": "user", "text": "yay thank you!!"}
+    ]
+  },
+  {
+    "name": "Ethan Okafor",
+    "phone": "+12065550104",
+    "profile": "Core Interests:\n[1] Competitive tennis, former high school number one singles, USTA 5.0, aggressive serve-and-volley, tournament play (Level: Advanced).\n[2] Competitive chess, rapid and blitz, 1900 Lichess rating, Sicilian Defense, opening preparation (Level: Advanced).",
+    "onboardedDaysAgo": 18,
+    "history": [
+      {"from": "user", "text": "Ethan. I play tennis and chess, looking for people who are actually good at either"},
+      {"from": "mixr", "text": "hey ethan, i'm mixr! you text me what you're into and i connect you with people and stuff happening on campus. how good are we talking for tennis and chess?"},
+      {"from": "user", "text": "tennis I was #1 singles in high school, 5.0 now. serve and volley, I play tournaments"},
+      {"from": "user", "text": "chess around 1900 on lichess, mostly rapid and blitz. sicilian player, I spend way too much time on opening prep"},
+      {"from": "mixr", "text": "got it: 5.0 tournament tennis with a serve-and-volley game, and 1900 lichess rapid and blitz with a sicilian habit. i'll text you when something at that level comes up, and you can text me anytime to host something or find people to play"},
+      {"from": "user", "text": "👍"}
+    ]
+  },
+  {
+    "name": "Sofia Rossi",
+    "phone": "+12065550105",
+    "profile": "Core Interests:\n[1] Beginner tennis, recreational rally, learning grip and footwork, low-pressure doubles with friends (Level: Beginner).\n[2] Baking, French pastries, croissant lamination, macarons, weekend bake sessions and cookie swaps (Vibe: Chill).\n[3] Italian home cooking, fresh pasta, risotto, shared family-style dinner parties (Vibe: Social).",
+    "onboardedDaysAgo": 11,
+    "history": [
+      {"from": "user", "text": "ciao!! a friend sent me this number"},
+      {"from": "mixr", "text": "ciao! i'm mixr. you text me what you're into and i connect you with people and things happening on campus. what's your first name, and what are you into? hobbies, sports, games, music, stuff you want to try"},
+      {"from": "user", "text": "i'm sofia! ok so i'm a baker at heart, french pastries mostly. trying to nail croissant lamination and macarons (they hate me) 🥐 i bake every weekend and would love a cookie swap or something"},
+      {"from": "user", "text": "also italian cooking bc my nonna would disown me otherwise lol. fresh pasta, risotto, and i love hosting big family style dinners"},
+      {"from": "user", "text": "and i want to try tennis! never really played tho"},
+      {"from": "mixr", "text": "love all of this. for tennis, are you thinking super casual rallying or more like lessons and drills?"},
+      {"from": "user", "text": "casual for sure, i barely know how to hold the racket 😅 working on grip and footwork. doubles with friends would be ideal"},
+      {"from": "mixr", "text": "perfect. got it: beginner tennis (casual doubles, no pressure), french pastry baking and cookie swaps, and fresh pasta dinner parties. i'll text you when something fits, and you can text me anytime to host something or find people"},
+      {"from": "user", "text": "grazie!!"}
+    ]
+  },
+  {
+    "name": "Kenji Watanabe",
+    "phone": "+12065550106",
+    "profile": "Core Interests:\n[1] Tennis doubles, USTA 3.5 to 4.0, net play, weekend ladder matches at IMA (Level: Intermediate).\n[2] Valorant ranked, Diamond rank, Controller main, Omen and Viper, five-stack scrims (Vibe: Competitive).",
+    "onboardedDaysAgo": 16,
+    "history": [
+      {"from": "user", "text": "yo"},
+      {"from": "mixr", "text": "yo! i'm mixr. text me what you're into and i'll connect you with people and stuff going on around campus. what's your first name and what are you into? sports, games, music, hobbies, how serious you are"},
+      {"from": "user", "text": "kenji. tennis + valorant"},
+      {"from": "user", "text": "tennis mostly doubles, somewhere between 3.5 and 4.0, i like playing net. been doing the weekend ladder at the ima"},
+      {"from": "mixr", "text": "nice. how serious are you about val, like chill unrated with friends or grinding ranked?"},
+      {"from": "user", "text": "grinding ranked lol. plat 3 rn, controller main (omen/viper). want a real 5 stack for scrims"},
+      {"from": "mixr", "text": "got it: 3.5-4.0 doubles tennis and the IMA weekend ladder, plus ranked val as an omen/viper controller looking for a 5-stack. i'll text you when something fits, and you can text me anytime to host something or find people to queue with"},
+      {"from": "user", "text": "bet"},
+      {"from": "user", "text": "update i finally hit diamond 🙏", "gapHours": 122},
+      {"from": "mixr", "text": "let's gooo, congrats! updated you to diamond"}
+    ]
+  },
+  {
+    "name": "Aaliyah Brooks",
+    "phone": "+12065550107",
+    "profile": "Core Interests:\n[1] Bouldering, projecting V6 to V7, overhang crimps, Seattle Bouldering Project regular (Level: Advanced).\n[2] Hiking, Cascades day hikes, Mt Si and Rattlesnake Ledge, alpine lakes, early-morning trailheads (Vibe: Social).\n[3] Climbing training, hangboard protocols, campus board, finger strength and injury prevention (Level: Advanced).",
+    "onboardedDaysAgo": 4,
+    "history": [
+      {"from": "user", "text": "heyy is this mixr"},
+      {"from": "mixr", "text": "that's me! you text me what you're into and i connect you with people and things to do on campus. what's your first name, and what are you into? sports, hobbies, music, games, stuff you want to try, how serious you are"},
+      {"from": "user", "text": "aaliyah! climbing is my life ngl. i boulder at SBP like 4x a week, projecting v6/v7 rn, overhang crimpy stuff is my favorite"},
+      {"from": "user", "text": "i also do a lot of training, hangboard protocols, campus board, trying to build finger strength without wrecking my pulleys lol. would love a training buddy"},
+      {"from": "user", "text": "and hiking!! cascades day hikes, mt si, rattlesnake, any alpine lake tbh. i love an early trailhead start and i'm always down to go with a group"},
+      {"from": "mixr", "text": "love it. got it: v6-v7 bouldering at SBP, hangboard and campus board training (the injury-smart kind), and early-start cascades day hikes with a crew. i'll text you when something fits, and you can text me anytime to host something or find people to climb with"},
+      {"from": "user", "text": "yesss"}
+    ]
+  },
+  {
+    "name": "Lucas Martins",
+    "phone": "+12065550108",
+    "profile": "Core Interests:\n[1] Bouldering, sending V3 to V4, slab and technique work, Seattle Bouldering Project sessions (Level: Intermediate).\n[2] Embedded hardware, ESP32 microcontrollers, custom PCB design, KiCad, IoT sensor projects (Level: Advanced).",
+    "onboardedDaysAgo": 20,
+    "history": [
+      {"from": "user", "text": "hey, a friend from husky robotics said to text this"},
+      {"from": "mixr", "text": "hey! i'm mixr. you tell me what you're into and i find you people and things to do on campus. what's your first name, and what are you into? hobbies, sports, games, music, how serious you are"},
+      {"from": "user", "text": "lucas. i'm mostly a hardware guy, esp32 stuff, i design my own pcbs in kicad, lots of iot sensor projects. been doing it for years so pretty deep into it"},
+      {"from": "user", "text": "and i boulder at sbp a couple times a week"},
+      {"from": "mixr", "text": "nice. what grades are you climbing these days?"},
+      {"from": "user", "text": "mostly v2-v3. i'm a slab person, trying to get my technique better"},
+      {"from": "mixr", "text": "got it: esp32 and kicad pcb builds and iot sensor projects, plus v2-v3 bouldering at sbp with a slab and technique focus. i'll text you when something fits, and you can text me anytime to host something or find people"},
+      {"from": "user", "text": "sounds good"},
+      {"from": "user", "text": "hey can you update my climbing, i've been sending v4s lately", "gapHours": 241},
+      {"from": "mixr", "text": "nice, congrats! updated you to v3-v4"}
+    ]
+  },
+  {
+    "name": "Hannah Kim",
+    "phone": "+12065550109",
+    "profile": "Core Interests:\n[1] Indoor bouldering, V0 to V2 problems, learning footwork, new climber, belay class next (Level: Beginner).\n[2] Anime and manga, Frieren, Jujutsu Kaisen, seasonal anime watch parties, manga recommendations (Vibe: Social).\n[3] Board games, cozy cooperative games, Codenames, Ticket to Ride, casual game nights (Vibe: Casual).",
+    "onboardedDaysAgo": 3,
+    "history": [
+      {"from": "user", "text": "hiii"},
+      {"from": "mixr", "text": "hi! i'm mixr. you tell me what you're into, i find you people and things to do on campus. what's your first name, and what are you into? braindump away: hobbies, games, music, sports, things you want to try"},
+      {"from": "user", "text": "i'm hannah!! ok i just got into bouldering like a month ago, i'm doing v0-v2 and my footwork is so bad lol. want to take a belay class next so i can do ropes"},
+      {"from": "user", "text": "also anime!!! frieren and jjk rn, i'd love watch parties for the seasonal stuff and ppl to trade manga recs with ✨"},
+      {"from": "user", "text": "and cozy board games, codenames, ticket to ride, nothing too intense"},
+      {"from": "mixr", "text": "love it. got it: new-climber bouldering (v0-v2, belay class next), frieren and jjk watch parties plus manga recs, and cozy codenames and ticket to ride nights. i'll text you when something fits, and you can text me anytime to host something or find people to hang with"},
+      {"from": "user", "text": "yay ty!!"}
+    ]
+  },
+  {
+    "name": "Diego Hernandez",
+    "phone": "+12065550110",
+    "profile": "Core Interests:\n[1] Outdoor rock climbing, sport lead 5.11c, trad climbing, Index and Leavenworth crags, rope partner (Level: Advanced).\n[2] PNW mountaineering and backpacking, Enchantments, Mt Rainier glacier travel, multi-day alpine trips (Level: Advanced).",
+    "onboardedDaysAgo": 13,
+    "history": [
+      {"from": "user", "text": "hey. need a climbing partner"},
+      {"from": "mixr", "text": "hey! i'm mixr. you text me what you're into and i connect you with people and things on campus, so i can help with that. what's your first name, and what kind of climbing do you do?"},
+      {"from": "user", "text": "diego. outdoor mostly. i lead 5.11c sport and place gear on trad, usually at index or leavenworth. looking for a rope partner who's solid"},
+      {"from": "user", "text": "also mountaineering and backpacking. did the enchantments this summer and rainier last year, comfortable on glaciers. always looking for people for multi day alpine trips"},
+      {"from": "mixr", "text": "got it: 5.11c sport and trad at index and leavenworth, and multi-day alpine trips like the enchantments and rainier glacier travel. i'll text you when something fits, and you can text me anytime to host a trip or find a partner"},
+      {"from": "user", "text": "sounds good"}
+    ]
+  },
+  {
+    "name": "Noor Haddad",
+    "phone": "+12065550111",
+    "profile": "Core Interests:\n[1] Bouldering, V4 problems, dynamic moves, Vertical World and Seattle Bouldering Project sessions (Level: Intermediate).\n[2] Running, morning loops around Green Lake, 9:00 mile pace, training for first half marathon (Level: Intermediate).\n[3] Middle Eastern cooking, mezze spreads, homemade hummus and falafel, potluck dinners (Vibe: Social).",
+    "onboardedDaysAgo": 19,
+    "history": [
+      {"from": "user", "text": "hi! is this the campus matching thing"},
+      {"from": "mixr", "text": "yep! i'm mixr. you text me what you're into and i connect you with people and stuff happening on campus. what's your first name, and what are you into? sports, games, music, hobbies, how serious you are"},
+      {"from": "user", "text": "noor! i boulder, mostly v4ish, i love the dynamic jumpy stuff. i go to vertical world and sbp. i also run, morning loops around green lake, around 9 min pace"},
+      {"from": "user", "text": "and i cook a ton of middle eastern food, big mezze spreads, homemade hummus and falafel. potlucks are my love language"},
+      {"from": "mixr", "text": "love that. got it: v4 dynos at vertical world and sbp, morning green lake runs around 9:00 pace, and mezze-heavy middle eastern cooking and potlucks. i'll text you when something fits, and you can text me anytime to host something or find people"},
+      {"from": "user", "text": "amazing thank u"},
+      {"from": "user", "text": "ok i did it, signed up for my first half marathon 😭", "gapHours": 200},
+      {"from": "mixr", "text": "amazing!! added that you're training for your first half"}
+    ]
+  },
+  {
+    "name": "Ben Whitaker",
+    "phone": "+12065550112",
+    "profile": "Core Interests:\n[1] Bouldering, beginner climber, V1 to V2 problems, learning technique, chill gym sessions (Level: Beginner).\n[2] Indie rock and live music, Showbox and Crocodile concerts, record store crawls, vinyl collecting (Vibe: Social).",
+    "onboardedDaysAgo": 7,
+    "history": [
+      {"from": "user", "text": "sup"},
+      {"from": "mixr", "text": "hey! i'm mixr. text me what you're into and i'll connect you with people and things to do on campus. what's your first name and what are you into? music, sports, games, hobbies, stuff you want to try"},
+      {"from": "user", "text": "ben. big into indie rock, i go to shows at the showbox and the crocodile a lot. also collect vinyl, down for record store crawls anytime"},
+      {"from": "user", "text": "and i started climbing recently"},
+      {"from": "mixr", "text": "nice ben. where are you at with climbing, like what grades?"},
+      {"from": "user", "text": "super casual lol, v1 v2 on a good day. just trying to learn technique, chill sessions"},
+      {"from": "mixr", "text": "got it: indie rock shows at the showbox and crocodile, vinyl and record store crawls, and chill beginner bouldering around v1-v2. i'll text you when something fits, and you can hit me up anytime to host something or find people to go with"},
+      {"from": "user", "text": "🤙"}
+    ]
+  },
+  {
+    "name": "Chloe Nguyen",
+    "phone": "+12065550113",
+    "profile": "Core Interests:\n[1] Heavy strategy board games, Twilight Imperium, Terraforming Mars, Brass Birmingham, long competitive game nights (Vibe: Competitive).\n[2] Anime and manga, shonen series, Chainsaw Man, One Piece manga, anime club screenings (Vibe: Social).",
+    "onboardedDaysAgo": 10,
+    "history": [
+      {"from": "user", "text": "hello! someone in my dorm said to text this"},
+      {"from": "mixr", "text": "hey, welcome! i'm mixr. you text me what you're into and i connect you with people and stuff happening on campus. what's your first name, and what are you into? games, music, sports, hobbies, how serious you are"},
+      {"from": "user", "text": "chloe. i need people for heavy board games. like twilight imperium, terraforming mars, brass birmingham. i want 6 hour game nights where people actually try to win, not party games"},
+      {"from": "user", "text": "also anime + manga, shonen mostly. chainsaw man, and i read one piece weekly (caught up 🫡). i go to anime club screenings sometimes"},
+      {"from": "mixr", "text": "understood, no party games. got it: long competitive strategy nights (TI, terraforming mars, brass), plus shonen anime and one piece manga. i'll text you when something fits, and you can text me anytime to host a game night or find people"},
+      {"from": "user", "text": "perfect"}
+    ]
+  },
+  {
+    "name": "Marcus Johnson",
+    "phone": "+12065550114",
+    "profile": "Core Interests:\n[1] Board games and party games, Catan, Codenames, Secret Hitler, big group game nights in the HUB (Vibe: Casual).\n[2] Super Smash Bros Ultimate, local weeklies, Steve and Joker main, bracket tournaments (Vibe: Competitive).\n[3] College football, Husky Stadium game days, tailgates, Pac-12 and Big Ten rivalries (Vibe: Social).",
+    "onboardedDaysAgo": 5,
+    "history": [
+      {"from": "user", "text": "YOOO what is this"},
+      {"from": "mixr", "text": "hey! i'm mixr. you text me what you're into and i connect you with people and stuff going on around campus. what's your first name, and what's your thing? games, sports, music, hobbies, how serious you are"},
+      {"from": "user", "text": "marcus!! ok i'm a game night guy. catan codenames secret hitler, the bigger the group the better, we used to take over like 3 tables in the HUB"},
+      {"from": "user", "text": "smash ult too, i go to weeklies and enter every bracket i can. steve/joker main (sorry in advance)"},
+      {"from": "user", "text": "and husky football!!! game days, tailgates, i will argue pac 12 vs big ten rivalries all day. go dawgs 🐶"},
+      {"from": "mixr", "text": "love the energy. got it: big casual game nights (catan, codenames, secret hitler), smash ult weeklies and brackets on steve/joker, and husky game days and tailgates. i'll text you when something fits, and you can text me anytime to host something or find people"},
+      {"from": "user", "text": "LETS GOOO"}
+    ]
+  },
+  {
+    "name": "Isabella Garcia",
+    "phone": "+12065550115",
+    "profile": "Core Interests:\n[1] Tabletop roleplaying games, Dungeons and Dragons 5e, dungeon master, weekly campaign, worldbuilding (Vibe: Social).\n[2] Board games, Wingspan, Azul, Everdell, cozy engine-building games, cafe game afternoons (Vibe: Casual).\n[3] Baking, layered birthday cakes, cake decorating, buttercream piping, holiday cookie baking (Vibe: Chill).",
+    "onboardedDaysAgo": 17,
+    "history": [
+      {"from": "user", "text": "hi there! is this mixr?"},
+      {"from": "mixr", "text": "it is! you text me what you're into and i connect you with people and things to do on campus. what's your first name, and what are you into? braindump away: games, hobbies, music, sports, stuff you want to try"},
+      {"from": "user", "text": "i'm isabella! i'm a forever DM lol. running a weekly 5e campaign and i spend way too much time worldbuilding. always looking for players or other DMs to nerd out with 🐉"},
+      {"from": "user", "text": "also cozy board games! wingspan, azul, everdell, anything engine building. i love a slow afternoon at a board game cafe"},
+      {"from": "mixr", "text": "love it. got it: dming a weekly 5e campaign and worldbuilding, and cozy engine-builders like wingspan, azul and everdell. i'll text you when something fits, and you can text me anytime to host something or find people"},
+      {"from": "user", "text": "sounds great thank you!"},
+      {"from": "user", "text": "oh wait i forgot, i also bake! mostly layer cakes for my friends birthdays, i'm learning buttercream piping. and holiday cookies obviously", "gapHours": 96},
+      {"from": "mixr", "text": "love that, added cake baking and decorating to your stuff"}
+    ]
+  },
+  {
+    "name": "Owen Fitzgerald",
+    "phone": "+12065550116",
+    "profile": "Core Interests:\n[1] Board games, deck-building and worker placement, Dominion, Agricola, weekly strategy game group (Vibe: Social).\n[2] Chess, rapid games, 1400 Chess.com rating, tactics puzzles, improving endgames, over-the-board club play (Level: Intermediate).",
+    "onboardedDaysAgo": 12,
+    "history": [
+      {"from": "user", "text": "Hi, my RA mentioned this. How does it work?"},
+      {"from": "mixr", "text": "hey! i'm mixr. you text me what you're into and i connect you with people and stuff happening on campus based on that. what's your first name, and what are you into? games, sports, music, hobbies, how serious you are"},
+      {"from": "user", "text": "I'm Owen. I like strategy board games, deck-builders and worker placement especially. Dominion and Agricola are my favorites. Would love a weekly group."},
+      {"from": "user", "text": "Also chess. Trying to get better."},
+      {"from": "mixr", "text": "nice owen. where are you at with chess, roughly what rating?"},
+      {"from": "user", "text": "About 1400 on chess.com, mostly rapid. I do a lot of tactics puzzles and I'm trying to fix my endgames. I'd like to play more over the board, maybe at a club."},
+      {"from": "mixr", "text": "got it: a weekly strategy group for dominion and agricola style games, and 1400 rapid chess with more over-the-board play. i'll text you when something fits, and you can text me anytime to host something or find people to play"},
+      {"from": "user", "text": "Great, thanks."}
+    ]
+  },
+  {
+    "name": "Ravi Patel",
+    "phone": "+12065550117",
+    "profile": "Core Interests:\n[1] Embedded systems, ESP32 and STM32 firmware, FreeRTOS, PCB layout, custom mechanical keyboards (Level: Advanced).\n[2] Hackathons, DubHacks, 24-hour hardware hacks, rapid prototyping, demo-day pitching (Vibe: Competitive).\n[3] Startups, hardware startup ideas, founder conversations, YC applications, building MVPs (Vibe: Social).",
+    "onboardedDaysAgo": 2,
+    "history": [
+      {"from": "user", "text": "hey i'm ravi, ee junior. i do a lot of embedded stuff, esp32 and stm32 firmware, freertos, i lay out my own pcbs. currently building a custom mech keyboard from scratch"},
+      {"from": "user", "text": "big hackathon guy too, did dubhacks the last 2 yrs, love 24hr hardware hacks and pitching at demo time. and i want to start a hardware startup eventually, applying to yc next cycle so always down to talk to other founders / build mvps"},
+      {"from": "mixr", "text": "hey ravi, welcome to mixr, great braindump. got it: embedded firmware and pcb work (plus that keyboard), competitive hardware hackathons, and hardware startup and yc founder chats. i'll text you when something fits, and you can text me anytime to host something or find people to build with"},
+      {"from": "user", "text": "sick"}
+    ]
+  },
+  {
+    "name": "Emily Larsen",
+    "phone": "+12065550118",
+    "profile": "Core Interests:\n[1] Maker projects, 3D printing, Prusa and Bambu printers, CAD in Fusion 360, CoMotion makerspace (Level: Intermediate).\n[2] Film photography, medium format, Mamiya RB67, home darkroom developing, black-and-white portraits (Level: Advanced).",
+    "onboardedDaysAgo": 8,
+    "history": [
+      {"from": "user", "text": "hi! saw a flyer for this in the comotion makerspace"},
+      {"from": "mixr", "text": "hey! i'm mixr. you tell me what you're into and i find you people and things to do on campus. what's your first name, and what are you into? hobbies, games, music, sports, things you want to try"},
+      {"from": "user", "text": "emily :) i'm at comotion a lot, 3d printing on the prusas and the bambu, i do my cad in fusion 360. i'd say decent but still learning"},
+      {"from": "user", "text": "and film photography! i shoot medium format on a mamiya rb67 and develop + print b&w in my bathroom darkroom lol, been doing it since high school. mostly portraits"},
+      {"from": "mixr", "text": "love that combo. got it: 3d printing and fusion 360 at comotion, and medium format b&w portraits on the rb67 with your own darkroom work. i'll text you when something fits, and you can text me anytime to host something or find people"},
+      {"from": "user", "text": "yay thanks!"}
+    ]
+  },
+  {
+    "name": "Tomás Silva",
+    "phone": "+12065550119",
+    "profile": "Core Interests:\n[1] Electronics tinkering, Arduino starter kits, breadboard circuits, soldering basics, LED projects (Level: Beginner).\n[2] Jazz guitar, comping chord voicings, ii-V-I progressions, learning standards, small-group jam sessions (Level: Intermediate).",
+    "onboardedDaysAgo": 15,
+    "history": [
+      {"from": "user", "text": "hola, is this the thing from the club fair?"},
+      {"from": "mixr", "text": "hey, yep! i'm mixr. you text me what you're into and i connect you with people and stuff happening on campus. what's your first name, and what are you into? music, hobbies, games, sports, things you want to try"},
+      {"from": "user", "text": "tomás! i play jazz guitar, mostly comping and working through ii-V-Is and learning standards. i'd love to find people to jam with in a small group"},
+      {"from": "user", "text": "and i just got an arduino starter kit, been messing with breadboards and leds. learning to solder too"},
+      {"from": "mixr", "text": "nice. how far along are you on guitar, like still learning the basics or comfortable sitting in on a jam?"},
+      {"from": "user", "text": "comfortable comping on most standards, my soloing is still pretty rough. so intermediate-ish? the arduino stuff i'm a total beginner"},
+      {"from": "mixr", "text": "got it: intermediate jazz guitar for small-group jams, and beginner arduino and soldering projects. i'll text you when something fits, and you can text me anytime to host something or find people to play with"},
+      {"from": "user", "text": "gracias!"}
+    ]
+  },
+  {
+    "name": "Grace Liu",
+    "phone": "+12065550120",
+    "profile": "Core Interests:\n[1] Indie and alt music, live concerts, Capitol Hill venues, Neumos, Sasquatch-style festivals (Vibe: Social).\n[2] Film photography, 35mm Canon AE-1, concert photography, Kodak Gold, photo walks (Level: Intermediate).\n[3] Food crawls, Capitol Hill restaurants, ramen and dumpling spots, trying new cafes (Vibe: Social).",
+    "onboardedDaysAgo": 1,
+    "history": [
+      {"from": "user", "text": "heyyy my roommate told me about this"},
+      {"from": "mixr", "text": "hey! i'm mixr. you text me what you're into and i connect you with people and things happening on campus. what's your first name, and what are you into? braindump away: music, hobbies, sports, games, how serious you are"},
+      {"from": "user", "text": "grace! live music is my thing, indie and alt, i'm at neumos or some cap hill venue like every week. festivals too, i miss sasquatch so bad"},
+      {"from": "user", "text": "i bring my canon ae-1 to shows and shoot concerts on kodak gold, and i love photo walks. i'm okay at it, not a pro lol"},
+      {"from": "user", "text": "oh and food!! ramen, dumplings, trying every new cafe on cap hill. food crawl anyone"},
+      {"from": "mixr", "text": "love it. got it: indie and alt shows on cap hill plus festivals, 35mm concert photography on your ae-1, and cap hill ramen, dumpling and cafe crawls. i'll text you when something fits, and you can text me anytime to host something or find people to go with"},
+      {"from": "user", "text": "yesss ty"}
+    ]
+  },
+  {
+    "name": "Jamal Wright",
+    "phone": "+12065550121",
+    "profile": "Core Interests:\n[1] Jazz trumpet, UW Jazz Ensemble, bebop improvisation, transcribing Clifford Brown solos, big band gigs (Level: Advanced).\n[2] Live jazz and music venues, Jazz Alley, Royal Room, late-night jam sessions (Vibe: Social).",
+    "onboardedDaysAgo": 21,
+    "history": [
+      {"from": "user", "text": "hey whats good"},
+      {"from": "mixr", "text": "hey! i'm mixr. you text me what you're into and i connect you with people and stuff happening on campus. what's your first name, and what are you into? music, sports, games, hobbies, how serious you are"},
+      {"from": "user", "text": "jamal. i play trumpet in the uw jazz ensemble, mostly bebop. been transcribing a lot of clifford brown lately. i gig with a big band on weekends too"},
+      {"from": "user", "text": "always looking for people to hit jazz alley or the royal room with, and for late night jam sessions"},
+      {"from": "mixr", "text": "got it: bebop trumpet (jazz ensemble, big band gigs, clifford brown transcriptions), and jazz alley, the royal room and late-night jams. i'll text you when something fits, and you can text me anytime to host a session or find people to play with"},
+      {"from": "user", "text": "appreciate it"}
+    ]
+  },
+  {
+    "name": "Zoe Anderson",
+    "phone": "+12065550122",
+    "profile": "Core Interests:\n[1] Indie music and concerts, shoegaze, dream pop, Tractor Tavern and Showbox shows, vinyl collecting (Vibe: Social).\n[2] Running, 5K and 10K races, Green Lake loops, 9:30 mile pace, social run clubs (Vibe: Casual).",
+    "onboardedDaysAgo": 9,
+    "history": [
+      {"from": "user", "text": "hi"},
+      {"from": "mixr", "text": "hi! i'm mixr. you tell me what you're into and i find you people and things to do on campus. what's your first name, and what are you into? music, sports, games, hobbies, stuff you want to try"},
+      {"from": "user", "text": "zoe. shoegaze and dream pop forever. i go to shows at the tractor and the showbox and i collect vinyl"},
+      {"from": "user", "text": "i also run but very casually"},
+      {"from": "mixr", "text": "love that. what's your usual pace or distance, roughly?"},
+      {"from": "user", "text": "like 9:30s? green lake loops and random 5ks and 10ks. mostly for the vibes and the post run coffee, a run club would be cute"},
+      {"from": "mixr", "text": "got it: shoegaze and dream pop shows at the tractor and showbox plus vinyl, and easy 9:30-pace green lake runs with the occasional 5k or 10k. i'll text you when something fits, and you can text me anytime to host something or find people"},
+      {"from": "user", "text": "ty"}
+    ]
+  },
+  {
+    "name": "Leila Ahmadi",
+    "phone": "+12065550123",
+    "profile": "Core Interests:\n[1] Jazz piano, Bill Evans voicings, reading lead sheets, combo rehearsals, learning to improvise (Level: Intermediate).\n[2] Chess, classical and rapid, 1600 Lichess rating, Queen's Gambit openings, casual cafe chess (Level: Intermediate).\n[3] Classical music concerts, Seattle Symphony, Benaroya Hall, chamber music performances (Vibe: Chill).",
+    "onboardedDaysAgo": 14,
+    "history": [
+      {"from": "user", "text": "Hello! Is this mixr?"},
+      {"from": "mixr", "text": "yep, that's me! you text me what you're into and i connect you with people and stuff on campus. what's your first name, and what are you into? music, games, sports, hobbies, how serious you are"},
+      {"from": "user", "text": "I'm Leila. I play jazz piano, I love Bill Evans voicings and I can read lead sheets fine, but I'm still learning to improvise. I'd love to rehearse with a small combo."},
+      {"from": "user", "text": "I also play chess, and I go to the symphony at Benaroya whenever student tickets drop. Chamber music too."},
+      {"from": "mixr", "text": "lovely. how serious are you with chess, like casual games or rated and competitive?"},
+      {"from": "user", "text": "Somewhere in between. About 1600 on lichess, classical and rapid, I play the Queen's Gambit a lot. Mostly casual games at cafes though."},
+      {"from": "mixr", "text": "got it: intermediate jazz piano for combo rehearsals, ~1600 chess over coffee, and seattle symphony and chamber music at benaroya. i'll text you when something fits, and you can text me anytime to host something or find people"},
+      {"from": "user", "text": "Thank you!"}
+    ]
+  },
+  {
+    "name": "Sam Rivera",
+    "phone": "+12065550124",
+    "profile": "Core Interests:\n[1] Jazz saxophone, alto sax, learning major scales and blues licks, first jam sessions (Level: Beginner).\n[2] Indie music, live shows, indie folk and singer-songwriter sets, open mics on Capitol Hill (Vibe: Chill).",
+    "onboardedDaysAgo": 6,
+    "history": [
+      {"from": "user", "text": "um hi, i got this number from a poster"},
+      {"from": "mixr", "text": "hey, welcome! i'm mixr. you text me what you're into and i connect you with people and things happening on campus. what's your first name, and what are you into? no pressure, just braindump"},
+      {"from": "user", "text": "i'm sam. i just started alto sax a few months ago, still learning scales and some blues licks. kinda want to try a jam session but nervous lol"},
+      {"from": "user", "text": "and i like indie folk, singer songwriter stuff. i go to open mics on cap hill sometimes just to listen"},
+      {"from": "mixr", "text": "love it, everyone starts somewhere. got it: beginner alto sax (scales, blues licks, working up to a first jam), and indie folk and cap hill open mics. i'll text you when something fits, and you can text me anytime to host something or find people"},
+      {"from": "user", "text": "ok cool thanks"}
+    ]
+  },
+  {
+    "name": "Ananya Iyer",
+    "phone": "+12065550125",
+    "profile": "Core Interests:\n[1] South Indian cooking, dosa and sambar, spice blends, meal prep, hosting potluck dinners (Vibe: Social).\n[2] Food crawls, University District restaurants, Ave food tour, bubble tea and dessert spots (Vibe: Casual).\n[3] Hiking, PNW day hikes, Mt Si, Lake Serene, waterfall trails, weekend carpool trips (Level: Intermediate).",
+    "onboardedDaysAgo": 10,
+    "history": [
+      {"from": "user", "text": "hi! a friend said this helps you find people to do stuff with?"},
+      {"from": "mixr", "text": "yep! i'm mixr. you text me what you're into and i connect you with people and things to do on campus. what's your first name, and what are you into? hobbies, food, sports, music, games, stuff you want to try"},
+      {"from": "user", "text": "ananya! i cook a lot of south indian food, dosa, sambar, i make my own spice blends. i meal prep every sunday and love hosting potlucks"},
+      {"from": "user", "text": "also down for any food crawl on the ave, especially bubble tea and dessert spots 🧋 and i hike on weekends"},
+      {"from": "mixr", "text": "love that. for hiking, what kind of trails are you up for, like easy waterfall walks or bigger elevation days?"},
+      {"from": "user", "text": "medium? i've done mt si and lake serene, i love waterfall trails. no car tho so carpools are a must lol"},
+      {"from": "mixr", "text": "got it: south indian cooking and potlucks, ave food crawls for bubble tea and dessert, and day hikes like mt si and lake serene (carpool friendly). i'll text you when something fits, and you can text me anytime to host something or find people"},
+      {"from": "user", "text": "perfect thank you!!"}
+    ]
+  },
+  {
+    "name": "Nate Sullivan",
+    "phone": "+12065550126",
+    "profile": "Core Interests:\n[1] Sourdough bread baking, starter maintenance, high-hydration loaves, scoring, open crumb (Level: Advanced).\n[2] Board games, Catan, Carcassonne, Splendor, relaxed game nights with snacks (Vibe: Casual).",
+    "onboardedDaysAgo": 19,
+    "history": [
+      {"from": "user", "text": "hey"},
+      {"from": "mixr", "text": "hey! i'm mixr. text me what you're into and i'll connect you with people and stuff going on around campus. what's your first name and what are you into? hobbies, games, sports, music, anything you want to try"},
+      {"from": "user", "text": "nate. i bake sourdough. like, a lot. my starter is 3 years old and has a name (doug)"},
+      {"from": "user", "text": "high hydration loaves, chasing the perfect open crumb. i'm pretty deep in it"},
+      {"from": "user", "text": "also board games. catan, carcassonne, splendor. chill nights, i bring bread"},
+      {"from": "mixr", "text": "doug sounds well loved 🍞 got it: serious sourdough (high hydration, open crumb), and relaxed catan, carcassonne and splendor nights with snacks. i'll text you when something fits, and you can text me anytime to host something or find people"},
+      {"from": "user", "text": "doug says thanks"}
+    ]
+  },
+  {
+    "name": "Mei Tanaka",
+    "phone": "+12065550127",
+    "profile": "Core Interests:\n[1] Food crawls, International District, dim sum, Japanese bakeries, hot pot nights with friends (Vibe: Social).\n[2] Anime and manga, shojo manga, Studio Ghibli films, cosplay, Sakura-Con convention (Vibe: Social).",
+    "onboardedDaysAgo": 4,
+    "history": [
+      {"from": "user", "text": "hiiii is this the campus thing"},
+      {"from": "mixr", "text": "hi! yep, i'm mixr. you tell me what you're into and i find you people and things to do on campus. what's your first name, and what are you into? braindump away"},
+      {"from": "user", "text": "mei!! food is #1, i'm always in the ID for dim sum and the japanese bakeries, and hot pot nights with friends are my favorite thing ever 🍲"},
+      {"from": "user", "text": "also shojo manga and ghibli movies, and i cosplay! going to sakura-con again this year"},
+      {"from": "mixr", "text": "love it. got it: ID food crawls (dim sum, japanese bakeries, hot pot nights), and shojo manga, ghibli and cosplay for sakura-con. i'll text you when something fits, and you can text me anytime to host something or find people"},
+      {"from": "user", "text": "yayyy"}
+    ]
+  },
+  {
+    "name": "Carlos Mendoza",
+    "phone": "+12065550128",
+    "profile": "Core Interests:\n[1] Marathon running, sub-3:10 marathon, 7:00 mile tempo runs, track intervals at Husky Track (Level: Advanced).\n[2] Trail running and hiking, Cougar Mountain trails, Tiger Mountain, long vert days, ultramarathon training (Level: Advanced).",
+    "onboardedDaysAgo": 12,
+    "history": [
+      {"from": "user", "text": "Carlos here. Looking for people to train with. Marathon + trail"},
+      {"from": "mixr", "text": "hey carlos, i'm mixr! you text me what you're into and i connect you with people and things on campus. what kind of paces and mileage are we talking?"},
+      {"from": "user", "text": "marathon PR is 3:08, going for sub 3:05 this spring. tempo runs around 7:00/mi and track intervals at husky track on tuesdays"},
+      {"from": "user", "text": "weekends are trail. cougar and tiger mountain, long vert days. training for my first ultra this summer"},
+      {"from": "mixr", "text": "got it: sub-3:10 marathoner with 7:00 tempos and husky track intervals, plus long vert trail days on cougar and tiger while you build to an ultra. i'll text you when something fits, and you can text me anytime to host a run or find training partners"},
+      {"from": "user", "text": "👍"}
+    ]
+  },
+  {
+    "name": "Ruby Thompson",
+    "phone": "+12065550129",
+    "profile": "Core Interests:\n[1] Running, couch to 5K program, 11:30 mile pace, Green Lake walks and jogs, new runner (Level: Beginner).\n[2] Home cooking, healthy meal prep, vegetarian recipes, farmers market shopping, cooking with roommates (Vibe: Chill).",
+    "onboardedDaysAgo": 7,
+    "history": [
+      {"from": "user", "text": "hi! my roommate made me text this lol"},
+      {"from": "mixr", "text": "haha hi, i'm mixr! you text me what you're into and i connect you with people and stuff happening on campus. what's your first name, and what are you into? hobbies, sports, music, games, things you want to try"},
+      {"from": "user", "text": "i'm ruby. ok so i'm trying to become a runner lol. doing couch to 5k, i'm at like 11:30 pace and it's mostly walk jog around green lake. would love buddies who won't judge 😅"},
+      {"from": "user", "text": "and i cook! mostly vegetarian meal prep, i go to the u district farmers market on saturdays and cook with my roommates"},
+      {"from": "mixr", "text": "love it, no judgment here. got it: couch to 5k around green lake at about 11:30 pace, and vegetarian meal prep, farmers market hauls and cooking with roommates. i'll text you when something fits, and you can text me anytime to host something or find people"},
+      {"from": "user", "text": "thank youuu"}
+    ]
+  },
+  {
+    "name": "Aiden Park",
+    "phone": "+12065550130",
+    "profile": "Core Interests:\n[1] Competitive chess, 2100 Lichess blitz rating, UW Chess Club, tournament play, opening theory (Level: Advanced).\n[2] Valorant ranked, Ascendant rank, Duelist main, Jett and Raze, aim training (Vibe: Competitive).",
+    "onboardedDaysAgo": 3,
+    "history": [
+      {"from": "user", "text": "yo whats this"},
+      {"from": "mixr", "text": "hey! i'm mixr. you text me what you're into and i connect you with people and stuff going on around campus. what's your first name and what are you into? games, sports, music, hobbies, how serious you are"},
+      {"from": "user", "text": "aiden. chess and val"},
+      {"from": "mixr", "text": "nice aiden. how serious are you with both, like rating and rank?"},
+      {"from": "user", "text": "2100 blitz on lichess, im in uw chess club and play otb tournaments. i know way too much opening theory"},
+      {"from": "user", "text": "val im ascendant, duelist main, jett/raze. i aim train every day lol"},
+      {"from": "mixr", "text": "got it: 2100 blitz and tournament chess with the chess club, plus ascendant val on jett and raze. i'll text you when something fits, and you can text me anytime to host something or find people to play"},
+      {"from": "user", "text": "bet"}
+    ]
+  },
+  {
+    "name": "Fatima Diallo",
+    "phone": "+12065550131",
+    "profile": "Core Interests:\n[1] Valorant, Immortal rank, in-game leader, collegiate esports team, scrims and VOD review (Vibe: Competitive).\n[2] Anime and manga, Attack on Titan, Demon Slayer, seasonal simulcasts, manga collecting (Vibe: Chill).",
+    "onboardedDaysAgo": 16,
+    "history": [
+      {"from": "user", "text": "hey is this the thing from the esports discord"},
+      {"from": "mixr", "text": "hey! i'm mixr. you text me what you're into and i connect you with people and things happening on campus. what's your first name, and what are you into? games, sports, music, hobbies, how serious you are"},
+      {"from": "user", "text": "fatima. i play val on the collegiate team, immortal, i'm the igl. always down for scrims and vod review, i take it pretty seriously"},
+      {"from": "user", "text": "off the clock i'm an anime + manga person. aot, demon slayer, i watch the seasonal simulcasts and collect the manga volumes. very chill about that part"},
+      {"from": "mixr", "text": "got it: immortal val igl on the collegiate team for scrims and vod review, and chill anime watching and manga collecting (aot, demon slayer). i'll text you when something fits, and you can text me anytime to host something or find people"},
+      {"from": "user", "text": "cool"}
+    ]
+  },
+  {
+    "name": "Tyler Brennan",
+    "phone": "+12065550132",
+    "profile": "Core Interests:\n[1] Super Smash Bros Ultimate, regional tournaments, Pokemon Trainer main, top-eight bracket placements, frame data (Vibe: Competitive).\n[2] Valorant, Platinum rank, casual ranked queue, Sage main, playing with friends (Vibe: Casual).",
+    "onboardedDaysAgo": 11,
+    "history": [
+      {"from": "user", "text": "hey is this mixr? lookin for smash ppl"},
+      {"from": "mixr", "text": "yep! i'm mixr, you text me what you're into and i connect you with people and stuff on campus. what's your first name, and how serious are you with smash?"},
+      {"from": "user", "text": "tyler. pretty serious, i travel to regionals and ive top 8'd a couple. pokemon trainer main, i spend way too long in frame data"},
+      {"from": "user", "text": "also play val but thats just for fun w friends, plat, sage main"},
+      {"from": "mixr", "text": "got it: tournament smash ult on pokemon trainer (regional top 8s), and casual plat val as sage with friends. i'll text you when something fits, and you can text me anytime to host something or find people to play"},
+      {"from": "user", "text": "sick ty"}
+    ]
+  },
+  {
+    "name": "Jasmine Wu",
+    "phone": "+12065550133",
+    "profile": "Core Interests:\n[1] Super Smash Bros, casual couch Smash, Mario Kart, Nintendo Switch party nights (Vibe: Casual).\n[2] Board games, social deduction games, Werewolf, Avalon, The Resistance, big group nights (Vibe: Social).\n[3] Anime, slice-of-life and romance anime, Spy x Family, cozy watch parties (Vibe: Chill).",
+    "onboardedDaysAgo": 5,
+    "history": [
+      {"from": "user", "text": "hey!! saw this on the hub board"},
+      {"from": "mixr", "text": "hey! i'm mixr. you text me what you're into and i connect you with people and things to do on campus. what's your first name, and what are you into? games, music, sports, hobbies, stuff you want to try"},
+      {"from": "user", "text": "jasmine! i love switch party nights, couch smash and mario kart. i'm bad at smash but i have fun lol"},
+      {"from": "user", "text": "social deduction games are my fav, werewolf, avalon, the resistance. bigger groups = better. and cozy anime nights, slice of life and romance, spy x family 🥹"},
+      {"from": "mixr", "text": "love it. got it: casual switch nights with couch smash and mario kart, big-group werewolf, avalon and resistance, and cozy slice-of-life anime watch parties. i'll text you when something fits, and you can text me anytime to host something or find people"},
+      {"from": "user", "text": "yay!"}
+    ]
+  },
+  {
+    "name": "Elliot Grayson",
+    "phone": "+12065550134",
+    "profile": "Core Interests:\n[1] Film photography, Leica M6, Tri-X 400 push processing, darkroom printing, landscape photography (Level: Advanced).\n[2] Hiking and backpacking, North Cascades, Olympic National Park, sunrise summits, photography hikes (Level: Intermediate).",
+    "onboardedDaysAgo": 20,
+    "history": [
+      {"from": "user", "text": "hi"},
+      {"from": "mixr", "text": "hi! i'm mixr. you tell me what you're into and i find you people and stuff to do on campus. what's your first name, and what are you into? hobbies, sports, music, games, things you want to try"},
+      {"from": "user", "text": "elliot. i shoot film, mostly landscapes on a leica m6. tri-x pushed a stop or two, and i print in the darkroom. been at it about 6 years"},
+      {"from": "user", "text": "and i hike/backpack to shoot. north cascades, olympics. sunrise summits"},
+      {"from": "mixr", "text": "nice. how experienced are you on the trail, like day hikes or bigger overnight trips?"},
+      {"from": "user", "text": "comfortable on long day hikes and a few overnights, nothing technical"},
+      {"from": "mixr", "text": "got it: film landscape work on your m6 with pushed tri-x and darkroom printing, and sunrise summit and photo hikes in the north cascades and olympics. i'll text you when something fits, and you can text me anytime to host something or find people"},
+      {"from": "user", "text": "thanks"}
+    ]
+  },
+  {
+    "name": "Olivia Martinez",
+    "phone": "+12065550135",
+    "profile": "Core Interests:\n[1] PNW backpacking, Enchantments permit trips, Olympic coast, Wonderland Trail sections, camping (Level: Advanced).\n[2] Film photography, 35mm Pentax K1000, landscape and travel photos, film scanning (Level: Beginner).\n[3] Camp cooking, backcountry meals, dehydrated food prep, Jetboil recipes (Vibe: Chill).",
+    "onboardedDaysAgo": 8,
+    "history": [
+      {"from": "user", "text": "hey! is this the campus thing where you find people to do stuff with"},
+      {"from": "mixr", "text": "that's me! i'm mixr. you text me what you're into and i connect you with people and things happening on campus. what's your first name, and what are you into? braindump away: sports, hobbies, music, games, how serious you are"},
+      {"from": "user", "text": "olivia! backpacking is my thing. i've done enchantments permit trips, the olympic coast, a few wonderland trail sections. pretty experienced and always looking for trip partners 🏕️"},
+      {"from": "user", "text": "i also just got a pentax k1000 and am learning film, total newbie. mostly landscape and travel shots, still figuring out scanning"},
+      {"from": "user", "text": "and i'm weirdly into camp cooking, i dehydrate my own backcountry meals and have a whole jetboil recipe rotation"},
+      {"from": "mixr", "text": "love it. got it: experienced pnw backpacking (enchantments, olympic coast, wonderland sections), beginner 35mm on your k1000, and backcountry meal prep and jetboil cooking. i'll text you when something fits, and you can text me anytime to host a trip or find people"},
+      {"from": "user", "text": "perfect!!"}
+    ]
+  },
+  {
+    "name": "Daniel Cho",
+    "phone": "+12065550136",
+    "profile": "Core Interests:\n[1] Startups, founding team experience, fintech side project, Buerk Center competitions, pitch decks (Vibe: Social).\n[2] Hackathons, DubHacks, full-stack web apps, React and Node, rapid MVP building (Vibe: Competitive).\n[3] Tennis, USTA 4.0, singles hitting sessions, IMA courts, competitive practice matches (Level: Intermediate).",
+    "onboardedDaysAgo": 15,
+    "history": [
+      {"from": "user", "text": "hey, daniel here. heard this is good for finding people"},
+      {"from": "mixr", "text": "hey daniel! i'm mixr. you text me what you're into and i connect you with people and stuff happening on campus. what are you into? braindump away: hobbies, sports, games, music, how serious you are"},
+      {"from": "user", "text": "startups mostly. i'm on the founding team of a fintech side project, we did the buerk center competition last spring. always making pitch decks lol"},
+      {"from": "user", "text": "and hackathons, dubhacks every year. full stack, react + node, i like shipping an mvp in 24 hrs"},
+      {"from": "mixr", "text": "nice. got it: early-stage fintech and buerk center pitching, and competitive dubhacks-style full-stack builds. i'll text you when something fits, and you can text me anytime to host something or find people to build with"},
+      {"from": "user", "text": "sounds good"},
+      {"from": "user", "text": "oh i forgot to mention tennis. i play singles at the ima, around 4.0. looking for people to hit with and play practice matches", "gapHours": 72},
+      {"from": "mixr", "text": "nice, added 4.0 singles tennis at the IMA to your stuff"}
+    ]
+  },
+  {
+    "name": "Sarah Goldberg",
+    "phone": "+12065550137",
+    "profile": "Core Interests:\n[1] Startups, solo founder, climate tech, customer discovery, fundraising, Seattle founder meetups (Vibe: Social).\n[2] Running, half marathon training, 8:00 mile pace, Burke-Gilman long runs, run club (Level: Intermediate).",
+    "onboardedDaysAgo": 18,
+    "history": [
+      {"from": "user", "text": "hi! is this the uw thing?"},
+      {"from": "mixr", "text": "yep! i'm mixr. you text me what you're into and i connect you with people and things happening on campus. what's your first name, and what are you into? hobbies, sports, music, games, things you want to try"},
+      {"from": "user", "text": "sarah! i'm a solo founder, climate tech. deep in customer discovery and starting to fundraise. love going to seattle founder meetups and meeting other builders"},
+      {"from": "user", "text": "and running is my sanity. training for a half"},
+      {"from": "mixr", "text": "love that. what pace are you usually running?"},
+      {"from": "user", "text": "around 8:00/mi, long runs on the burke gilman on sundays. i'd love a run club"},
+      {"from": "mixr", "text": "got it: climate tech solo founder (customer discovery, fundraising, founder meetups), and half marathon training around 8:00 pace on the burke-gilman. i'll text you when something fits, and you can text me anytime to host something or find people"},
+      {"from": "user", "text": "amazing thanks"}
+    ]
+  },
+  {
+    "name": "Kofi Mensah",
+    "phone": "+12065550138",
+    "profile": "Core Interests:\n[1] Hackathons, hardware hacks, ESP32 and Raspberry Pi projects, sensor fusion, robotics prototypes (Vibe: Competitive).\n[2] Embedded electronics, soldering, PCB assembly, Husky Robotics team, motor controllers (Level: Intermediate).\n[3] Valorant, Gold rank, casual ranked with friends, Sova main, late-night queues (Vibe: Casual).",
+    "onboardedDaysAgo": 13,
+    "history": [
+      {"from": "user", "text": "yo i'm kofi, on husky robotics. i do the electronics side, soldering, pcb assembly, motor controllers. decent at it, still learning a lot"},
+      {"from": "user", "text": "love hardware hackathons too, esp32 and raspberry pi stuff, sensor fusion, building janky robots in 24 hrs lol"},
+      {"from": "user", "text": "and val late at night with friends. gold, sova main, not sweaty about it"},
+      {"from": "mixr", "text": "hey kofi, welcome to mixr! got it: robotics electronics (soldering, pcbs, motor controllers), hardware hacks with esp32 and pi, and chill late-night gold val on sova. i'll text you when something fits, and you can text me anytime to host something or find people"},
+      {"from": "user", "text": "🔥"}
+    ]
+  },
+  {
+    "name": "Lily Zhang",
+    "phone": "+12065550139",
+    "profile": "Core Interests:\n[1] Startups, product management, user research, early-stage startup internships, founder coffee chats (Vibe: Social).\n[2] Cooking and baking, matcha desserts, mochi, Taiwanese home cooking, recipe swaps (Vibe: Chill).",
+    "onboardedDaysAgo": 9,
+    "history": [
+      {"from": "user", "text": "hiii someone in my PM club mentioned this"},
+      {"from": "mixr", "text": "hi! i'm mixr. you tell me what you're into and i find you people and things to do on campus. what's your first name, and what are you into? hobbies, sports, music, games, stuff you want to try"},
+      {"from": "user", "text": "lily! i'm really into the product/startup world. i want to be a PM, i love user research and i'm looking for early stage startup internships. always down for coffee chats with founders ☕"},
+      {"from": "user", "text": "and i cook/bake to destress. matcha desserts, mochi, taiwanese home cooking like my mom's. would love to swap recipes"},
+      {"from": "mixr", "text": "love it. got it: startup product work (user research, early-stage internships, founder coffee chats), and matcha desserts, mochi and taiwanese home cooking. i'll text you when something fits, and you can text me anytime to host something or find people"},
+      {"from": "user", "text": "thank you!"}
+    ]
+  },
+  {
+    "name": "Alex Novak",
+    "phone": "+12065550140",
+    "profile": "Core Interests:\n[1] Tennis, USTA 4.0, singles and doubles, hitting partner for weekend practice sets (Level: Intermediate).\n[2] Jazz guitar, gypsy jazz, Django Reinhardt standards, jam sessions, chord melody (Level: Advanced).\n[3] Embedded hardware, ESP32 home automation, Home Assistant, sensor dashboards (Level: Intermediate).\n[4] Film photography, 35mm rangefinder, Portra 400, street and travel photography (Level: Intermediate).\n[5] Cooking, Eastern European dishes, pierogi, slow braises, hosting dinner parties (Vibe: Social).\n[6] Chess, casual rapid games, 1500 Chess.com rating, coffee shop chess (Vibe: Casual).",
+    "onboardedDaysAgo": 21,
+    "history": [
+      {"from": "user", "text": "hey! ok fair warning i'm into a lot of things"},
+      {"from": "mixr", "text": "haha perfect, that's what i'm for. i'm mixr: you text me what you're into and i connect you with people and stuff happening on campus. what's your first name, and what's the list?"},
+      {"from": "user", "text": "alex. ok: tennis, i'm a 4.0, play singles and doubles, want a hitting partner for weekend sets"},
+      {"from": "user", "text": "gypsy jazz guitar, django stuff, been playing like 8 years, love jams and chord melody. also i tinker with esp32s for home automation, home assistant, sensor dashboards, i'm decent"},
+      {"from": "user", "text": "film photography too, 35mm rangefinder, portra 400, street and travel, couple years in. and i cook a lot of eastern european food, pierogi, slow braises, i host dinner parties pretty often"},
+      {"from": "mixr", "text": "love it. got it: 4.0 tennis, gypsy jazz guitar, esp32 home automation, 35mm street photography, and eastern european dinner parties. i'll text you when something fits, and you can text me anytime to host something or find people"},
+      {"from": "user", "text": "🙏"},
+      {"from": "user", "text": "forgot one lol. chess, super casual, like 1500 on chess.com rapid. coffee shop games", "gapHours": 150},
+      {"from": "mixr", "text": "haha of course. added casual chess (~1500 rapid) to the list"}
+    ]
+  },
+  {
+    "name": "Nadia Petrova",
+    "phone": "+12065550141",
+    "profile": "Core Interests:\n[1] Bouldering, V5 projects, comp-style problems, Seattle Bouldering Project, climbing partner (Level: Advanced).\n[2] Board games, Wingspan, Spirit Island, cooperative strategy games, weekly game night (Vibe: Social).\n[3] Indie music, live concerts, synth-pop and indie electronic, Capitol Hill shows (Vibe: Social).\n[4] Running, 10K races, 8:15 mile pace, Green Lake and Arboretum loops (Level: Intermediate).\n[5] Startups, edtech side project, hackathon teams, founder meetups (Vibe: Social).",
+    "onboardedDaysAgo": 17,
+    "history": [
+      {"from": "user", "text": "hello! is this the thing where you text your interests"},
+      {"from": "mixr", "text": "that's the one! i'm mixr. you text me what you're into and i connect you with people and things happening on campus. what's your first name, and what are you into? braindump away: sports, games, music, hobbies, how serious you are"},
+      {"from": "user", "text": "nadia! ok climbing first: i boulder at sbp, projecting v5s, love comp style problems. need a consistent partner"},
+      {"from": "user", "text": "board games, wingspan and spirit island, co-op strategy is my fav. i'd love a weekly game night. also synth pop / indie electronic shows on cap hill"},
+      {"from": "user", "text": "and running, i do 10ks, green lake and the arboretum"},
+      {"from": "mixr", "text": "love it. what pace are you usually running?"},
+      {"from": "user", "text": "like 8:15"},
+      {"from": "mixr", "text": "got it: v5 comp-style bouldering at sbp, weekly co-op strategy game nights (wingspan, spirit island), synth-pop shows on cap hill, and 10ks around 8:15 pace. i'll text you when something fits, and you can text me anytime to host something or find people"},
+      {"from": "user", "text": "perfect"},
+      {"from": "user", "text": "oh also add startups! i'm building an edtech side project and i love hackathon teams + founder meetups", "gapHours": 110},
+      {"from": "mixr", "text": "love that, added startups and your edtech project"}
+    ]
+  },
+  {
+    "name": "Jake Morrison",
+    "phone": "+12065550142",
+    "profile": "Core Interests:\n[1] Hiking, Mt Si and Mailbox Peak, PNW day hikes, summit views, carpool trips (Level: Intermediate).\n[2] Super Smash Bros Melee, wavedashing, Fox main, local netplay and weeklies (Vibe: Competitive).\n[3] Baking, cinnamon rolls, banana bread, cookies for friends, weekend baking (Vibe: Chill).\n[4] Maker hardware, ESP32 LED projects, WLED light strips, soldering kits (Level: Beginner).\n[5] Anime, mecha and sci-fi anime, Gundam, Evangelion, anime club screenings (Vibe: Casual).",
+    "onboardedDaysAgo": 14,
+    "history": [
+      {"from": "user", "text": "hey whats up, i'm jake"},
+      {"from": "mixr", "text": "hey jake! i'm mixr. you text me what you're into and i connect you with people and stuff happening on campus. what are you into? hobbies, games, sports, music, stuff you want to try"},
+      {"from": "user", "text": "lots of random stuff lol. hiking (did mailbox peak last month, mt si a bunch), melee, baking, and i just started messing w esp32 led stuff"},
+      {"from": "mixr", "text": "nice mix. how serious are you with melee and hiking?"},
+      {"from": "user", "text": "melee pretty serious, fox main, i can wavedash lol, i play netplay and go to weeklies. hiking i'd say intermediate, i can do mailbox but i'm not out here summiting rainier. no car so carpools are clutch"},
+      {"from": "user", "text": "baking is chill, cinnamon rolls and banana bread for my friends. the led stuff is total beginner, got a soldering kit and some wled strips"},
+      {"from": "mixr", "text": "got it: day hikes like mt si and mailbox (carpool), competitive melee on fox, chill baking, and beginner esp32 and wled led projects. i'll text you when something fits, and you can text me anytime to host something or find people"},
+      {"from": "user", "text": "sick"},
+      {"from": "user", "text": "also anime, forgot that. mecha/sci fi, gundam and evangelion. i go to anime club screenings sometimes", "gapHours": 80},
+      {"from": "mixr", "text": "nice, added mecha and sci-fi anime to your stuff"}
+    ]
+  },
+  {
+    "name": "Amara Obi",
+    "phone": "+12065550143",
+    "profile": "Core Interests:\n[1] Tennis, learning fundamentals, recreational rally, beginner clinic, friendly doubles (Level: Beginner).\n[2] Bouldering and top-rope climbing, V2 to V3, 5.9 top-rope, IMA climbing wall (Level: Intermediate).\n[3] Jazz vocals, jazz choir, singing standards, Ella Fitzgerald, open mic nights (Level: Intermediate).\n[4] Food crawls, Ethiopian and West African restaurants, Seattle brunch spots (Vibe: Social).\n[5] Film photography, disposable cameras, 35mm point-and-shoot, candid photos of friends (Level: Beginner).\n[6] Hackathons and startups, DubHacks, social impact projects, design and pitching (Vibe: Social).",
+    "onboardedDaysAgo": 19,
+    "history": [
+      {"from": "user", "text": "hey!! i'm amara and i want to do everything lol"},
+      {"from": "mixr", "text": "hey amara, love that. i'm mixr: you text me what you're into and i connect you with people and things happening on campus. so what's everything?"},
+      {"from": "user", "text": "ok so: i'm in a beginner tennis clinic, would love friendly doubles. and i climb at the ima wall, v2-v3 bouldering and 5.9 on top rope"},
+      {"from": "user", "text": "i sing in jazz choir, ella fitzgerald is my queen, i do standards and open mics sometimes. been singing a while, decent but not a pro"},
+      {"from": "user", "text": "food crawls!! ethiopian and west african spots, and brunch. and i'm always taking disposable camera / point and shoot pics of my friends, very amateur 📸"},
+      {"from": "mixr", "text": "love it. got it: beginner tennis and friendly doubles, v2-v3 and 5.9 climbing at the IMA, jazz vocals and open mics, ethiopian, west african and brunch crawls, and candid point-and-shoot photos. i'll text you when something fits, and you can text me anytime to host something or find people"},
+      {"from": "user", "text": "yay!!"},
+      {"from": "user", "text": "oh wait also hackathons/startups! i did dubhacks last year, i'm usually the design + pitch person. love social impact projects", "gapHours": 168},
+      {"from": "mixr", "text": "love that, added hackathons and social impact startups to your stuff"}
+    ]
+  },
+  {
+    "name": "Hiro Sato",
+    "phone": "+12065550144",
+    "profile": "Core Interests:\n[1] Manga and anime, seinen manga, Vagabond, Berserk, Vinland Saga, manga reading club (Vibe: Chill).\n[2] Manga illustration, digital drawing, Clip Studio Paint, character design, webcomics (Level: Intermediate).",
+    "onboardedDaysAgo": 2,
+    "history": [
+      {"from": "user", "text": "hi"},
+      {"from": "mixr", "text": "hi! i'm mixr. you text me what you're into and i connect you with people and stuff to do on campus. what's your first name, and what are you into? hobbies, games, music, sports, things you want to try"},
+      {"from": "user", "text": "hiro. manga"},
+      {"from": "mixr", "text": "nice hiro. what kind of manga, and are you more into reading or drawing it?"},
+      {"from": "user", "text": "seinen. vagabond berserk vinland saga. would be cool to have a reading club"},
+      {"from": "user", "text": "i draw too. digital in clip studio, character design, working on a webcomic. intermediate i guess"},
+      {"from": "mixr", "text": "got it: seinen manga (vagabond, berserk, vinland saga) and a reading club, plus digital manga illustration and your webcomic in clip studio. i'll text you when something fits, and you can text me anytime to host something or find people"},
+      {"from": "user", "text": "ok thanks"}
+    ]
+  },
+  {
+    "name": "Elena Popescu",
+    "phone": "+12065550145",
+    "profile": "Core Interests:\n[1] Bouldering, projecting V7 to V8, competitive bouldering, USA Climbing collegiate comps, Seattle Bouldering Project (Level: Advanced).\n[2] Running, cross-training runs, 7:45 mile pace, Green Lake and Husky Stadium stairs (Level: Advanced).",
+    "onboardedDaysAgo": 6,
+    "history": [
+      {"from": "user", "text": "hey, elena here. i compete in collegiate bouldering, usa climbing comps. projecting v7/v8 at sbp. want people who climb at that level to session with"},
+      {"from": "user", "text": "also run for cross training, 7:45ish pace, green lake loops and the husky stadium stairs"},
+      {"from": "mixr", "text": "hey elena, welcome to mixr! got it: competitive v7-v8 bouldering at sbp and collegiate comps, plus 7:45-pace cross-training runs and stadium stairs. i'll text you when something fits, and you can text me anytime to host something or find people to session with"},
+      {"from": "user", "text": "great"}
+    ]
+  },
+  {
+    "name": "Mateo Ramirez",
+    "phone": "+12065550146",
+    "profile": "Core Interests:\n[1] Pickup soccer, casual small-sided games, IMA fields and Denny Field, weekend kickabouts (Level: Intermediate).\n[2] Salsa and bachata dancing, social dance nights, Latin dance lessons, dancing with friends (Vibe: Social).\n[3] Specialty coffee, U District coffee shops, pour-over brewing, latte art practice (Vibe: Chill).",
+    "onboardedDaysAgo": 5,
+    "history": [
+      {"from": "user", "text": "hey is this the campus thing"},
+      {"from": "mixr", "text": "hey! yep, i'm mixr. you text me what you're into and i connect you with people and things to do on campus. what's your first name, and what are you into? sports, games, music, hobbies, how serious you are"},
+      {"from": "user", "text": "mateo. i play pickup soccer, usually at the ima fields or denny field on weekends. small sided games, nothing too crazy"},
+      {"from": "user", "text": "also salsa/bachata, i go to social dance nights and want to get more friends into it. and i basically live in u district coffee shops lol, big specialty coffee guy, pour overs, learning latte art"},
+      {"from": "mixr", "text": "nice. how would you rate yourself at soccer, like just kicking it around or pretty solid?"},
+      {"from": "user", "text": "pretty solid, played rec my whole life but never club. i'd say intermediate"},
+      {"from": "mixr", "text": "got it: intermediate pickup soccer at the IMA fields and denny, salsa and bachata social nights, and u district specialty coffee. i'll text you when something fits, and you can text me anytime to host something or find people to play with"},
+      {"from": "user", "text": "bet thanks"}
+    ]
+  },
+  {
+    "name": "Kai Hoffmann",
+    "phone": "+12065550147",
+    "profile": "Core Interests:\n[1] Competitive soccer, former high school varsity captain, UW club soccer team, center midfielder, 11v11 matches (Level: Advanced).\n[2] Strength training, barbell squat and deadlift programming, IMA weight room morning lifts (Level: Intermediate).\n[3] Premier League and Champions League soccer, Arsenal supporter, early-kickoff match watch parties (Vibe: Social).",
+    "onboardedDaysAgo": 10,
+    "history": [
+      {"from": "user", "text": "kai here. looking for real soccer, full 11v11 not kickabout. played varsity in hs (captain senior yr), now on the uw club team, center mid"},
+      {"from": "mixr", "text": "hey kai, i'm mixr! you text me what you're into and i connect you with people and stuff on campus. love it. anything else you're into besides soccer?"},
+      {"from": "user", "text": "lifting. squat/deadlift programming, i'm in the ima weight room most mornings. decent numbers, not a powerlifter powerlifter"},
+      {"from": "user", "text": "and arsenal. i'll watch any prem or champions league match, the earlier the kickoff the better lol"},
+      {"from": "mixr", "text": "got it: competitive 11v11 soccer (ex-varsity captain, club team, center mid), barbell lifting at the IMA, and arsenal and champions league watch parties. i'll text you when something fits, and you can text me anytime to host something or find people to play"},
+      {"from": "user", "text": "👍"}
+    ]
+  },
+  {
+    "name": "Zara Ahmed",
+    "phone": "+12065550148",
+    "profile": "Core Interests:\n[1] Beginner soccer and futsal, never played before, learning to dribble and pass, low-pressure pickup games (Level: Beginner).\n[2] Pottery and ceramics, wheel throwing class, handmade mugs and bowls, studio practice (Level: Beginner).\n[3] Thrifting and vintage fashion, Capitol Hill thrift stores, Goodwill bins, clothing swaps (Vibe: Social).",
+    "onboardedDaysAgo": 3,
+    "history": [
+      {"from": "user", "text": "hii my roommate said i should text this"},
+      {"from": "mixr", "text": "hi! i'm mixr. you tell me what you're into and i find you people and things to do on campus. what's your first name, and what are you into? hobbies, sports, music, games, stuff you want to try"},
+      {"from": "user", "text": "zara! ok so i've always wanted to try soccer or futsal but i've literally never played 😭 i'd need people who are chill with someone still learning to dribble and pass"},
+      {"from": "user", "text": "i also just started a pottery class, wheel throwing, my mugs and bowls are lopsided but i love it. and i thrift a LOT, cap hill thrift stores, goodwill bins, clothing swaps would be so fun"},
+      {"from": "mixr", "text": "love it, total beginners welcome. got it: trying soccer or futsal from scratch in low-pressure games, beginner wheel-throwing pottery, and cap hill thrifting and clothing swaps. i'll text you when something fits, and you can text me anytime to host something or find people"},
+      {"from": "user", "text": "yay thank you!!"}
+    ]
+  },
+  {
+    "name": "Devon Carter",
+    "phone": "+12065550149",
+    "profile": "Core Interests:\n[1] Pickup basketball, IMA courts, casual full-court runs, shooting around, weeknight games after class (Vibe: Casual).\n[2] Seattle sports, Mariners games, NBA fan, Sonics return hopes, game-day watch parties (Vibe: Social).\n[3] Music production, hip-hop beatmaking in FL Studio, sampling old soul records (Level: Beginner).",
+    "onboardedDaysAgo": 8,
+    "history": [
+      {"from": "user", "text": "yo"},
+      {"from": "mixr", "text": "yo! i'm mixr. text me what you're into and i'll connect you with people and stuff going on around campus. what's your first name and what are you into? sports, games, music, hobbies, how serious you are"},
+      {"from": "user", "text": "devon. hoopin mostly, pickup at the ima"},
+      {"from": "mixr", "text": "nice devon. what kind of runs are you looking for, like casual pickup or more competitive?"},
+      {"from": "user", "text": "casual. full court if there's enough ppl, otherwise just shooting around. usually weeknights after class"},
+      {"from": "user", "text": "also big seattle sports guy, mariners games, i watch a lot of nba and i'm still waiting on the sonics to come back lol. and i just started making beats in fl studio, sampling old soul records"},
+      {"from": "mixr", "text": "got it: casual pickup hoops at the IMA on weeknights, mariners, nba and seattle sports watch parties, and beginner beatmaking in fl studio. i'll text you when something fits, and you can text me anytime to host something or find people to hoop with"},
+      {"from": "user", "text": "bet"}
+    ]
+  },
+  {
+    "name": "Maddie Kowalski",
+    "phone": "+12065550150",
+    "profile": "Core Interests:\n[1] Ultimate frisbee, co-ed pickup games, Denny Field and IMA fields, throwing practice, friendly play (Vibe: Social).\n[2] Car camping, Olympic Peninsula weekend trips, campfire cooking, stargazing with friends (Vibe: Chill).\n[3] Party board games, Codenames, Telestrations, chill dorm game nights (Vibe: Casual).",
+    "onboardedDaysAgo": 12,
+    "history": [
+      {"from": "user", "text": "hi! is this mixr? a friend from my dorm sent me"},
+      {"from": "mixr", "text": "hey, it is! you text me what you're into and i connect you with people and things happening on campus. what's your first name, and what are you into? braindump away: sports, games, music, hobbies, how serious you are"},
+      {"from": "user", "text": "maddie! i play ultimate, mostly pickup on denny field and the ima fields. super social, co-ed, i just like throwing around and meeting people 🥏"},
+      {"from": "user", "text": "also love camping, car camping on the olympic peninsula, campfire cooking, stargazing. and chill game nights, codenames, telestrations, that kind of thing"},
+      {"from": "mixr", "text": "love it. got it: social co-ed pickup ultimate on denny and the IMA fields, car camping and stargazing trips on the olympic peninsula, and chill party game nights. i'll text you when something fits, and you can text me anytime to host something or find people to throw with"},
+      {"from": "user", "text": "yay ty!"}
+    ]
+  }
+]
