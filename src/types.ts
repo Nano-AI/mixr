@@ -8,8 +8,16 @@ export type User = {
   canonicalProfile: string | null;
   embedding: number[] | null;
   snoozedUntil: Date | null;
-  seeded: boolean;
+  seeded: boolean; // demo pool
+  step: OnboardingStep | null; // real users before the agent takes over; null once verified
+  email: string | null;
+  emailVerified: boolean;
+  optedOut: boolean;
+  assignedNumber: string | null; // the Photon number this user texts mixr at
+  joinedVia: string | null;
 };
+
+export type OnboardingStep = 'consent' | 'name' | 'email' | 'verify';
 
 // A special request as data. Person rules are SQL filters before recall (stage 0); text rules are judged per
 // candidate in the rerank call from what people wrote in their own profiles, and enforced by code.

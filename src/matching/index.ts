@@ -1,6 +1,7 @@
 import type { PersonMatch, RecallHit, RerankPick } from '../types.ts';
 import { getUser, q, toVec } from '../db/index.ts';
 import { now } from '../clock.ts';
+import { currentPool } from '../context.ts';
 import { embedOne } from '../llm/embed.ts';
 import { llm, pipelineLlm } from '../llm/index.ts';
 import { trace } from '../trace.ts';
@@ -38,9 +39,10 @@ export async function recall(vector: number[], opts: RecallOpts = {}): Promise<R
      WHERE state = 'active' AND embedding IS NOT NULL
        AND (snoozed_until IS NULL OR snoozed_until <= $2)
        AND NOT (id = ANY($3::int[]))
+       AND seeded = $7 -- demo and real users never meet
      ORDER BY (embedding <=> $1::vector) + CASE WHEN id = ANY($5::int[]) THEN $6::float8 ELSE 0 END, id
      LIMIT $4`,
-    [toVec(vector), t.toISOString(), exclude, limit, f?.avoidIds ?? [], AVOID_PENALTY],
+    [toVec(vector), t.toISOString(), exclude, limit, f?.avoidIds ?? [], AVOID_PENALTY, currentPool() === 'demo'],
   );
   const hits: RecallHit[] = rows.map((r) => ({
     userId: r.id,

@@ -8,8 +8,29 @@ CREATE TABLE IF NOT EXISTS users (
   canonical_profile TEXT,             -- source of truth for who the user is
   embedding vector(1536),             -- derived from canonical_profile, always re-embedded together
   snoozed_until TIMESTAMPTZ,
-  seeded BOOLEAN NOT NULL DEFAULT false,
+  seeded BOOLEAN NOT NULL DEFAULT false,  -- true = demo pool (seeded or created in the dashboard)
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+-- Real users (joined through the website + iMessage). Onboarding before the agent takes over:
+--   step: 'consent' -> 'name' -> 'email' -> 'verify' -> NULL (verified; the agent handles the braindump)
+ALTER TABLE users ADD COLUMN IF NOT EXISTS step TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS email TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS opted_out BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS consent_at TIMESTAMPTZ;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS photon_user_id TEXT;      -- Photon shared-line user id
+ALTER TABLE users ADD COLUMN IF NOT EXISTS assigned_number TEXT;     -- the number this user texts mixr at
+ALTER TABLE users ADD COLUMN IF NOT EXISTS joined_via TEXT;          -- 'web' | 'imessage' | 'demo'
+
+-- Pending UW email codes (salted scrypt hash, never the code itself).
+CREATE TABLE IF NOT EXISTS email_codes (
+  user_id INTEGER PRIMARY KEY REFERENCES users(id),
+  email TEXT NOT NULL,
+  hash TEXT NOT NULL,
+  salt TEXT NOT NULL,
+  expires_at TIMESTAMPTZ NOT NULL,
+  attempts INTEGER NOT NULL DEFAULT 0,
+  sent_at TIMESTAMPTZ NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS messages (
@@ -20,6 +41,33 @@ CREATE TABLE IF NOT EXISTS messages (
   sim_time TIMESTAMPTZ NOT NULL
 );
 CREATE INDEX IF NOT EXISTS messages_user ON messages(user_id, id);
+-- 'phone' | 'dashboard' for inbound (who typed it); 'system' for outbound.
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS via TEXT NOT NULL DEFAULT 'phone';
+
+-- Outbound delivery to real users over Photon. 'sent' = provider accepted, not handset delivery.
+CREATE TABLE IF NOT EXISTS message_jobs (
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES users(id),
+  message_id INTEGER REFERENCES messages(id),
+  dedupe_key TEXT NOT NULL UNIQUE,
+  text TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'sent', 'failed', 'suppressed')),
+  attempts INTEGER NOT NULL DEFAULT 0,
+  error TEXT,
+  even_if_opted_out BOOLEAN NOT NULL DEFAULT false,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  sent_at TIMESTAMPTZ
+);
+
+-- Inbound iMessages, persisted by provider id before processing: duplicates are processed once, and a crash
+-- mid-processing leaves a 'processing' row to inspect rather than blindly replaying side effects.
+CREATE TABLE IF NOT EXISTS inbound_messages (
+  provider_id TEXT PRIMARY KEY,
+  phone TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'processing' CHECK (status IN ('processing', 'done', 'failed')),
+  error TEXT,
+  received_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
 
 CREATE TABLE IF NOT EXISTS events (
   id SERIAL PRIMARY KEY,
@@ -144,6 +192,7 @@ CREATE TABLE IF NOT EXISTS jobs (
   done BOOLEAN NOT NULL DEFAULT false
 );
 CREATE INDEX IF NOT EXISTS jobs_due ON jobs(done, run_at);
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS pool TEXT NOT NULL DEFAULT 'demo';  -- runs on that pool's clock
 
 CREATE TABLE IF NOT EXISTS traces (
   id SERIAL PRIMARY KEY,
@@ -152,6 +201,7 @@ CREATE TABLE IF NOT EXISTS traces (
   ref_id INTEGER,
   data JSONB NOT NULL
 );
+ALTER TABLE traces ADD COLUMN IF NOT EXISTS pool TEXT NOT NULL DEFAULT 'demo';
 
 CREATE TABLE IF NOT EXISTS clock (
   id INTEGER PRIMARY KEY DEFAULT 1 CHECK (id = 1),
