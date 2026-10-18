@@ -40,6 +40,7 @@
       <ul>
         <li><a href="#features">Features</a></li>
         <li><a href="#architecture">Architecture</a></li>
+        <li><a href="#photon-version-note-for-reviewers">Photon version</a></li>
         <li><a href="#privacy-and-consent">Privacy and consent</a></li>
         <li><a href="#built-with">Built with</a></li>
       </ul>
@@ -139,6 +140,18 @@ flowchart LR
 * **Code map.** `src/messaging/` (Photon, inbound pipeline, onboarding), `src/agent/`, `src/matching/`, `src/events/`, `src/relay/` (intros), `src/requirements/` (blocks and special requests), `src/profiles/`, `src/transport/`, `src/jobs/`, `src/http/`, `src/db/`. Outside `src/`: `web/` (dashboard), `landing/` (joinmixr.club), `scripts/`, `deploy/`, `test/`, `fixtures/`. The full map is in [CONTRIBUTING.md](CONTRIBUTING.md).
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
+
+### Photon version (note for reviewers)
+
+mixr is built on **Photon 2.0 (Spectrum)**, the version the DubHacks Photon track requires ("must be built on Photon 2.0 and live on at least one Photon channel"). In the code:
+
+* `spectrum-ts` 12.11 with its iMessage provider: `core.Spectrum({ projectId, projectSecret, providers: [imessage.config()] })` in [`src/messaging/photon.ts`](src/messaging/photon.ts).
+* Sign-ups go through the Spectrum REST API (`https://spectrum.photon.codes`, project-scoped Basic auth) in [`src/messaging/photon-api.ts`](src/messaging/photon-api.ts), which registers each number on the project's shared iMessage line.
+* Nothing uses the Photon 1.0 iMessage SDK directly or a 1.0 line's address and token.
+
+The constraint we ran into: Photon 2.0 Free allows **10 registered users per project** (Pro: 100). During the hackathon, Photon's sponsor team answered our "we need more than 10 people" question by offering a free month of a **Photon 1.0 iMessage Pro line** (promo code `HACKWITHPHOTON`). That offer applies to Photon 1.0, not 2.0, so we did not switch: moving to 1.0 would take mixr off the version the track is judged on. We stayed on 2.0 and kept the 10-user cap for the live pilot. The 50 demo students in the dashboard run in a separate pool that never sends a real text and uses no Photon slots.
+
+If mixr needs more than 10 real users, the path is a Photon 2.0 Pro plan on the same project (no code change). A 1.0 Pro line is the fallback if 2.0 Pro isn't available: Spectrum's iMessage provider can also take a dedicated line's address and token, which would be a config change in `src/messaging/photon.ts`.
 
 ### Privacy and consent
 
@@ -372,7 +385,7 @@ FORCE=1 scripts/deploy.sh       # rebuild a live commit or retry a failed one
 - [ ] Resend sending domain for verification email
 - [ ] Polls
 - [ ] Rolling conversation summaries for long-time users
-- [ ] Photon plan upgrade past 10 users
+- [ ] Photon 2.0 Pro plan to go past 10 real users (see "Photon version" above)
 - [ ] BM25 at scale: SQL full-text past about 10k users
 - [ ] Test verification email delivery to Outlook inboxes
 - [ ] Live multi-phone run-through
