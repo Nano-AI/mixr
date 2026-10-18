@@ -84,6 +84,7 @@ const num = $('#num'); // real (visually hidden) input: keyboard, paste and auto
 // into view (preventScroll or not), which shifts the whole fixed page
 const touch = matchMedia('(pointer: coarse)').matches;
 const focusNum = () => !touch && num.focus({ preventScroll: true });
+const mac = /mac/i.test(navigator.userAgentData?.platform || navigator.userAgent); // iPads say Mac too, but they're touch
 // (425) 340-5583, built as you type
 const fmt = (d) => (d.length < 4 ? (d ? `(${d}` : '') : d.length < 7 ? `(${d.slice(0, 3)}) ${d.slice(3)}` : `(${d.slice(0, 3)}) ${d.slice(3, 6)}-${d.slice(6)}`);
 const render = () => {
@@ -494,22 +495,34 @@ async function join(phone) {
   }
 }
 
-// your mixr line: the number big and selectable (on a laptop you'll text it from your phone), and a
-// real link that opens Messages to it
+// your mixr line: the number big and selectable, then whatever this device can do with it. Phones and
+// Macs open Messages and Contacts; Macs also get a QR (plenty of people text from their phone); other
+// desktops can't open either, so they get the QR and a copy button instead.
+const el = (tag, cls, text) => Object.assign(document.createElement(tag), { className: cls, textContent: text });
 function lineCard(number, link) {
   const d = String(number).replace(/\D/g, '').replace(/^1(?=\d{10}$)/, '');
   const pretty = d.length === 10 ? fmt(d) : String(number);
+  const e164 = d.length === 10 ? `+1${d}` : String(number);
+  const head = el('span', 'line-head');
+  const id = el('span', 'line-id');
+  const numEl = el('span', 'line-num', pretty);
+  id.append(el('b', 'line-name', 'mixr'), numEl);
+  head.append(Object.assign(el('img', 'line-av'), { src: 'brand/mixr-icon.svg', alt: '' }), id);
+  const card = document.createDocumentFragment();
+  card.append(head);
+  if (touch || mac) card.append(lineActs(number, link, pretty));
+  if (!touch) card.append(lineQR(e164, pretty));
+  if (!touch && !mac) card.append(copyButton(e164, numEl));
+  return card;
+}
+
+// Message (a real sms: link) and Add to Contacts (a vCard)
+function lineActs(number, link, pretty) {
   // only hand the link to the browser if it's a web or sms link; anything else gets a plain sms: one
   let href = `sms:${number}&body=hi%20mixr`;
   try {
     if (['https:', 'sms:'].includes(new URL(link).protocol)) href = link;
   } catch {}
-  const el = (tag, cls, text) => Object.assign(document.createElement(tag), { className: cls, textContent: text });
-  // a shared-contact card: avatar, name and number, then Message and Add to Contacts
-  const head = el('span', 'line-head');
-  const id = el('span', 'line-id');
-  id.append(el('b', 'line-name', 'mixr'), el('span', 'line-num', pretty));
-  head.append(Object.assign(el('img', 'line-av'), { src: 'brand/mixr-icon.svg', alt: '' }), id);
   const msg = el('a', 'line-cta', 'Message');
   msg.href = href;
   msg.setAttribute('aria-label', `message mixr at ${pretty}`);
@@ -522,9 +535,45 @@ function lineCard(number, link) {
   });
   const acts = el('span', 'line-acts');
   acts.append(msg, add);
-  const card = document.createDocumentFragment();
-  card.append(head, acts);
-  return card;
+  return acts;
+}
+
+// a QR that opens Messages to mixr with "hi mixr" typed. SMSTO: is the form iOS Camera and Google Lens
+// both turn into a text; with sms: the body splits between ?body= (Android) and &body= (iOS).
+// The QR library loads only here, so the homepage never pays for it.
+function lineQR(e164, pretty) {
+  const box = el('span', 'line-qr');
+  const code = el('span', 'line-code');
+  code.setAttribute('role', 'img');
+  code.setAttribute('aria-label', `QR code that texts mixr at ${pretty}`);
+  box.append(code, el('span', 'line-cap', 'Scan with your phone to text mixr'));
+  const s = Object.assign(document.createElement('script'), { src: 'vendor/qrcode.min.js' });
+  s.onload = () => {
+    const qr = window.qrcode(0, 'M');
+    qr.addData(`SMSTO:${e164}:hi mixr`);
+    qr.make();
+    code.innerHTML = qr.createSvgTag({ cellSize: 1, margin: 4, scalable: true });
+  };
+  s.onerror = () => box.remove(); // the number above is still there to type
+  document.head.append(s);
+  return box;
+}
+
+function copyButton(e164, numEl) {
+  const copy = el('button', 'line-copy', 'Copy number');
+  copy.type = 'button';
+  copy.setAttribute('aria-live', 'polite');
+  copy.addEventListener('click', async () => {
+    try {
+      await navigator.clipboard.writeText(e164);
+      copy.textContent = 'Copied';
+    } catch {
+      getSelection().selectAllChildren(numEl); // no clipboard (plain http, old browser): select it instead
+      copy.textContent = 'Press Ctrl+C to copy';
+    }
+    setTimeout(() => (copy.textContent = 'Copy number'), 1800);
+  });
+  return copy;
 }
 
 // a vCard with mixr's name, photo and this person's line, so the thread shows up as mixr
@@ -566,7 +615,7 @@ compose.addEventListener('submit', async (e) => {
     closeKeypad();
     bubble('b them', "you're in! here's your mixr line:");
     const card = await say(lineCard(res.data.number, res.data.link), 'b them line');
-    if (!touch) card.querySelector('a').focus({ preventScroll: true }); // Enter opens Messages
+    if (!touch) card.querySelector('a, button').focus({ preventScroll: true }); // Enter opens Messages, or copies
     busy = false;
     return;
   }

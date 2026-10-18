@@ -361,6 +361,16 @@ a { color: inherit; }
 }
 .line .line-cta { font-weight: 600; border-right: .5px solid rgba(60, 60, 67, .29); }
 .line .line-cta:focus-visible, .line .line-add:focus-visible { outline: 2px solid var(--blue); outline-offset: -2px; }
+/* desktops: a QR to text mixr from your phone (the white tile and quiet zone come with the svg) */
+.line-qr { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 14px 14px 12px; border-top: .5px solid rgba(60, 60, 67, .29); }
+.line-code { width: 148px; aspect-ratio: 1; border-radius: 8px; overflow: hidden; background: #fff; }
+.line-code svg { display: block; width: 100%; height: 100%; shape-rendering: crispEdges; }
+.line-cap { font: 400 13px/1.25 var(--sf); letter-spacing: -.08px; color: #3c3c43; text-align: center; }
+.line .line-copy {
+  padding: 12px 6px; border: 0; border-top: .5px solid rgba(60, 60, 67, .29); background: none; cursor: pointer;
+  color: var(--blue); font: 600 16px/1 var(--sf); letter-spacing: -.2px;
+}
+.line .line-copy:focus-visible { outline: 2px solid var(--blue); outline-offset: -2px; }
 
 .compose { flex: none; display: flex; align-items: flex-end; gap: 9px; padding: 8px 12px 30px; background: #fff; }
 .chat.kb .compose { padding-bottom: 8px; }
