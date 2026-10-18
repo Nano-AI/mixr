@@ -84,12 +84,12 @@ describe('rerank', () => {
         ],
       };
     });
-    const picks = await rerank({ purpose: 'people', target: 'tennis partner', candidates: [hit(1, 0.9), hit(2, 0.8), hit(3, 0.1)], k: 2, refId: 5 });
+    const picks = await rerank({ purpose: 'event', target: 'tennis partner', candidates: [hit(1, 0.9), hit(2, 0.8), hit(3, 0.1)], k: 2, refId: 5 });
     expect(picks).toEqual([
       { userId: 3, reason: 'r3', pitch: 'p3' },
       { userId: 1, reason: 'r1', pitch: 'p1' },
     ]);
-    expect(req!.input).toContain('PURPOSE: people');
+    expect(req!.input).toContain('PURPOSE: event');
     expect(req!.input).toContain('tennis partner');
     expect(req!.input).toContain('user_id: 3');
     const s: any = req!.schema;
@@ -98,6 +98,21 @@ describe('rerank', () => {
     const [t] = await q<{ ref_id: number; data: any }>(`SELECT ref_id, data FROM traces WHERE kind = 'rerank'`);
     expect(t.ref_id).toBe(5);
     expect(t.data.picks.map((p: any) => p.reason)).toEqual(['r3', 'r1']);
+  });
+
+  test("people searches don't ask the model for a pitch (only the reason is shown)", async () => {
+    const fake = await fresh();
+    let req: JsonRequest | undefined;
+    fake.onJson('rerank', (r) => {
+      req = r;
+      return { picks: [{ user_id: 1, reason: 'both love tennis', checks: [] }], screened_out: [] };
+    });
+    const picks = await rerank({ purpose: 'people', target: 'tennis partner', candidates: [hit(1, 0.9)], k: 1 });
+    const s: any = req!.schema;
+    expect(s.properties.picks.items.required).toEqual(['user_id', 'reason', 'checks']);
+    expect(s.properties.picks.items.properties.pitch).toBeUndefined();
+    expect(picks[0]).toMatchObject({ userId: 1, reason: 'both love tennis' });
+    expect(picks[0].pitch).toBeTruthy(); // template filler; RerankPick keeps its shape
   });
 
   test('LLM may return fewer (or none)', async () => {
@@ -149,7 +164,7 @@ describe('findPeople', () => {
     fake.onJson('rerank', (r) => {
       input = r.input;
       const ids = [...r.input.matchAll(/user_id: (\d+)/g)].map((m) => Number(m[1]));
-      return { picks: ids.slice(0, 1).map((id) => ({ user_id: id, reason: 'you both love sourdough', pitch: 'p' })) };
+      return { picks: ids.slice(0, 1).map((id) => ({ user_id: id, reason: 'you both love sourdough' })) };
     });
     const me = await makeUser('Me', 'Core Interests:\n[1] Competitive tennis.');
     const baker = await makeUser('Bea', 'Looking for: sourdough baking bread');
