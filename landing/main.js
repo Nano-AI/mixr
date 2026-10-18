@@ -1,4 +1,4 @@
-import { animate, createTimeline, onScroll, stagger, utils } from 'https://cdn.jsdelivr.net/npm/animejs@4.5.0/dist/bundles/anime.esm.min.js';
+import { animate, createTimeline, stagger, utils } from 'https://cdn.jsdelivr.net/npm/animejs@4.5.0/dist/bundles/anime.esm.min.js';
 import { startGlow } from './glow.js';
 
 const API = location.hostname.endsWith('joinmixr.club') ? 'https://api.joinmixr.club' : 'http://localhost:3000';
@@ -28,7 +28,6 @@ for (let i = 1; i <= DEPTH; i++) {
 const fit = () => {
   const s = Math.min(1, (innerWidth * 0.88) / 426, (innerHeight * 0.82) / 898);
   phone.style.setProperty('--s', s);
-  document.documentElement.style.setProperty('--pw', `${426 * s}px`);
 };
 fit();
 addEventListener('resize', fit);
@@ -127,8 +126,7 @@ num.addEventListener('keydown', (e) => {
 addEventListener('keydown', (e) => {
   if (joined || e.target === num || e.metaKey || e.ctrlKey || e.altKey || !/^\d$/.test(e.key)) return;
   e.preventDefault();
-  const end = $('#scroll');
-  if (scrollY < end.offsetTop + end.offsetHeight * 0.6) scrollTo({ top: end.offsetTop + end.offsetHeight - innerHeight, behavior: reduced ? 'auto' : 'smooth' });
+  go(Infinity);
   openKeypad();
   num.focus({ preventScroll: true });
   setDigits(digits + e.key);
@@ -159,7 +157,8 @@ function closeKeypad() {
   animate(keypad, { height: 0, duration: 380, ease: 'inOutQuad', onComplete: done });
 }
 
-// ── scroll story ──
+// ── the story ──
+let go = () => {}; // move to a slide; set up below unless motion is reduced
 const steps = [...rail.querySelectorAll('[data-step]')];
 // hidden steps collapse via negative margin so the thread grows from the bottom like iOS
 const shown = steps.map((el) => parseFloat(getComputedStyle(el).marginTop));
@@ -184,7 +183,7 @@ if (reduced) {
   paintReveal();
   steps.filter((el) => el.hasAttribute('data-typing')).forEach((el) => el.remove());
   openKeypad();
-  hint.classList.add('on');
+  root.classList.add('end');
 } else {
   steps.forEach((el, i) => {
     el.style.transformOrigin = origin(el);
@@ -193,8 +192,7 @@ if (reduced) {
   utils.set('[data-notif]', { opacity: 0, y: -40, scale: 0.94 });
   utils.set(['.statusbar', '.touch'], { opacity: 0 });
 
-  // The conversation follows the scroll, but its playhead can only chase the scroll position at
-  // a capped speed and never goes backward: scroll fast and the texts still land one at a time.
+  // the conversation as one timeline; slides set how far it plays (see SLIDES)
   const chat = createTimeline({ autoplay: false });
   const at = [0, 1100, 1350, 1800, 2900, 3700, 4800, 5100, 5700, 6900, 7500, 8500];
   steps.forEach((el, i) => {
@@ -208,56 +206,95 @@ if (reduced) {
     }
     if (el.hasAttribute('data-typing')) chat.add(el, { opacity: [1, 0], marginTop: [shown[i], hidden[i]], duration: 260, ease: 'outQuad' }, at[i + 1] - 140);
   });
-  const CHAT_FROM = 700; // story time (0..1000) where the thread starts: a beat after the phone lands full size (610)
-  const CHAT_TO = 880; // ...and where it has fully played
-  const section = $('#scroll');
-  const scrollPos = () => utils.clamp((scrollY - section.offsetTop) / (section.offsetHeight - innerHeight), 0, 1) * 1000;
-  let unlocked = false; // once the phone has been unlocked, the thread keeps what it has shown
-  let target = 0;
+  // ── slides: one screen, no page scroll. Each slide is a point on the story timeline (0..1000) plus
+  // how far the conversation has played; moving between slides plays the animation in between.
+  const chatEnd = (i) => at[i] + 420; // chat time when step i has fully landed
+  const SLIDES = [
+    { t: 0, chat: 0 }, // hero, phone on its back
+    { t: 400, chat: 0 }, // lock screen with mixr's notification
+    { t: 700, chat: chatEnd(0) }, // Messages opens on mixr's first text
+    { t: 700, chat: chatEnd(5) }, // you answer; mixr finds people and a time
+    { t: 700, chat: chatEnd(11) }, // you're in; your turn
+    { t: 1000, chat: chatEnd(11) }, // zoomed on the number pad
+  ];
+  const LAST = SLIDES.length - 1;
+  let slide = -1;
+  let move; // the running slide transition
+  const pos = { t: 0 };
   let head = 0;
   let last = 0;
+  let speed = 1.5; // chat playback, x real time
+
+  const dots = $('#dots');
+  SLIDES.forEach((_, i) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.setAttribute('aria-label', `Step ${i + 1} of ${SLIDES.length}`);
+    b.addEventListener('click', () => go(i));
+    dots.append(b);
+  });
+
+  go = (i) => {
+    i = utils.clamp(i, 0, LAST);
+    if (i === slide && !move) return;
+    speed = Math.abs(i - slide) > 1 ? 6 : 1.5; // a jump (nav button, a dot) fast-forwards the texts
+    slide = i;
+    [...dots.children].forEach((d, j) => d.toggleAttribute('aria-current', j === i));
+    root.classList.toggle('end', i === LAST);
+    if (i === LAST) openKeypad();
+    else if (kbOn && !joined) closeKeypad();
+    move?.pause();
+    const d = Math.abs(SLIDES[i].t - pos.t);
+    move = animate(pos, {
+      t: SLIDES[i].t,
+      duration: utils.clamp(d * 2.6, d ? 600 : 0, 1500),
+      ease: 'inOutSine',
+      onUpdate: () => story.seek(pos.t),
+      onComplete: () => (move = null),
+    });
+  };
+
   const chase = (now) => {
     const dt = last ? Math.min(now - last, 50) : 16;
     last = now;
-    const sp = scrollPos();
-    // color on past the unlock, off only once clearly back before it: the gap stops a scroll that
-    // hovers near the line (or the observer's own jitter) from flicking it on and off
-    if (sp > 470) reveal.goal = 1;
-    else if (sp < 420) reveal.goal = 0;
-    if (reveal.goal) unlocked = true;
-    // driven by the story's own clock, not the raw scroll: the story trails the scroll, and the first
-    // texts would otherwise play behind the lock screen
-    if (unlocked) target = Math.max(target, utils.clamp((story.currentTime - CHAT_FROM) / (CHAT_TO - CHAT_FROM), 0, 1) * chat.duration);
-    if (head < target) {
-      head = Math.min(target, head + dt * 3); // at most 3x real texting speed
-      chat.seek(head);
-      if (head >= chat.duration) openKeypad();
-    }
+    // color on past the unlock, off only once clearly back before it
+    if (pos.t > 470) reveal.goal = 1;
+    else if (pos.t < 420) reveal.goal = 0;
+    // texts land one at a time once the phone has settled; going back rewinds at once
+    const target = pos.t >= 690 ? SLIDES[slide].chat : 0;
+    if (head > target) chat.seek((head = target));
+    else if (head < target) chat.seek((head = Math.min(target, head + dt * speed)));
     // the page turns light as the color reaches the top edge behind the nav (cover ~0.12..0.5; the
     // corners fill last), on the same clock, so nav and background change together
     const x = hasGL ? utils.clamp((reveal.cover - 0.12) / 0.38, 0, 1) : reveal.v;
     root.style.setProperty('--lit', x * x * (3 - 2 * x));
-    const on = kbOn && sp > CHAT_TO;
+    const on = kbOn && slide === LAST && !move && innerWidth >= 1000;
     if (on) {
-      // the hint lives in the sticky stage, which slides up once scrolled past the section: measure from it
-      const r = compose.querySelector('.field').getBoundingClientRect();
-      root.style.setProperty('--hint-y', `${r.top + r.height / 2 - stage.getBoundingClientRect().top}px`);
+      const f = compose.querySelector('.field').getBoundingClientRect();
+      root.style.setProperty('--hint-y', `${f.top + f.height / 2}px`);
+      root.style.setProperty('--hint-x', `${phone.getBoundingClientRect().left}px`);
     }
     hint.classList.toggle('on', on);
     requestAnimationFrame(chase);
   };
   requestAnimationFrame(chase);
 
-  const story = createTimeline({
-    defaults: { ease: 'outQuad', duration: 60 },
-    autoplay: onScroll({ target: '#scroll', enter: 'top top', leave: 'bottom bottom', sync: 0.25 }),
-    onUpdate: paintReveal,
-  })
+  // last slide: zoom to the bottom of the phone so the pad is as big as the screen allows, leaving
+  // room under it for the consent note. y is in phone units (scaled by --s), the zoom by z.
+  const zoom = () => {
+    const s = parseFloat(phone.style.getPropertyValue('--s'));
+    const z = Math.min((innerWidth * 0.96) / (426 * s), (innerHeight - 150) / (520 * s), 1.45);
+    const room = innerWidth < 700 ? 74 : 64;
+    return { z, y: (innerHeight / 2 - room) / s - 449 * z };
+  };
+
+  const story = createTimeline({ defaults: { ease: 'outQuad', duration: 60 }, autoplay: false, onUpdate: paintReveal })
     // the phone turns over from its back and pulls away
     .add(phone, { rotateY: [200, 0], rotateX: [16, 0], rotateZ: [-8, 0], duration: 300, ease: 'inOutCubic' }, 0)
     .add(phone, { scale: [1.3, 0.82], y: [480, 100], duration: 300, ease: 'inOutCubic' }, 0)
     // the rising phone pushes the hero up and out under the clip edge below the nav
     .add('.hero', { y: [0, () => -$('.hero').getBoundingClientRect().bottom], duration: 260, ease: 'inOutCubic' }, 0)
+    .add('.origin', { opacity: [1, 0], duration: 120 }, 0)
     .add('.screen', { '--sheen': ['-60%', '60%'], duration: 520, ease: 'linear' }, 0)
     // wake, notify, swipe up to unlock
     .add('.off', { opacity: [1, 0], duration: 50 }, 270)
@@ -272,8 +309,46 @@ if (reduced) {
     // color grows out of the black behind the phone; the page settles to light under it
     .add(reveal, { v: [0, 1], duration: 170, ease: 'inOutSine' }, 445)
     .add(phone, { scale: [0.82, 1], y: [100, 0], duration: 90, ease: 'inOutQuad' }, 520)
-    // keeps the timeline exactly 1000 long, so its time matches scrollPos() and the CHAT_* marks
+    .add(phone, { scale: [1, () => zoom().z], y: [0, () => zoom().y], duration: 100, ease: 'inOutCubic' }, 900)
+    // keeps the timeline exactly 1000 long, so slide times are story times
     .add({ t: 0 }, { t: 1, duration: 1 }, 999);
+
+  // input: one wheel gesture, swipe, tap or arrow key moves one slide
+  const busyTarget = (t) => t.closest('a, button, .compose, .keypad');
+  let quietSince = 0;
+  let armed = true;
+  addEventListener('wheel', (e) => {
+    e.preventDefault();
+    const now = performance.now();
+    if (now - quietSince > 220) armed = true; // a pause ends the gesture (trackpad momentum keeps firing)
+    quietSince = now;
+    if (armed && Math.abs(e.deltaY) > 6) {
+      armed = false;
+      go(slide + Math.sign(e.deltaY));
+    }
+  }, { passive: false });
+  let touchY = null;
+  addEventListener('touchstart', (e) => (touchY = e.touches[0].clientY), { passive: true });
+  addEventListener('touchmove', (e) => e.cancelable && e.preventDefault(), { passive: false });
+  addEventListener('touchend', (e) => {
+    if (touchY === null) return;
+    const dy = touchY - e.changedTouches[0].clientY;
+    touchY = null;
+    if (Math.abs(dy) > 40) go(slide + Math.sign(dy));
+    else if (Math.abs(dy) < 8 && !busyTarget(e.target) && slide < LAST) go(slide + 1);
+  });
+  addEventListener('click', (e) => {
+    // mouse clicks advance too; touch taps are handled above
+    if (e.pointerType === 'mouse' && !busyTarget(e.target) && slide < LAST) go(slide + 1);
+  });
+  addEventListener('keydown', (e) => {
+    if (e.target === num) return;
+    if (['ArrowDown', 'PageDown', ' '].includes(e.key)) go(slide + 1);
+    else if (['ArrowUp', 'PageUp'].includes(e.key)) go(slide - 1);
+    else return;
+    e.preventDefault();
+  });
+  go(0);
 }
 
 // the one load-in moment: the hero settles into place
@@ -281,8 +356,7 @@ if (!reduced) animate('.hero > *', { opacity: [0, 1], y: [24, 0], duration: 1100
 
 $('#toJoin').addEventListener('click', (e) => {
   e.preventDefault();
-  const sec = $('#scroll');
-  scrollTo({ top: sec.offsetTop + sec.offsetHeight - innerHeight, behavior: reduced ? 'auto' : 'smooth' });
+  go(Infinity);
 });
 
 // ── the real sign-up ──
