@@ -1,7 +1,7 @@
 import { q, one, getUser } from '../db/index.ts';
 import { publish } from '../bus.ts';
 import { now } from '../clock.ts';
-import { queueDelivery } from './outbox.ts';
+import { queueDelivery, type RichContent } from './outbox.ts';
 
 // The seam between mixr and a phone. Every message is logged here (the dashboard reads it); outbound texts to
 // real users are additionally queued for iMessage delivery by the outbox when the context allows it.
@@ -9,6 +9,7 @@ import { queueDelivery } from './outbox.ts';
 export type SendOpts = {
   dedupeKey?: string; // one logical notification = one key, so retries and replays never double-text
   evenIfOptedOut?: boolean; // only the STOP acknowledgement
+  content?: RichContent; // native iMessage form of this text (contact card, effect...); `text` is the fallback
 };
 
 export async function send(userId: number, text: string, opts: SendOpts = {}): Promise<void> {

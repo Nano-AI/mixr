@@ -61,6 +61,10 @@ CREATE TABLE IF NOT EXISTS message_jobs (
   sent_at TIMESTAMPTZ
 );
 
+-- Native iMessage extras for one job (contact card, effect, tapback, ...; RichContent in src/transport/outbox.ts).
+-- NULL = plain text. `text` stays the plain fallback, sent if Photon rejects the rich form.
+ALTER TABLE message_jobs ADD COLUMN IF NOT EXISTS content JSONB;
+
 -- Databases created before 'sending' existed.
 ALTER TABLE message_jobs DROP CONSTRAINT IF EXISTS message_jobs_status_check;
 ALTER TABLE message_jobs ADD CONSTRAINT message_jobs_status_check CHECK (status IN ('pending', 'sending', 'sent', 'failed', 'suppressed'));
