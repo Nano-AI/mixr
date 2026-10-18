@@ -51,7 +51,7 @@ scripts/deploy.sh --rollback  # previous release
 - systemd user service `mixr` (`deploy/mixr.service`): `Restart=always`, starts at boot (lingering), 4 GB cap. `mixr-health.timer` restarts it if `/health` fails twice.
 - Secrets: `~/mixr-data/mixr.env` (mode 600, never in git). Data: `~/mixr-data/pglite`. Nightly snapshots: `~/mixr-data/backups` (7 kept).
 - Logs: `journalctl --user -u mixr -f`.
-- Public URL: `https://mixr-api.johnomeara.com` (Cloudflare tunnel → `localhost:8787`). `api.joinmixr.club` will work once it's a Cloudflare for SaaS custom hostname pointing at the tunnel; then update `PUBLIC_URL` and the `API` constant in `landing/main.js`.
+- Public URL: `https://api.joinmixr.club` (Cloudflare for SaaS custom hostname → the tunnel's `mixr-api.johnomeara.com` → `localhost:8787`; the tunnel also routes `api.joinmixr.club` itself). `mixr-api.johnomeara.com` keeps working as a direct alias.
 - Railway is an option later ([docs/deploy/railway.md](docs/deploy/railway.md)); today it's the monolith.
 
 ## Privacy & consent
