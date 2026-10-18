@@ -485,8 +485,8 @@ const say = async (content, cls = 'b them') => {
   return bubble(cls, content);
 };
 
-// POST {phone} → 200 {ok, number, link} | 409 {full} | 400/429/5xx {error}. mixr never texts first:
-// joining hands you your own mixr number, and `link` opens Messages to it with "hi mixr" typed
+// POST {phone} → 200 {ok, number, link, welcome} | 409 {full} | 400/429/5xx {error}. joining hands you your own
+// mixr number, and `link` opens Messages to it with "hi mixr" typed; welcome = mixr just texted you first
 const MOCKS = {
   ok: [200, { ok: true, number: '+16285551234', link: 'sms:+16285551234&body=hi%20mixr' }],
   full: [409, { ok: false, full: true, error: 'mixr is full.' }],
@@ -632,7 +632,7 @@ compose.addEventListener('submit', async (e) => {
     const rc = bubble('receipt', 'Delivered');
     setTimeout(() => (rc.textContent = `Read ${$('[data-clock="ampm"]').textContent}`), reduced ? 0 : 500);
     closeKeypad();
-    bubble('b them', "you're in! here's your mixr line:");
+    bubble('b them', res.data.welcome ? "you're in! i just texted you. here's my number:" : "you're in! here's your mixr line:");
     const card = await say(lineCard(res.data.number, res.data.link), 'b them line');
     if (!touch) card.querySelector('a, button').focus({ preventScroll: true }); // Enter opens Messages, or copies
     busy = false;

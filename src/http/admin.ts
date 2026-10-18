@@ -9,7 +9,7 @@ import { send } from '../transport/index.ts';
 //                  crash; never replayed automatically, so ask the person to resend if needed)
 //   POST /send     operator message to one real user ({phone, text}); delivered like any mixr text (outbox,
 //                  opt-out respected) and returns the delivery record. For support and for unsticking a
-//                  conversation; mixr itself still never texts first.
+//                  conversation. (mixr only texts first when WELCOME_TEXT=on: one welcome after a website join.)
 
 const LIMIT = 100;
 const iso = (v: unknown): string | null => (v ? new Date(v as string).toISOString() : null);

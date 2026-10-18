@@ -1,10 +1,13 @@
-import { afterEach, beforeEach, expect, test } from 'vitest';
+import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import { fresh } from './helpers.ts';
 import { getUserByPhone, one, q } from '../src/db/index.ts';
 import { config } from '../src/config.ts';
 import { publicApi } from '../src/http/public.ts';
 import { adminApi } from '../src/http/admin.ts';
 import { setPhotonFetch } from '../src/messaging/photon-api.ts';
+import { setDeliverer } from '../src/transport/outbox.ts';
+import { processText } from '../src/messaging/pipeline.ts';
+import { CONSENT, WELCOME } from '../src/messaging/onboarding.ts';
 
 // POST /join (website) and the admin messaging views. Photon is always a fake fetch here: the real API has a
 // 10-user cap and every new registration uses a slot.
@@ -20,6 +23,7 @@ beforeEach(async () => {
 afterEach(() => {
   Object.assign(config, original);
   setPhotonFetch(null);
+  setDeliverer(null);
   delete process.env.DEV_JOIN_NUMBER;
 });
 
@@ -53,13 +57,13 @@ const created = (phoneNumber: string, id = '11111111-2222-4333-8444-555555555555
 test('sim transport: a stand-in number and sms link, a real user waiting at consent, and no text sent', async () => {
   const res = await join({ phone: '(425) 555-0100' });
   expect(res.status).toBe(200);
-  expect(await res.json()).toEqual({ ok: true, number: '+15555550100', link: 'sms:+15555550100&body=hi%20mixr' });
+  expect(await res.json()).toEqual({ ok: true, number: '+15555550100', link: 'sms:+15555550100&body=hi%20mixr', welcome: false });
   expect(await getUserByPhone('+14255550100')).toMatchObject({ seeded: false, step: 'consent', joinedVia: 'web', assignedNumber: '+15555550100' });
   expect((await q(`SELECT 1 FROM messages`)).length).toBe(0);
   expect((await q(`SELECT 1 FROM message_jobs`)).length).toBe(0);
 
   process.env.DEV_JOIN_NUMBER = '+12065550199';
-  expect(await (await join({ phone: '1-425-555-0100' })).json()).toEqual({ ok: true, number: '+12065550199', link: 'sms:+12065550199&body=hi%20mixr' });
+  expect(await (await join({ phone: '1-425-555-0100' })).json()).toEqual({ ok: true, number: '+12065550199', link: 'sms:+12065550199&body=hi%20mixr', welcome: false });
   expect((await q(`SELECT 1 FROM users`)).length).toBe(1);
 });
 
@@ -120,6 +124,7 @@ test('photon: registers a shared user, stores the assignment, answers with the n
     ok: true,
     number: '+16285550199',
     link: 'https://spectrum.photon.codes/users/11111111-2222-4333-8444-555555555555/redirect?msg=hi%20mixr',
+    welcome: false,
   });
   expect(calls).toHaveLength(1);
   expect(calls[0].url).toBe(`https://spectrum.photon.codes/projects/${PROJECT}/users/`);
@@ -129,7 +134,7 @@ test('photon: registers a shared user, stores the assignment, answers with the n
   expect(JSON.parse(String(calls[0].init.body))).toEqual({ type: 'shared', phoneNumber: '+14255550100' });
   expect(await getUserByPhone('+14255550100')).toMatchObject({ seeded: false, step: 'consent', joinedVia: 'web', assignedNumber: '+16285550199' });
   expect((await one(`SELECT photon_user_id FROM users WHERE phone = '+14255550100'`))!.photon_user_id).toBe('11111111-2222-4333-8444-555555555555');
-  expect((await q(`SELECT 1 FROM messages`)).length).toBe(0); // they text first
+  expect((await q(`SELECT 1 FROM messages`)).length).toBe(0); // WELCOME_TEXT off: they text first
 
   // Already registered (and already onboarded): same answer, progress untouched.
   await q(`UPDATE users SET step = NULL, email_verified = true WHERE phone = '+14255550100'`);
@@ -137,6 +142,65 @@ test('photon: registers a shared user, stores the assignment, answers with the n
   expect(again.status).toBe(200);
   expect((await again.json()).number).toBe('+16285550199');
   expect(await getUserByPhone('+14255550100')).toMatchObject({ step: null, emailVerified: true });
+});
+
+const outbound = async (phone: string) =>
+  (await q<{ text: string }>(`SELECT m.text FROM messages m JOIN users u ON u.id = m.user_id WHERE u.phone = $1 AND m.direction = 'out' ORDER BY m.id`, [phone])).map((r) => r.text);
+
+test('WELCOME_TEXT=on, photon: exactly one welcome reaches the deliverer for a never-texted number; a repeat join sends nothing', async () => {
+  config.welcomeText = true;
+  photon(() => created('+14255550100'));
+  const sent: { phone: string; text: string }[] = [];
+  setDeliverer(async (phone, text) => void sent.push({ phone, text }));
+
+  const res = await join({ phone: '425-555-0100' });
+  expect((await res.json()).welcome).toBe(true);
+  await vi.waitFor(async () => expect((await q(`SELECT status FROM message_jobs WHERE status = 'sent'`)).length).toBe(1));
+  const u = (await getUserByPhone('+14255550100'))!;
+  expect(await one(`SELECT dedupe_key, text FROM message_jobs`)).toEqual({ dedupe_key: `welcome:${u.id}`, text: WELCOME });
+  expect(sent).toEqual([{ phone: '+14255550100', text: WELCOME }]);
+
+  const again = await join({ phone: '4255550100' });
+  expect((await again.json()).welcome).toBe(false);
+  await new Promise((r) => setTimeout(r, 50));
+  expect(sent).toHaveLength(1);
+  expect(await outbound('+14255550100')).toEqual([WELCOME]);
+  expect(u.step).toBe('consent');
+});
+
+test('WELCOME_TEXT=on: a "yes" opts in without a second greeting; anything else gets the ask, not another hello', async () => {
+  config.welcomeText = true;
+  expect((await (await join({ phone: '4255550101' })).json()).welcome).toBe(true);
+  await vi.waitFor(async () => expect(await outbound('+14255550101')).toEqual([WELCOME]));
+  await processText('+14255550101', 'yes!', 'phone', 'imessage:w1');
+  expect(await outbound('+14255550101')).toEqual([WELCOME, "you're in! what's your full name? (first and last)"]);
+  expect((await getUserByPhone('+14255550101'))!.step).toBe('name');
+
+  ip++;
+  await join({ phone: '4255550102' });
+  await vi.waitFor(async () => expect(await outbound('+14255550102')).toEqual([WELCOME]));
+  await processText('+14255550102', 'hi mixr', 'phone', 'imessage:w2'); // the landing page's prefilled text
+  const [, reply] = await outbound('+14255550102');
+  expect(reply).toMatch(/^reply YES to opt in/);
+  expect(reply).not.toBe(CONSENT);
+  await processText('+14255550102', 'yes', 'phone', 'imessage:w3');
+  expect((await getUserByPhone('+14255550102'))!.step).toBe('name');
+});
+
+test('WELCOME_TEXT=on: a welcome Photon refused does not count as consent; their first text gets the full disclosure', async () => {
+  config.welcomeText = true;
+  photon(() => created('+14255550103'));
+  setDeliverer(async () => {
+    throw new Error('Target not allowed for this project');
+  });
+  const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+  await join({ phone: '4255550103' });
+  await vi.waitFor(() => expect(warn).toHaveBeenCalledWith(expect.stringMatching(/^Welcome text for user \d+ not delivered \(pending: Target not allowed/)));
+  warn.mockRestore();
+  setDeliverer(async () => {});
+  await processText('+14255550103', 'yes', 'phone', 'imessage:w4');
+  expect((await outbound('+14255550103')).at(-1)).toBe(CONSENT);
+  expect((await getUserByPhone('+14255550103'))!.step).toBe('consent');
 });
 
 test('photon: plan cap reached -> 409 full, nobody created', async () => {
