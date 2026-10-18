@@ -66,12 +66,13 @@ type Sourced = RecallHit & { source: 'Et' | 'E0' };
 async function candidates(ev: EventFull, exclude: number[], filter: HardFilter): Promise<Sourced[]> {
   const { recall } = matchingDeps();
   const { e0, et } = await loadVectors(ev.id);
+  const text = `${ev.title}\n${ev.rawDescription}`; // raw words, not HyDE: BM25 wants the host's exact terms
   if (ev.waveNumber === 0) {
-    const hits = await recall(e0, { exclude, filter, limit: RECALL_FIRST, refId: ev.id, label: 'event E0' });
+    const hits = await recall(e0, { exclude, filter, text, limit: RECALL_FIRST, refId: ev.id, label: 'event E0' });
     return hits.map((h) => ({ ...h, source: 'E0' as const }));
   }
-  const fromEt = await recall(et, { exclude, filter, limit: RECALL_ET, refId: ev.id, label: 'event Et' });
-  const fromE0 = await recall(e0, { exclude, filter, limit: RECALL_E0, refId: ev.id, label: 'event E0 (exploration)' });
+  const fromEt = await recall(et, { exclude, filter, text, limit: RECALL_ET, refId: ev.id, label: 'event Et' });
+  const fromE0 = await recall(e0, { exclude, filter, text, limit: RECALL_E0, refId: ev.id, label: 'event E0 (exploration)' });
   const seen = new Set<number>();
   const out: Sourced[] = [];
   for (const [hits, source] of [[fromEt, 'Et'], [fromE0, 'E0']] as const)

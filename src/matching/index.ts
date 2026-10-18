@@ -8,6 +8,7 @@ import { trace } from '../trace.ts';
 import { profileSlots } from '../profiles/index.ts';
 import { peopleFilter, recordScreenings, standingTextRules, type HardFilter, type JudgeRule, type Verdict } from '../requirements/index.ts';
 import { RERANK_SYSTEM, rerankSchema } from './prompts.ts';
+import { bm25, rrf, tokenize } from './bm25.ts';
 
 // tune: stage-1 recall size (cheap, tolerant of polymaths' diluted vectors).
 const RECALL_LIMIT = 40;
@@ -20,20 +21,24 @@ const PITCH_WORDS = 8;
 
 // filter: stage-0 hard rules (requirements module). Excluded users (blocks, person rules, screened-out) are dropped
 // in SQL here, before ranking, so the reranker never sees them; 'prefer' person rules rank people lower.
-export type RecallOpts = { exclude?: number[]; limit?: number; refId?: number | null; label?: string; filter?: HardFilter };
+// text: raw ask / event text. When set, recall is hybrid: vector and BM25 rankings over every eligible row, fused by RRF.
+export type RecallOpts = { exclude?: number[]; limit?: number; refId?: number | null; label?: string; filter?: HardFilter; text?: string };
 
 const AVOID_PENALTY = 0.1; // tune: cosine-distance penalty for a 'rather not' person (real similarities span ~0.1)
 
 const r3 = (x: number) => Math.round(x * 1000) / 1000;
 export const firstName = (name: string | null | undefined): string => (name ?? '').trim().split(/\s+/)[0] || 'someone';
 
-// Stage 1: pgvector cosine top-N over active, non-snoozed users with an embedding.
+// Stage 1: pgvector cosine top-N over active, non-snoozed users with an embedding (+ BM25 via RRF when opts.text is set).
 export async function recall(vector: number[], opts: RecallOpts = {}): Promise<RecallHit[]> {
   const limit = opts.limit ?? RECALL_LIMIT;
   const f = opts.filter;
   const exclude = [...(opts.exclude ?? []), ...(f?.excludeIds ?? [])];
   const t = await now();
-  const rows = await q<{ id: number; name: string | null; canonical_profile: string | null; similarity: number }>(
+  const text = opts.text?.trim();
+  // With text, LIMIT NULL (no limit) fetches every eligible row so BM25 can find exact terms the vector ranks low.
+  // ponytail: unlimited fetch (~30 ms) + in-process BM25/RRF (~40 ms) at 5k users; past ~10k users move it to SQL full-text or pg_textsearch.
+  let rows = await q<{ id: number; name: string | null; canonical_profile: string | null; similarity: number }>(
     `SELECT id, name, canonical_profile, 1 - (embedding <=> $1::vector) AS similarity
      FROM users
      WHERE state = 'active' AND embedding IS NOT NULL
@@ -43,8 +48,22 @@ export async function recall(vector: number[], opts: RecallOpts = {}): Promise<R
        AND NOT opted_out -- people who texted STOP are never invited or suggested
      ORDER BY (embedding <=> $1::vector) + CASE WHEN id = ANY($5::int[]) THEN $6::float8 ELSE 0 END, id
      LIMIT $4`,
-    [toVec(vector), t.toISOString(), exclude, limit, f?.avoidIds ?? [], AVOID_PENALTY, currentPool() === 'demo'],
+    [toVec(vector), t.toISOString(), exclude, text ? null : limit, f?.avoidIds ?? [], AVOID_PENALTY, currentPool() === 'demo'],
   );
+  let lexical: string | undefined;
+  if (text) {
+    // rows are already in vector order (avoid penalty included). 'Rather not' people get no lexical boost.
+    const avoid = new Set(f?.avoidIds ?? []);
+    const scores = bm25(text, rows.map((r) => r.canonical_profile ?? ''));
+    const lex = rows.map((r, i) => ({ r, s: scores[i] })).filter((x) => x.s > 0 && !avoid.has(x.r.id)).sort((a, b) => b.s - a.s);
+    const byId = new Map(rows.map((r) => [r.id, r]));
+    rows = rrf(rows.map((r) => r.id), lex.map((x) => x.r.id)).slice(0, limit).map((id) => byId.get(id)!);
+    const terms = new Set(tokenize(text));
+    lexical = lex
+      .slice(0, TRACE_HITS)
+      .map((x) => `${x.r.name ?? x.r.id} (${[...new Set(tokenize(x.r.canonical_profile ?? ''))].filter((w) => terms.has(w)).join(', ')})`)
+      .join(', ');
+  }
   const hits: RecallHit[] = rows.map((r) => ({
     userId: r.id,
     name: r.name ?? '',
@@ -58,6 +77,7 @@ export async function recall(vector: number[], opts: RecallOpts = {}): Promise<R
     hardFiltered: f ? { excluded: f.excludeIds.length, avoided: f.avoidIds.length } : null, // dropped / demoted before ranking
     count: hits.length,
     hits: hits.slice(0, TRACE_HITS).map((h) => ({ userId: h.userId, name: h.name, similarity: r3(h.similarity) })),
+    ...(text ? { lexical: lexical || 'none' } : {}), // who BM25 matched on which exact terms (top lexical hits)
   });
   return hits;
 }
@@ -198,7 +218,7 @@ export async function findPeople(userId: number, request?: string, k?: number): 
   );
   const exclude = [userId, ...linked.map((r) => r.other)];
   const filter = await peopleFilter(userId);
-  const candidates = await recall(vector, { exclude, filter, refId: userId, label: ask ? `people: ${ask}` : 'people' });
+  const candidates = await recall(vector, { exclude, filter, refId: userId, label: ask ? `people: ${ask}` : 'people', text: ask });
 
   const target = [
     ask ? `Looking for: ${ask}` : 'Looking for: people who share their interests',
