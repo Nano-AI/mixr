@@ -83,7 +83,7 @@ describe('hybrid recall (BM25 + RRF)', () => {
   });
 
   test('rareTerms: only query words in few candidates get a lexical boost; weightedRrf lets the vector side lead', () => {
-    const docs = Array.from({ length: 10 }, (_, i) => (i < 6 ? 'new to climbing on weekends' : 'climbing at Seattle Bouldering Project'));
+    const docs: string[] = Array.from({ length: 10 }, (_, i) => (i < 6 ? 'new to climbing on weekends' : 'climbing at Seattle Bouldering Project'));
     docs[0] = 'catan and weekends';
     expect([...rareTerms('someone new to catan on weekends', docs)]).toEqual(['catan']);
     expect(weightedRrf([[[1, 2], 1], [[9], 0.5]])).toEqual([1, 2, 9]); // a lexical-only hit doesn't jump the vector ranking
