@@ -1,0 +1,6 @@
+[Unit]
+Description=mixr health watchdog (restarts mixr if /health stops answering)
+
+[Service]
+Type=oneshot
+ExecStart=%h/mixr/deploy/healthcheck.sh
