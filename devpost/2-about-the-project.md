@@ -43,11 +43,11 @@ Embeddings are good at meaning and bad at exact details. To a vector, "4.5 tenni
 
 $$\text{score}(q, d) = \sum_{t \in q} \text{IDF}(t) \cdot \frac{f(t,d)\,(k_1 + 1)}{f(t,d) + k_1\left(1 - b + b\,\frac{|d|}{\text{avgdl}}\right)} \qquad \text{IDF}(t) = \ln\left(1 + \frac{N - n_t + 0.5}{n_t + 0.5}\right)$$
 
-Here $f(t,d)$ is how many times word $t$ appears in profile $d$, $|d|$ is the profile's length, $N$ is the number of candidates and $n_t$ is how many of them contain $t$. We use $k_1 = 1.2$ and $b = 0.75$. Three things fall out of it:
+Here \\(f(t,d)\\) is how many times word \\(t\\) appears in profile \\(d\\), \\(|d|\\) is the profile's length, \\(N\\) is the number of candidates and \\(n_t\\) is how many of them contain \\(t\\). We use \\(k_1 = 1.2\\) and \\(b = 0.75\\). Three things fall out of it:
 
 - Rare words count more. Among five profiles where four say "tennis" and one says "4.5", IDF(tennis) = ln(1 + 1.5/4.5) ≈ 0.29 while IDF(4.5) = ln(1 + 4.5/1.5) ≈ 1.39. The rating is worth almost five times the sport.
 - Repeats level off. For an average-length profile, saying a word once gives a term weight of 2.2/2.2 = 1.0. Saying it three times gives 6.6/4.2 ≈ 1.57, not 3.
-- Long profiles don't win by length. The $b$ term shrinks the score of a profile longer than average, so a match in a short profile says more.
+- Long profiles don't win by length. The \\(b\\) term shrinks the score of a profile longer than average, so a match in a short profile says more.
 
 We only give the keyword boost to words that appear in at most 20% of the candidates, and never to words that frame the ask ("looking", "people", "group"), so a chatty request can't push someone up just for sharing the word "weekends."
 
@@ -55,17 +55,17 @@ We only give the keyword boost to words that appear in at most 20% of the candid
 
 The vector score and the BM25 score live on different scales, so we merge ranks instead of scores with reciprocal rank fusion:
 
-$$\text{RRF}(d) = \sum_{r} \frac{w_r}{60 + \text{rank}_r(d)} \qquad w_{\text{vector}} = 1,\ \ w_{\text{keyword}} = 0.5$$
+$$\text{RRF}(d) = \sum_{r} \frac{w_r}{60 + \pi_r(d)} \qquad w_{\text{vector}} = 1,\ \ w_{\text{keyword}} = 0.5$$
 
-A profile that's near the top of both lists beats one that's first on only one of them. The keyword side gets half weight, so it breaks ties and rescues exact matches without overriding meaning. The top 40 after fusion go to Claude for the rerank.
+Here \\(\pi_r(d)\\) is profile d's position in ranking r (1 for the top match), and 60 is the standard damping constant. A profile that's near the top of both lists beats one that's first on only one of them. The keyword side gets half weight, so it breaks ties and rescues exact matches without overriding meaning. The top 40 after fusion go to Claude for the rerank.
 
 ### Events that learn who they're for (HyDE + Rocchio)
 
-When someone hosts, Claude writes a profile of the ideal attendee and we embed it as the event's starting vector, $E_0$. That's HyDE: searching with a made-up example of the answer instead of the question. After every RSVP we recompute the event vector with Rocchio relevance feedback, the "more like this" update from information retrieval:
+When someone hosts, Claude writes a profile of the ideal attendee and we embed it as the event's starting vector, \\(E_0\\). That's HyDE: searching with a made-up example of the answer instead of the question. After every RSVP we recompute the event vector with Rocchio relevance feedback, the "more like this" update from information retrieval:
 
 $$E_t = \frac{0.70\,E_0 + 0.25\,\bar{Y} - 0.05\,\bar{N}}{\lVert 0.70\,E_0 + 0.25\,\bar{Y} - 0.05\,\bar{N} \rVert}$$
 
-$\bar{Y}$ is the average vector of everyone who said yes and $\bar{N}$ is the average of everyone who said "not my thing." In other words, the event slowly becomes the average of the people actually going. "Busy friday" doesn't move it at all, since being busy says nothing about taste. The 0.70 anchor keeps the event close to what the host asked for, so three early yeses can't turn a chill board game night into something else.
+\\(\bar{Y}\\) is the average vector of everyone who said yes and \\(\bar{N}\\) is the average of everyone who said "not my thing." In other words, the event slowly becomes the average of the people actually going. "Busy friday" doesn't move it at all, since being busy says nothing about taste. The 0.70 anchor keeps the event close to what the host asked for, so three early yeses can't turn a chill board game night into something else.
 
 ### How many invites per round
 
@@ -73,7 +73,7 @@ Each round sends enough invites to fill the open spots at the event's own yes ra
 
 $$n = \min\left(10,\ \max\left(3,\ \left\lceil \frac{\text{spots left}}{p} \right\rceil\right)\right) \qquad p = \min\left(0.8,\ \max\left(0.15,\ \frac{\text{yeses}}{\text{responses}}\right)\right)$$
 
-Until five people have responded we assume $p = 0.35$, so an event with 4 open spots starts with $\lceil 4 / 0.35 \rceil = 12$, capped to 10 invites. After the first round, 32 candidates come from near $E_t$ and 8 from near $E_0$, so the first few yeses can't pull the event into one clique. The wait between rounds is a sixth of the time left before the event, clamped between 15 minutes and 6 hours, and invites stop an hour before start.
+Until five people have responded we assume \\(p = 0.35\\), so an event with 4 open spots starts with \\(\lceil 4 / 0.35 \rceil = 12\\), capped to 10 invites. After the first round, 32 candidates come from near \\(E_t\\) and 8 from near \\(E_0\\), so the first few yeses can't pull the event into one clique. The wait between rounds is a sixth of the time left before the event, clamped between 15 minutes and 6 hours, and invites stop an hour before start.
 
 ### Campus events
 
