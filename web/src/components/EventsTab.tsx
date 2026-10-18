@@ -1,7 +1,8 @@
 import { useMemo } from 'react';
-import type { ApiEvent, ApiInvite, AppState, InviteStatus } from '../api.ts';
+import type { ApiEvent, ApiInvite, AppState, InviteStatus, Pool } from '../api.ts';
 import { cx, fmtRel, fmtWhen } from '../util.ts';
 import { EventChip, INVITE_STATUSES, InviteChip, inviteLabel } from './Chip.tsx';
+import { countPools, eventPool, inPool, PoolBadge, PoolToggle, poolNow, type PoolFilter } from './Pool.tsx';
 
 type Props = {
   state: AppState;
@@ -9,21 +10,31 @@ type Props = {
   onSelect: (id: number) => void;
   onOpenPhone: (phone: string) => void;
   onShowUser: (id: number) => void;
+  poolFilter: PoolFilter;
+  setPoolFilter: (f: PoolFilter) => void;
 };
 
 const STATUS_ORDER = { open: 0, full: 1, closed: 2, cancelled: 3 } as const;
 
-export function EventsTab({ state, selectedId, onSelect, onOpenPhone, onShowUser }: Props) {
+export function EventsTab({ state, selectedId, onSelect, onOpenPhone, onShowUser, poolFilter, setPoolFilter }: Props) {
+  const usersById = useMemo(() => new Map(state.users.map((u) => [u.id, u])), [state.users]);
+  const poolFor = useMemo(() => {
+    const m = new Map(state.events.map((e) => [e.id, eventPool(e, usersById)]));
+    return (e: ApiEvent): Pool => m.get(e.id) ?? 'demo';
+  }, [state.events, usersById]);
+  const counts = useMemo(() => countPools(state.events, poolFor), [state.events, poolFor]);
   const events = useMemo(
     () =>
-      [...state.events].sort(
-        (a, b) => STATUS_ORDER[a.status] - STATUS_ORDER[b.status] || new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime(),
-      ),
-    [state.events],
+      state.events
+        .filter((e) => inPool(poolFor(e), poolFilter))
+        .sort(
+          (a, b) => STATUS_ORDER[a.status] - STATUS_ORDER[b.status] || new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime(),
+        ),
+    [state.events, poolFor, poolFilter],
   );
   const selected = state.events.find((e) => e.id === selectedId) ?? null;
 
-  if (!events.length) {
+  if (!state.events.length) {
     return (
       <div className="empty">
         <div className="empty-title">No events yet</div>
@@ -34,26 +45,49 @@ export function EventsTab({ state, selectedId, onSelect, onOpenPhone, onShowUser
 
   return (
     <div className="split events-split">
-      <ul className="list event-list">
-        {events.map((e) => (
-          <li key={e.id}>
-            <button className={cx('list-item', e.id === selectedId && 'selected')} onClick={() => onSelect(e.id)}>
-              <div className="li-main">
-                <div className="li-title">{e.title}</div>
-                <div className="li-sub">
-                  {e.hostName ?? 'unknown host'} · {fmtWhen(e.startsAt)} <span className="muted">({fmtRel(e.startsAt, state.now)})</span>
-                </div>
-              </div>
-              <div className="li-side">
-                <EventChip status={e.status} />
-                <Capacity going={e.going} capacity={e.capacity} />
-              </div>
-            </button>
-          </li>
-        ))}
-      </ul>
+      <div className="list-wrap event-list-wrap">
+        <div className="list-search">
+          <span className="muted small grow">
+            {events.length} event{events.length === 1 ? '' : 's'}
+          </span>
+          <PoolToggle value={poolFilter} onChange={setPoolFilter} counts={counts} />
+        </div>
+        <ul className="list event-list">
+          {events.length === 0 && <li className="empty small">No {poolFilter} events.</li>}
+          {events.map((e) => {
+            const pool = poolFor(e);
+            return (
+              <li key={e.id}>
+                <button className={cx('list-item', e.id === selectedId && 'selected')} onClick={() => onSelect(e.id)}>
+                  <div className="li-main">
+                    <div className="li-title">{e.title}</div>
+                    <div className="li-sub">
+                      {e.hostName ?? 'unknown host'} · {fmtWhen(e.startsAt)}{' '}
+                      <span className="muted">({fmtRel(e.startsAt, poolNow(pool, state.now))})</span>
+                    </div>
+                  </div>
+                  <div className="li-side">
+                    <div className="row">
+                      <PoolBadge pool={pool} />
+                      <EventChip status={e.status} />
+                    </div>
+                    <Capacity going={e.going} capacity={e.capacity} />
+                  </div>
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      </div>
       {selected ? (
-        <EventDetail ev={selected} now={state.now} users={state.users} onOpenPhone={onOpenPhone} onShowUser={onShowUser} />
+        <EventDetail
+          ev={selected}
+          pool={poolFor(selected)}
+          now={poolNow(poolFor(selected), state.now)}
+          users={state.users}
+          onOpenPhone={onOpenPhone}
+          onShowUser={onShowUser}
+        />
       ) : (
         <div className="empty">Select an event</div>
       )}
@@ -95,13 +129,15 @@ function DriftMeter({ cos }: { cos: number | null }) {
 
 function EventDetail({
   ev,
+  pool,
   now,
   users,
   onOpenPhone,
   onShowUser,
 }: {
   ev: ApiEvent;
-  now: string;
+  pool: Pool;
+  now: string; // the event's pool clock: wall time for real, the demo clock for demo
   users: AppState['users'];
   onOpenPhone: (phone: string) => void;
   onShowUser: (id: number) => void;
@@ -131,9 +167,14 @@ function EventDetail({
     <div className="detail">
       <div className="detail-head">
         <h3>{ev.title}</h3>
+        <PoolBadge pool={pool} />
         <EventChip status={ev.status} />
       </div>
       <div className="meta-grid">
+        <span className="meta-k">pool</span>
+        <span className="muted small">
+          {pool === 'real' ? 'real host · wall-clock time · invites go to real users' : 'demo host · demo clock · nothing delivered'}
+        </span>
         <span className="meta-k">host</span>
         <span>
           {host ? (

@@ -21,6 +21,12 @@
   --ok: #2f9e5b;
   --warn: #c9840b;
 
+  /* Pools. real = people who joined for real (be careful); demo = fixtures + dashboard numbers. */
+  --real: #c2410c;
+  --real-text: #9a3412;
+  --real-soft: rgba(194, 65, 12, 0.09);
+  --demo: #64748b;
+
   --bubble-in: #0a84ff;
   --bubble-in-text: #ffffff;
   --bubble-out: #e9e9ef;
@@ -79,6 +85,11 @@
     --danger: #ff6369;
     --ok: #4cc38a;
     --warn: #f0b041;
+
+    --real: #fb923c;
+    --real-text: #fdba74;
+    --real-soft: rgba(251, 146, 60, 0.12);
+    --demo: #94a3b8;
 
     --bubble-out: #2a2a34;
     --bubble-out-text: #ececf2;
@@ -389,19 +400,29 @@ pre { margin: 0; }
 /* ---------- top bar ---------- */
 
 .topbar {
-  height: var(--topbar-h);
+  min-height: var(--topbar-h);
   flex-shrink: 0;
   display: flex;
+  flex-wrap: wrap; /* more controls than fit on narrow screens: wrap rather than overflow */
   align-items: center;
-  gap: 12px;
-  padding: 0 16px;
+  gap: 8px 12px;
+  padding: 8px 16px;
   background: color-mix(in srgb, var(--panel) 88%, transparent);
   backdrop-filter: saturate(1.6) blur(10px);
   border-bottom: 1px solid var(--border);
   position: relative;
   z-index: 20;
 }
-.title { font-size: 14px; font-weight: 600; color: var(--text); white-space: nowrap; margin-right: 4px; }
+.title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+  margin-right: 4px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
 
 .clock {
   display: flex;
@@ -628,7 +649,7 @@ pre { margin: 0; }
   overflow: hidden;
 }
 .phone-name .link, .phone-name span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.phone-sub { display: flex; align-items: center; gap: 6px; margin-top: 2px; white-space: nowrap; overflow: hidden; }
+.phone-sub { display: flex; flex-wrap: wrap; align-items: center; gap: 3px 6px; margin-top: 2px; white-space: nowrap; overflow: hidden; }
 .phone-sub .badge { height: 17px; font-size: 9.5px; padding: 0 6px; }
 .phone-sub .tag { height: 17px; }
 .phone-number { font-family: var(--mono); font-size: 11.5px; color: var(--muted); white-space: nowrap; }
@@ -1222,7 +1243,7 @@ pre { margin: 0; }
 
 @media (max-width: 1180px) {
   .clock-date { display: none; }
-  .topbar { gap: 8px; padding: 0 10px; }
+  .topbar { gap: 8px; padding: 8px 10px; }
 }
 
 @media (max-width: 860px) {
@@ -1241,3 +1262,146 @@ pre { margin: 0; }
 .req { padding: 6px 10px; border: 1px solid var(--border); border-radius: 8px; font-size: 12.5px; }
 .req-top { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
 .req-said { color: var(--text-2); font-style: italic; margin-top: 2px; }
+
+/* ---------- pools: real vs demo ---------- */
+
+.tag-danger { background: color-mix(in srgb, var(--danger) 13%, transparent); color: var(--danger); }
+
+.pool-badge {
+  display: inline-flex;
+  align-items: center;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: 5px;
+  font-size: 9.5px;
+  font-weight: 750;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+  flex-shrink: 0;
+  border: 1px solid transparent;
+}
+.pool-badge.pool-real {
+  color: var(--real);
+  background: color-mix(in srgb, var(--real) 12%, transparent);
+  border-color: color-mix(in srgb, var(--real) 35%, transparent);
+}
+.pool-badge.pool-demo { color: var(--demo); background: color-mix(in srgb, var(--demo) 12%, transparent); }
+
+.seg { display: inline-flex; flex-shrink: 0; border: 1px solid var(--border-strong); border-radius: 8px; overflow: hidden; }
+.seg-btn {
+  border: none;
+  background: var(--panel);
+  height: 28px;
+  padding: 0 9px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-2);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+}
+.seg-btn + .seg-btn { border-left: 1px solid var(--border); }
+.seg-btn:hover { background: var(--panel-2); }
+.seg-btn.on { background: var(--accent-soft); color: var(--accent); }
+.seg-btn.on.pool-real { background: color-mix(in srgb, var(--real) 14%, transparent); color: var(--real); }
+.seg-btn.on.pool-demo { background: color-mix(in srgb, var(--demo) 16%, transparent); color: var(--text); }
+.seg-count { font-size: 10.5px; font-weight: 700; opacity: 0.7; font-variant-numeric: tabular-nums; }
+
+.list-group,
+.picker-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px 4px;
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--muted);
+}
+.list-group.pool-real, .picker-group.pool-real { color: var(--real); }
+.picker-group { padding: 8px 8px 4px; position: sticky; top: -4px; background: var(--panel); z-index: 1; }
+.picker-group-count { font-variant-numeric: tabular-nums; opacity: 0.75; }
+.picker-group-note { margin-left: auto; text-transform: none; letter-spacing: 0; font-weight: 500; font-size: 11px; color: var(--muted); }
+
+.event-list-wrap .event-list { border-bottom: none; flex: 1; }
+
+/* top bar clocks: the demo clock (fast-forwardable) and real time for context */
+.clock-group { display: inline-flex; align-items: center; gap: 8px; }
+.clock-label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.wall-clock { display: inline-flex; align-items: baseline; gap: 6px; font-size: 12.5px; color: var(--text-2); white-space: nowrap; }
+.wall-time { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+
+/* acting as a real user: distinct frame + a banner that never goes away */
+.phone.phone-real { border-color: var(--real); box-shadow: var(--shadow), 0 0 0 1px var(--real); }
+.phone.phone-real .phone-notch { background: var(--real); }
+.phone.phone-real.flash { box-shadow: var(--shadow), 0 0 0 4px var(--accent); }
+.phone.phone-real .phone-head { background: color-mix(in srgb, var(--real) 6%, var(--panel-2)); }
+.real-banner {
+  padding: 8px 12px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--real-text);
+  background: var(--real-soft);
+  border-bottom: 1px solid color-mix(in srgb, var(--real) 35%, transparent);
+}
+.real-banner strong { font-weight: 700; }
+.phone-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 3px 8px; margin-top: 3px; font-size: 11px; color: var(--muted); }
+.phone-meta .tag { height: 17px; }
+
+/* a real user's inbound typed in the dashboard (vs sent from their own phone) */
+.bubble.in.via-dashboard {
+  background: transparent;
+  color: var(--text);
+  border: 1.5px dashed var(--bubble-in);
+  padding: 5.5px 10.5px;
+}
+.stamp.dl-sent { color: var(--ok); }
+.stamp.dl-pending { color: var(--warn); }
+.stamp.dl-failed { color: var(--danger); cursor: help; }
+.stamp.dl-suppressed, .stamp.dl-not_delivered { color: var(--muted); }
+
+/* map: optional color by pool (selection and invite statuses still win) */
+.map-check { display: inline-flex; align-items: center; gap: 5px; cursor: pointer; user-select: none; }
+.map.by-pool .map-user.pool-real:not([class*='st-']):not(.host) circle { fill: var(--real); fill-opacity: 0.8; }
+.map.by-pool .map-user.pool-demo:not([class*='st-']):not(.host) circle { fill: var(--demo); fill-opacity: 0.5; }
+.map.by-pool .map-event.pool-real:not(.sel) .e0 { stroke: var(--real); }
+.map.by-pool .map-event.pool-real:not(.sel) .et { fill: var(--real); }
+.map.by-pool .map-event.pool-real:not(.sel) .et-ring,
+.map.by-pool .map-event.pool-real:not(.sel) .drift-line { stroke: var(--real); }
+.lg.pool-real .lg-pool { background: var(--real); }
+.lg.pool-demo .lg-pool { background: var(--demo); }
+
+/* ---------- login ---------- */
+
+.boot { height: 100%; display: flex; align-items: center; justify-content: center; }
+.login-wrap { min-height: 100%; display: flex; align-items: center; justify-content: center; padding: 24px 16px; }
+.login-card {
+  width: 100%;
+  max-width: 360px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 24px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  box-shadow: var(--shadow);
+}
+.login-card h1 { margin: 0; font-size: 18px; font-weight: 700; letter-spacing: -0.01em; }
+.login-card p { margin: 0 0 6px; }
+.login-card .btn { height: 36px; margin-top: 4px; }
+.login-card .error-box { margin: 0; }
+.login-label { font-size: 12px; font-weight: 600; color: var(--text-2); }
+.login-error { color: var(--danger); font-size: 12.5px; }
+.input[aria-invalid='true'] { border-color: var(--danger); }

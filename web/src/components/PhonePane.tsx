@@ -1,14 +1,15 @@
 import { Fragment, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { api, useBus, type ApiUser, type Message } from '../api.ts';
+import { api, poolOf, useBus, useDebounced, type ApiUser, type Delivery, type Message } from '../api.ts';
 import type { Notify } from '../App.tsx';
-import { cx, dayKey, fmtDayLabel, fmtPhone, fmtTime, fmtWhen, initials } from '../util.ts';
+import { cx, dayKey, firstName, fmtDate, fmtDayLabel, fmtPhone, fmtTime, fmtWhen, initials } from '../util.ts';
+import { joinedViaLabel, PoolBadge, UserFlags } from './Pool.tsx';
 
 type Pending = { id: number; text: string; failed?: boolean };
 
 type Props = {
   phone: string;
   user: ApiUser | undefined;
-  now: string | undefined;
+  now: string | undefined; // demo clock
   flashN: number;
   onClose: () => void;
   onShowUser: (id: number) => void;
@@ -18,6 +19,16 @@ type Props = {
 const key = (m: Message) => `${m.direction}|${m.simTime}|${m.text}`;
 const GAP_SEPARATOR_MS = 30 * 60_000;
 const GAP_RUN_MS = 5 * 60_000;
+const DELIVERY_POLL_MS = 8_000; // tune: refresh a real user's thread while a reply is still going out
+const REAL_RELOAD_MS = 600; // tune: live messages lack via/delivery; re-read the thread shortly after
+
+const DELIVERY_LABEL: Record<Delivery, string> = {
+  sent: 'sent to their phone',
+  pending: 'sending to their phone…',
+  failed: 'delivery failed',
+  suppressed: 'not sent · opted out',
+  not_delivered: 'not delivered · stayed in dashboard',
+};
 
 function mergeMessages(base: Message[], extra: Message[]): Message[] {
   const seen = new Set(base.map(key));
@@ -29,6 +40,9 @@ function mergeMessages(base: Message[], extra: Message[]): Message[] {
     .sort((a, b) => a.t - b.t || a.i - b.i)
     .map((x) => x.m);
 }
+
+// Who typed an inbound message, for real users: their own phone, or an operator in the dashboard.
+const typedHere = (m: Message) => m.direction === 'in' && m.via === 'dashboard';
 
 export function PhonePane({ phone, user, now, flashN, onClose, onShowUser, notify }: Props) {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -47,6 +61,9 @@ export function PhonePane({ phone, user, now, flashN, onClose, onShowUser, notif
   const sendingRef = useRef(false);
   sendingRef.current = sending;
 
+  const pool = poolOf(user);
+  const isReal = pool === 'real';
+
   // replace: after a bulk change (seed, reconnect) the server's history is the truth, so drop what we had.
   async function loadHistory(replace = false) {
     try {
@@ -59,6 +76,7 @@ export function PhonePane({ phone, user, now, flashN, onClose, onShowUser, notif
       setLoaded(true);
     }
   }
+  const reloadSoon = useDebounced(() => void loadHistory(), REAL_RELOAD_MS);
 
   useEffect(() => {
     void loadHistory();
@@ -67,10 +85,11 @@ export function PhonePane({ phone, user, now, flashN, onClose, onShowUser, notif
 
   useBus((e) => {
     if (e.type === 'resync') return void loadHistory(true);
-    if (e.type === 'state' && loadError) void loadHistory();
+    if (e.type === 'state' && (loadError || isReal)) reloadSoon(); // real: delivery statuses move on their own
     if (e.type !== 'message' || e.phone !== phone) return;
     const m: Message = { direction: e.direction, text: e.text, simTime: e.simTime };
     setMessages((prev) => mergeMessages(prev, [m]));
+    if (isReal) reloadSoon();
     if (e.direction === 'in') {
       setPending((p) => {
         const i = p.findIndex((x) => x.text === e.text && !x.failed);
@@ -80,6 +99,15 @@ export function PhonePane({ phone, user, now, flashN, onClose, onShowUser, notif
       setUnread((n) => n + 1);
     }
   });
+
+  // A reply still going out to a real phone: keep its status fresh until it settles.
+  const deliveryPending = isReal && messages.some((m) => m.delivery === 'pending');
+  useEffect(() => {
+    if (!deliveryPending) return;
+    const t = setInterval(() => void loadHistory(), DELIVERY_POLL_MS);
+    return () => clearInterval(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [deliveryPending, phone]);
 
   // Auto-scroll to the newest message unless the user scrolled up to read history.
   useLayoutEffect(() => {
@@ -117,14 +145,23 @@ export function PhonePane({ phone, user, now, flashN, onClose, onShowUser, notif
     }
   }
 
-  const snoozed = !!(user?.snoozedUntil && now && new Date(user.snoozedUntil) > new Date(now));
+  // Real users live on the wall clock; demo users on the demo clock.
+  const refNow = isReal ? new Date().toISOString() : now;
+  const snoozed = !!(user?.snoozedUntil && refNow && new Date(user.snoozedUntil) > new Date(refNow));
   const badge = !user ? 'new' : snoozed ? 'snoozed' : user.state;
-  const title = user?.name ?? (user ? 'Unnamed' : 'New number');
+  const title = user?.name ?? (user ? 'Unnamed' : 'New demo number');
+  const actingName = user?.name ?? fmtPhone(phone);
+  const via = joinedViaLabel(user?.joinedVia);
+
+  // For real users a run also breaks where the sender (phone vs dashboard) or delivery status changes, so each
+  // run's stamp can say which it was.
+  const sameRun = (a: Message, b: Message) =>
+    a.direction === b.direction && (!isReal || (a.via === b.via && a.delivery === b.delivery));
 
   return (
     <div
       ref={rootRef}
-      className={cx('phone', flashing && 'flash')}
+      className={cx('phone', isReal && 'phone-real', flashing && 'flash')}
       onMouseDown={() => setUnread(0)}
       onFocusCapture={() => setUnread(0)}
     >
@@ -143,11 +180,21 @@ export function PhonePane({ phone, user, now, flashN, onClose, onShowUser, notif
           </div>
           <div className="phone-sub">
             <span className="phone-number">{fmtPhone(phone)}</span>
-            <span className={`badge badge-${badge}`} title={snoozed ? `Snoozed until ${fmtWhen(user?.snoozedUntil)}` : undefined}>
-              {badge}
-            </span>
-            {user?.seeded && <span className="tag tag-muted">seeded</span>}
+            <PoolBadge pool={pool} />
+            {!(isReal && user?.step) && ( // a real user's onboarding step chip (below) says more
+              <span className={`badge badge-${badge}`} title={snoozed ? `Snoozed until ${fmtWhen(user?.snoozedUntil)}` : undefined}>
+                {badge}
+              </span>
+            )}
           </div>
+          {isReal && user && (
+            <div className="phone-meta">
+              <UserFlags user={user} />
+              {via && <span>via {via}</span>}
+              {user.joinedAt && <span title={fmtWhen(user.joinedAt)}>joined {fmtDate(user.joinedAt)}</span>}
+              {user.assignedNumber && <span title="The number they text mixr at">texts {fmtPhone(user.assignedNumber)}</span>}
+            </div>
+          )}
         </div>
         {unread > 0 && (
           <span className="unread" title={`${unread} new message${unread === 1 ? '' : 's'}`}>
@@ -158,6 +205,13 @@ export function PhonePane({ phone, user, now, flashN, onClose, onShowUser, notif
           ×
         </button>
       </header>
+
+      {isReal && (
+        <div className="real-banner" role="note">
+          <strong>Acting as {actingName} (real user)</strong> — your messages and mixr's replies stay here; nothing is sent
+          to their phone. Actions are real (RSVPs, events).
+        </div>
+      )}
 
       <div
         className="phone-body"
@@ -173,7 +227,7 @@ export function PhonePane({ phone, user, now, flashN, onClose, onShowUser, notif
           <div className="phone-hint">
             No messages yet.
             <br />
-            Say hi to mixr.
+            {isReal ? `Anything you send here stays in the dashboard.` : 'Say hi to mixr.'}
           </div>
         )}
         {messages.map((m, i) => {
@@ -182,8 +236,11 @@ export function PhonePane({ phone, user, now, flashN, onClose, onShowUser, notif
           const t = new Date(m.simTime).getTime();
           const newDay = !prev || dayKey(prev.simTime) !== dayKey(m.simTime);
           const gap = !prev || t - new Date(prev.simTime).getTime() > GAP_SEPARATOR_MS;
-          const endOfRun =
-            !next || next.direction !== m.direction || new Date(next.simTime).getTime() - t > GAP_RUN_MS;
+          const endOfRun = !next || !sameRun(m, next) || new Date(next.simTime).getTime() - t > GAP_RUN_MS;
+          const here = isReal && typedHere(m);
+          let note = '';
+          if (isReal && m.direction === 'in' && m.via) note = here ? 'typed in dashboard' : 'from their phone';
+          if (isReal && m.direction === 'out' && m.delivery) note = DELIVERY_LABEL[m.delivery] ?? m.delivery;
           return (
             <Fragment key={`${key(m)}#${i}`}>
               {(newDay || gap) && (
@@ -193,18 +250,29 @@ export function PhonePane({ phone, user, now, flashN, onClose, onShowUser, notif
                 </div>
               )}
               <div className={cx('bubble-row', m.direction, endOfRun && 'run-end')}>
-                <div className={cx('bubble', m.direction)} title={fmtWhen(m.simTime)}>
+                <div
+                  className={cx('bubble', m.direction, here && 'via-dashboard')}
+                  title={`${fmtWhen(m.simTime)}${note ? ` · ${note}` : ''}`}
+                >
                   {m.text}
                 </div>
               </div>
-              {endOfRun && <div className={cx('stamp', m.direction)}>{fmtTime(m.simTime)}</div>}
+              {endOfRun && (
+                <div
+                  className={cx('stamp', m.direction, isReal && m.delivery && `dl-${m.delivery}`)}
+                  title={m.delivery === 'failed' && m.deliveryError ? m.deliveryError : undefined}
+                >
+                  {fmtTime(m.simTime)}
+                  {note && ` · ${note}`}
+                </div>
+              )}
             </Fragment>
           );
         })}
         {pending.map((p) => (
           <div key={p.id} className="bubble-row in run-end">
             <div
-              className={cx('bubble', 'in', 'pending', p.failed && 'failed')}
+              className={cx('bubble', 'in', 'pending', isReal && 'via-dashboard', p.failed && 'failed')}
               title={p.failed ? 'Not delivered, click to dismiss' : 'Sending…'}
               onClick={() => p.failed && setPending((x) => x.filter((y) => y.id !== p.id))}
             >
@@ -234,11 +302,13 @@ export function PhonePane({ phone, user, now, flashN, onClose, onShowUser, notif
         <input
           ref={inputRef}
           className="input"
-          placeholder={sending ? 'mixr is replying…' : 'Text message'}
+          placeholder={
+            sending ? 'mixr is replying…' : isReal ? `Text as ${firstName(user?.name) ?? 'them'} (stays here)` : 'Text message'
+          }
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           disabled={sending}
-          aria-label={`Message from ${fmtPhone(phone)}`}
+          aria-label={isReal ? `Message as ${actingName} (real user, stays in the dashboard)` : `Message from ${fmtPhone(phone)}`}
         />
         <button className="send-btn" type="submit" disabled={sending || !draft.trim()} aria-label="Send">
           <svg viewBox="0 0 20 20" aria-hidden>

@@ -4,12 +4,12 @@ import { getUserByPhone, q, resetDemo } from '../db/index.ts';
 import { now } from '../clock.ts';
 import { publish, subscribe } from '../bus.ts';
 import { advance } from '../jobs/index.ts';
-import { history } from '../transport/index.ts';
-import { handleInbound } from '../agent/index.ts';
+import { processText } from '../messaging/pipeline.ts';
 
 // The simulator dashboard's API: state, conversations, acting as any user, the demo clock, traces.
 
 const KEEPALIVE_MS = 10_000; // tune: SSE ping interval (the dashboard reconnects if it hears nothing for 25s)
+const MESSAGE_LIMIT = 1000; // tune: messages returned per conversation
 
 const iso = (v: unknown): string | null => (v ? new Date(v as string).toISOString() : null);
 const errMsg = (e: unknown): string => (e instanceof Error ? e.message : String(e));
@@ -26,7 +26,7 @@ dashboardApi.get('/state', async (c) => {
          FROM users ORDER BY seeded, id`,
     ),
     q(
-      `SELECT e.id, e.host_id, h.name AS host_name, e.title, e.raw_description, e.starts_at, e.location, e.capacity, e.status,
+      `SELECT e.id, e.host_id, h.name AS host_name, h.seeded AS host_seeded, e.title, e.raw_description, e.starts_at, e.location, e.capacity, e.status,
               e.wave_number, e.next_wave_at, e.hyde_profile,
               (SELECT count(*)::int FROM event_invites i WHERE i.event_id = e.id AND i.status = 'yes') AS going,
               (1 - (e.initial_embedding <=> e.current_embedding))::float8 AS cos_to_e0
@@ -103,6 +103,7 @@ dashboardApi.get('/state', async (c) => {
       id: e.id,
       hostId: e.host_id,
       hostName: e.host_name,
+      pool: e.host_seeded ? 'demo' : 'real', // an event lives in its host's pool
       title: e.title,
       description: e.raw_description,
       startsAt: iso(e.starts_at),
@@ -130,9 +131,32 @@ dashboardApi.get('/state', async (c) => {
   });
 });
 
+// A conversation, oldest first. via: who typed an inbound message ('phone' = the person on their own phone,
+// 'dashboard' = an operator acting as them); outbound is 'system'. delivery (outbound only): the newest
+// message_jobs row's status, or 'not_delivered' when nothing was queued (demo users, and replies while acting as
+// a real user, stay in the dashboard).
 dashboardApi.get('/messages/:phone', async (c) => {
   const u = await getUserByPhone(c.req.param('phone'));
-  return c.json(u ? await history(u.id, 1000) : []);
+  if (!u) return c.json([]);
+  const rows = await q(
+    `SELECT m.direction, m.text, m.sim_time, m.via, j.status AS delivery, j.error AS delivery_error
+       FROM messages m
+       LEFT JOIN LATERAL (SELECT status, error FROM message_jobs WHERE message_id = m.id ORDER BY id DESC LIMIT 1) j ON true
+      WHERE m.user_id = $1 ORDER BY m.id DESC LIMIT $2`,
+    [u.id, MESSAGE_LIMIT],
+  );
+  return c.json(
+    rows.reverse().map((r) => {
+      const out = r.direction === 'out';
+      return {
+        direction: r.direction,
+        text: r.text,
+        simTime: iso(r.sim_time),
+        via: r.via ?? (out ? 'system' : 'phone'),
+        ...(out ? { delivery: r.delivery ?? 'not_delivered', deliveryError: r.delivery_error ?? null } : {}),
+      };
+    }),
+  );
 });
 
 dashboardApi.post('/inbound', async (c) => {
@@ -141,7 +165,9 @@ dashboardApi.post('/inbound', async (c) => {
   const text = typeof body.text === 'string' ? body.text.trim() : '';
   if (!phone || !text) return c.json({ ok: false, error: 'phone and text are required' }, 400);
   try {
-    await handleInbound(phone, text, 'dashboard'); // demo user, or acting as a real one (quiet toward them)
+    // Same pipeline as iMessage: demo users go to the agent; acting as a real user runs STOP/HELP, onboarding and
+    // the agent for real, but replies to them stay in the dashboard.
+    if ((await processText(phone, text, 'dashboard')) === 'invalid') return c.json({ ok: false, error: 'phone must be +E.164 and text at most 5000 characters' }, 400);
     return c.json({ ok: true });
   } catch (e) {
     return c.json({ ok: false, error: errMsg(e) });
