@@ -6,6 +6,8 @@ import { sendMessage } from './send.ts';
 import { services, type Services } from './services.ts';
 export const STOP_WORDS = ['STOP', 'STOPALL', 'UNSUBSCRIBE', 'END', 'QUIT'];
 export const REPLY_WORDS = ['YES', 'PASS', 'CANCEL'];
+export const FEEDBACK_WORDS = ['WENT', 'MISSED'];
+export const EVENT_WORDS = ['EVENTS', 'JOIN'];
 
 export function createRouter(overrides: Partial<Services> = {}) {
   const deps = { ...services, ...overrides };
@@ -93,9 +95,16 @@ export function createRouter(overrides: Partial<Services> = {}) {
         }
       } else if (word === 'HELP') await reply(help);
       else if (
+        word === 'YES' && user.step === 'active' && !/^YES\s+\d+\b/i.test(text) &&
+        (text.toUpperCase() !== 'YES' || deps.openInvitations(id, 'yes').length === 0)
+      ) {
+        // A natural answer to a chat question is not an RSVP without an invite target.
+        await reply(await onboardingStep(id, m.text.trim(), deps));
+      }
+      else if (
         REPLY_WORDS.includes(word) &&
         (user.step === 'active' ||
-          /^\w+\s+\d+$/.test(text) ||
+          /^\w+\s+\d+\b/.test(text) ||
           (onboarded && ['PASS', 'CANCEL'].includes(word)))
       ) {
         if (!user.email_verified || !onboarded)
@@ -103,8 +112,9 @@ export function createRouter(overrides: Partial<Services> = {}) {
             'Finish onboarding and verify your UW email before responding to meetups.',
           );
         else {
-          const match = /^(YES|PASS|CANCEL)(?:\s+([1-9]\d*))?$/i.exec(text);
-          if (!match || (match[2] && !Number.isSafeInteger(Number(match[2]))))
+          const match = /^(YES|PASS|CANCEL)(?:\s+([1-9]\d*)(?:\s+\+?\s*(\S.*))?)?$/i.exec(text);
+          if (!match || (match[2] && !Number.isSafeInteger(Number(match[2]))) ||
+            (match[3] && (word !== 'YES' || match[3] === '+')))
             await reply(`Use ${word} followed by the invitation number.`);
           else {
             const answer = word.toLowerCase() as Reply;
@@ -117,26 +127,45 @@ export function createRouter(overrides: Partial<Services> = {}) {
                 `Which one? Reply ${ids.map((n) => `${word} ${n}`).join(' or ')}`,
               );
             else {
-              const result = await deps.recordResponse(id, ids[0], answer);
-              const messages = {
-                accepted:
-                  'Your RSVP is recorded. We will confirm once enough people accept.',
-                confirmed:
-                  'Your meetup is confirmed. Watch for the meetup details.',
-                declined: 'You passed on that invite.',
-                cancelled: 'Your RSVP is cancelled.',
-                full: 'That meetup is full.',
-                closed: 'That meetup is closed.',
-                not_invited: 'You do not have an invitation to that meetup.',
-              };
-              await reply(messages[result.outcome]);
+              const result = match[3]
+                ? await deps.recordResponse(id, ids[0], answer, new Date(), match[3])
+                : await deps.recordResponse(id, ids[0], answer);
+              // Lifecycle services send their own acknowledgements after commit.
+              // Only not_invited is silent; don't duplicate the other responses.
+              if (result.outcome === 'not_invited')
+                await reply('You do not have an invitation to that meetup.');
             }
           }
         }
+      } else if (FEEDBACK_WORDS.includes(word) || EVENT_WORDS.includes(word)) {
+        if (!user.email_verified || !onboarded)
+          await reply('Finish onboarding and verify your UW email before using meetup commands.');
+        else if (FEEDBACK_WORDS.includes(word)) {
+          // Preserve the student's note, including its punctuation.
+          const note = m.text.trim().replace(/^\S+\s*/, '');
+          if (!await deps.recordFeedback(id, word === 'WENT', note))
+            await reply('No outstanding meetup feedback to record right now.');
+        } else if (word === 'EVENTS') {
+          await deps.listPublicEvents(id, new Date(), `reply:${m.providerId}`);
+        } else {
+          const match = /^JOIN\s+([1-9]\d*)$/i.exec(text);
+          if (!match || !Number.isSafeInteger(Number(match[1])))
+            await reply('Use JOIN followed by the event number, e.g. JOIN 12.');
+          else {
+            const result = await deps.joinEvent(id, Number(match[1]));
+            if (result.outcome === 'not_invited')
+              await reply('That event is not available to join. Send EVENTS for public events.');
+          }
+        }
       } else {
-        if (user.step === 'active' && word === 'EDIT') {
+        if (user.step === 'active' && word === 'PROFILE') {
+          setStep(id, 'braindump');
+          await reply(await onboardingStep(id, 'PROFILE', deps));
+        } else if (user.step === 'active' && word === 'EDIT') {
           const state = getState(id);
           delete state.draft;
+          delete state.interestNotes;
+          delete state.chatHistory;
           saveState(id, state);
           setStep(id, 'braindump');
           await reply(
