@@ -3,12 +3,12 @@
 # GitHub into a fresh release folder, installs, builds the dashboard, switches ~/mixr to it (keeping the last
 # 3 releases for instant rollback), (re)installs the systemd units, restarts, and waits for /health.
 # Secrets live in ~/mixr-data/mixr.env on the server (never in git); data in ~/mixr-data/pglite.
-#   scripts/deploy.sh                      # deploys the integration branch
-#   DEPLOY_BRANCH=main scripts/deploy.sh   # another branch
+#   scripts/deploy.sh                      # deploys main (production)
+#   DEPLOY_BRANCH=integration scripts/deploy.sh   # another branch
 #   scripts/deploy.sh --rollback           # switch back to the previous release
 set -euo pipefail
 HOST="${DEPLOY_HOST:-jsomeara@polarcrest.johnomeara.com}"
-BRANCH="${DEPLOY_BRANCH:-integration}"
+BRANCH="${DEPLOY_BRANCH:-main}"
 REPO_SLUG="${DEPLOY_REPO:-Nano-AI/mixr}"
 MODE="${1:-deploy}"
 
