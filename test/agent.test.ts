@@ -412,6 +412,11 @@ test('replies are tidied: lowercase openers, runaway length clipped at a sentenc
   expect(tidy("bet, asked Casey. i'll leave the trash talk out. i'll get back to you when they answer.")).toBe(
     "bet, asked Casey. i'll leave the trash talk out. i'll get back to you when they answer.",
   );
+  // A link never counts toward the cap or gets cut: it goes out as its own bubble.
+  const link = 'https://calendar.google.com/calendar/render?action=TEMPLATE&text=catan.night&dates=20261023T020000Z/20261023T040000Z&location=HUB.145';
+  const withLink = `${'you are in for catan night. '.repeat(14)}add it: ${link}`;
+  expect(tidy(withLink)).toBe(withLink.trim());
+  expect(tidy(`${'so much to say here. '.repeat(30)}add it: ${link}`)).not.toContain('https://');
   expect(tidy('Only one thing on the calendar. Tonight works, Maya. Maybe UW has more.')).toBe('only one thing on the calendar. tonight works, Maya. maybe UW has more.');
   expect(tidy("i'll get back to you")).toBe("i'll get back to you");
   expect(tidy("you're in. i'll lyk if anything changes")).toBe("you're in. i'll lyk if anything changes");
