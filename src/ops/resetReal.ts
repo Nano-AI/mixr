@@ -26,6 +26,27 @@ export async function resetRealDb(): Promise<{ users: number }> {
   return { users: n };
 }
 
+// Removes one real user (by phone) and everything tied to them. Demo users can't be targeted. Server STOPPED.
+export async function deleteRealUser(phone: string): Promise<{ deleted: boolean }> {
+  const u = (await q<{ id: number; seeded: boolean }>('SELECT id, seeded FROM users WHERE phone = $1', [phone]))[0];
+  if (!u) return { deleted: false };
+  if (u.seeded) throw new Error('that number belongs to a demo user; refusing');
+  const id = u.id;
+  await q(`DELETE FROM screenings WHERE user_id = $1 OR requirement_id IN (SELECT id FROM requirements WHERE owner_id = $1)`, [id]);
+  await q(`DELETE FROM requirements WHERE owner_id = $1`, [id]);
+  await q(`DELETE FROM blocks WHERE blocker_id = $1`, [id]);
+  await q(`DELETE FROM event_invites WHERE user_id = $1 OR event_id IN (SELECT id FROM events WHERE host_id = $1)`, [id]);
+  await q(`DELETE FROM intros WHERE requester_id = $1 OR target_id = $1`, [id]);
+  await q(`DELETE FROM message_jobs WHERE user_id = $1`, [id]);
+  await q(`DELETE FROM email_codes WHERE user_id = $1`, [id]);
+  await q(`DELETE FROM messages WHERE user_id = $1`, [id]);
+  await q(`DELETE FROM events WHERE host_id = $1`, [id]);
+  await q(`DELETE FROM inbound_messages WHERE phone = $1`, [phone]);
+  await q(`DELETE FROM traces WHERE kind = 'agent' AND ref_id = $1 AND pool = 'real'`, [id]);
+  await q(`DELETE FROM users WHERE id = $1`, [id]);
+  return { deleted: true };
+}
+
 const API = 'https://spectrum.photon.codes';
 
 // Deletes every user registered on the Photon project (frees the shared-line slots).

@@ -131,6 +131,36 @@ test('onboarding happy path: consent -> name -> UW email -> code -> the agent ta
   expect((await q(`SELECT status FROM inbound_messages`)).every((r) => r.status === 'done')).toBe(true);
 });
 
+test("verification shares name and photo, then mixr's contact card (assigned number, photo), before the braindump prompt", async () => {
+  noAgent();
+  await toVerify();
+  await q(`UPDATE users SET assigned_number = '+16287896827' WHERE phone = $1`, [PHONE]);
+  const sent = capture();
+  await say(lastCode());
+  expect(sent.map((s) => s.text)).toEqual([
+    '[share name and photo]',
+    "save me so you know it's me [contact card: mixr, (628) 789-6827]",
+    braindumpPrompt('Ana Lee'),
+  ]);
+  // Share Name and Photo is delivery-only: not in the chat log the dashboard and the agent read.
+  expect(await outbox()).not.toContain('[share name and photo]');
+  const [job] = await q<{ content: unknown }>(`SELECT content FROM message_jobs WHERE dedupe_key = $1`, [`mixr-card:${(await user()).id}`]);
+  expect(job.content).toEqual({ kind: 'contact', first: 'mixr', phone: '+16287896827', mixrPhoto: true, caption: "save me so you know it's me" });
+});
+
+test('verification without an assigned number (dev) skips the card; IMESSAGE_SHARE_CARD=off skips the share', async () => {
+  noAgent();
+  await toVerify();
+  config.imessageShareCard = false;
+  const sent = capture();
+  try {
+    await say(lastCode());
+  } finally {
+    config.imessageShareCard = true;
+  }
+  expect(sent.map((s) => s.text)).toEqual([braindumpPrompt('Ana Lee')]);
+});
+
 test('a first text of YES gets the disclosure instead of counting as consent', async () => {
   await say('yes');
   expect((await user()).step).toBe('consent');
@@ -307,6 +337,7 @@ test('email delivery failure fails closed: no code stored, not verified', async 
 
 test('HELP answers without the agent and without moving onboarding', async () => {
   noAgent();
+  capture();
   for (const t of ['hi', 'yes']) await say(t);
   await say('help');
   expect(await lastOut()).toBe(HELP_TEXT);
@@ -316,6 +347,9 @@ test('HELP answers without the agent and without moving onboarding', async () =>
   await realUser('+12065551111', { name: 'Kai', step: null, verified: true });
   await say('HELP', undefined, '+12065551111');
   expect(await lastOut('+12065551111')).toBe(HELP_TEXT);
+  // Delivered with a joinmixr.club link preview after the text (plain HELP_TEXT is the fallback).
+  const [job] = await q<{ text: string; content: unknown }>(`SELECT text, content FROM message_jobs ORDER BY id DESC LIMIT 1`);
+  expect(job).toEqual({ text: HELP_TEXT, content: { kind: 'richlink', url: 'https://www.joinmixr.club', caption: HELP_TEXT } });
 });
 
 test('rate limit: past RATE_LIMIT texts an hour, one notice then silence; HELP and STOP still work', async () => {

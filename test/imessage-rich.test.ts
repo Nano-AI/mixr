@@ -1,0 +1,236 @@
+import { test, expect, afterEach, vi } from 'vitest';
+import { axis, fresh } from './helpers.ts';
+import { q, toVec } from '../src/db/index.ts';
+import { poolContext, runIn } from '../src/context.ts';
+import { config } from '../src/config.ts';
+import { send } from '../src/transport/index.ts';
+import { retryPending, setDeliverer, type RichContent } from '../src/transport/outbox.ts';
+import { deliver, parseSpectrumMessage, type Sdk, type SpaceLike } from '../src/messaging/photon.ts';
+import { processText } from '../src/messaging/pipeline.ts';
+import { fakeEmbed } from '../src/llm/embed.ts';
+import { requestIntro, respondToIntro } from '../src/relay/index.ts';
+import { confetti, handleInbound } from '../src/agent/index.ts';
+
+// Native iMessage extras: rich content rides on outbound jobs, the Photon deliverer builds the SDK object and
+// falls back to the plain text. Photon is never called: a capturing deliverer, or deliver() with a fake space.
+
+const real = poolContext('real');
+afterEach(() => {
+  config.transport = 'sim';
+  setDeliverer(null);
+});
+
+type Sent = { phone: string; text: string; content: RichContent | null };
+function capture(): Sent[] {
+  config.transport = 'photon';
+  const sent: Sent[] = [];
+  setDeliverer(async (phone, text, content) => void sent.push({ phone, text, content }));
+  return sent;
+}
+
+async function realUser(name = 'Real Riley', fields: { assigned?: string } = {}) {
+  const v = (await fakeEmbed(['tennis']))[0];
+  const r = await q<{ id: number; phone: string }>(
+    `INSERT INTO users (phone, name, state, canonical_profile, embedding, seeded, assigned_number) VALUES ($1, $2, 'active', 'tennis', $3, false, $4) RETURNING id, phone`,
+    [`+1206${String(Math.floor(Math.random() * 1e7)).padStart(7, '0')}`, name, toVec(v), fields.assigned ?? null],
+  );
+  return r[0];
+}
+
+// A fake SDK: builders return tagged objects; `fail` makes a builder throw.
+function fakeSdk(fail: string[] = []): Sdk {
+  const b =
+    (kind: string) =>
+    (...args: unknown[]) => {
+      if (fail.includes(kind)) throw new Error(`${kind} rejected`);
+      return { kind, args };
+    };
+  return {
+    contact: b('contact'),
+    effect: b('effect'),
+    reaction: b('reaction'),
+    reply: b('reply'),
+    richlink: b('richlink'),
+    nativeContactCard: b('nativeContactCard'),
+    confetti: 'confetti-id',
+  };
+}
+function fakeSpace(opts: { messages?: Record<string, unknown>; reject?: string[] } = {}) {
+  const sent: unknown[] = [];
+  const space: SpaceLike = {
+    send: async (c: unknown) => {
+      const kind = typeof c === 'string' ? 'text' : (c as { kind: string }).kind;
+      if (opts.reject?.includes(kind)) throw new Error(`${kind} refused by Photon`);
+      sent.push(c);
+      return { id: 'out-1' };
+    },
+    getMessage: async (id: string) => opts.messages?.[id],
+  };
+  return { space, sent };
+}
+
+test('outbox: rich content is stored with the job and reaches the deliverer; dedupe and retries unchanged', async () => {
+  await fresh();
+  const sent = capture();
+  const u = await realUser();
+  const content: RichContent = { kind: 'effect', effect: 'confetti' };
+  await runIn(real, () => send(u.id, "you're in!", { dedupeKey: 'k1', content }));
+  await runIn(real, () => send(u.id, "you're in!", { dedupeKey: 'k1', content })); // same notification
+  expect(sent).toEqual([{ phone: u.phone, text: "you're in!", content }]);
+  const [job] = await q<{ text: string; content: unknown }>('SELECT text, content FROM message_jobs');
+  expect(job).toEqual({ text: "you're in!", content });
+
+  // A failed rich send retries with its content; plain sends carry null.
+  let fail = true;
+  const later: Sent[] = [];
+  setDeliverer(async (phone, text, c) => {
+    if (fail) throw new Error('network down');
+    later.push({ phone, text, content: c });
+  });
+  await runIn(real, () => send(u.id, 'card', { content: { kind: 'contact', first: 'Ana', phone: '+14255550100' } }));
+  await runIn(real, () => send(u.id, 'plain'));
+  fail = false;
+  await retryPending();
+  expect(later.map((s) => [s.text, s.content?.kind ?? null])).toEqual([
+    ['card', 'contact'],
+    ['plain', null],
+  ]);
+});
+
+test('deliver: plain text, rich content, and the text fallback when Photon rejects the rich form', async () => {
+  const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+  const sdk = fakeSdk();
+
+  let s = fakeSpace();
+  await deliver(s.space, 'hello', null, sdk);
+  expect(s.sent).toEqual(['hello']);
+
+  s = fakeSpace();
+  await deliver(s.space, 'yay', { kind: 'effect', effect: 'confetti' }, sdk);
+  expect(s.sent).toEqual([{ kind: 'effect', args: ['yay', 'confetti-id'] }]);
+
+  // The SDK builder throws -> plain text.
+  s = fakeSpace();
+  await deliver(s.space, 'fallback', { kind: 'effect', effect: 'confetti' }, fakeSdk(['effect']));
+  expect(s.sent).toEqual(['fallback']);
+
+  // Photon rejects the send -> plain text.
+  s = fakeSpace({ reject: ['contact'] });
+  await deliver(s.space, "here's Ana: +14255550100", { kind: 'contact', first: 'Ana', phone: '+14255550100', caption: "here's Ana" }, sdk);
+  expect(s.sent).toEqual(["here's Ana", "here's Ana: +14255550100"]);
+
+  // A kind the deliverer doesn't support -> plain text.
+  s = fakeSpace();
+  await deliver(s.space, 'pick a time: fri / sat', { kind: 'poll', title: 'pick a time', options: ['fri', 'sat'] }, sdk);
+  expect(s.sent).toEqual(['pick a time: fri / sat']);
+
+  // A caption identical to the text isn't sent twice when the rich part fails.
+  s = fakeSpace({ reject: ['richlink'] });
+  await deliver(s.space, 'help text', { kind: 'richlink', url: 'https://www.joinmixr.club', caption: 'help text' }, sdk);
+  expect(s.sent).toEqual(['help text']);
+
+  // A tapback whose target can't be found -> plain text (the emoji).
+  s = fakeSpace();
+  await deliver(s.space, '👍', { kind: 'reaction', emoji: '👍', targetId: 'imessage:gone' }, sdk);
+  expect(s.sent).toEqual(['👍']);
+
+  // Share Name and Photo is best effort: errors are swallowed, nothing replaces it.
+  s = fakeSpace({ reject: ['nativeContactCard'] });
+  await expect(deliver(s.space, '[share name and photo]', { kind: 'share_contact' }, sdk)).resolves.toBeUndefined();
+  expect(s.sent).toEqual([]);
+
+  // Only a failed plain send rejects (the outbox retries it).
+  s = fakeSpace({ reject: ['text'] });
+  await expect(deliver(s.space, 'x', { kind: 'effect', effect: 'confetti' }, fakeSdk(['effect']))).rejects.toThrow(/refused/);
+  warn.mockRestore();
+});
+
+test('confetti only on the reply confirming a seat they just got', async () => {
+  const fake = await fresh();
+  const sent = capture();
+  const host = await realUser('Hana Host');
+  const guest = await realUser('Gus Guest');
+  const v = toVec(axis(0));
+  const [ev] = await q<{ id: number }>(
+    `INSERT INTO events (host_id, title, raw_description, starts_at, location, capacity, hyde_profile, initial_embedding, current_embedding, wave_number, created_at)
+     VALUES ($1, 'catan night', 'd', $2, 'the hub', 3, 'h', $3, $3, 1, now()) RETURNING id`,
+    [host.id, new Date(Date.now() + 48 * 3600_000).toISOString(), v],
+  );
+  await q(`INSERT INTO event_invites (event_id, user_id, wave, pitch, invited_at) VALUES ($1, $2, 1, 'p', now())`, [ev.id, guest.id]);
+  let n = 0;
+  fake.agentHandler = () =>
+    ++n % 2 === 1
+      ? { text: '', calls: [{ call_id: `c${n}`, name: 'respond_to_invite', arguments: JSON.stringify({ event_id: ev.id, response: 'yes' }) }] }
+      : { text: "you're in! catan night at the hub", calls: [] };
+  await handleInbound(guest.phone, 'yes!', 'phone');
+  expect(sent.find((s) => s.phone === guest.phone)).toEqual({
+    phone: guest.phone,
+    text: "you're in! catan night at the hub",
+    content: { kind: 'effect', effect: 'confetti' },
+  });
+  expect(sent.find((s) => s.phone === host.phone)?.content).toBeNull(); // the host's update stays plain
+  // Saying yes again ("already in") is not a new confirmation.
+  await handleInbound(guest.phone, 'yes', 'phone');
+  expect(sent.filter((s) => s.phone === guest.phone).map((s) => s.content)).toEqual([{ kind: 'effect', effect: 'confetti' }, null]);
+  expect(confetti([{ name: 'respond_to_invite', args: {}, result: { outcome: 'waitlisted', detail: 'catan night just filled up' } }])).toBe(false);
+});
+
+test('react: the agent tapbacks the text it is answering and sends no reply', async () => {
+  const fake = await fresh();
+  const sent = capture();
+  const u = await realUser();
+  let calls = 0;
+  fake.agentHandler = () => (calls++, { text: '', calls: [{ call_id: 'c1', name: 'react', arguments: JSON.stringify({ emoji: '❤️' }) }] });
+  expect(await processText(u.phone, 'thanks!!', 'phone', 'imessage:GUID-1')).toBe('done');
+  expect(calls).toBe(1); // no follow-up model call for a text reply
+  expect(sent).toEqual([{ phone: u.phone, text: '❤️', content: { kind: 'reaction', emoji: '❤️', targetId: 'imessage:GUID-1' } }]);
+
+  // Outside the allowed set: an error back to the model, which then replies normally.
+  calls = 0;
+  fake.agentHandler = () =>
+    ++calls === 1 ? { text: '', calls: [{ call_id: 'c2', name: 'react', arguments: JSON.stringify({ emoji: '🔥' }) }] } : { text: 'haha ok', calls: [] };
+  await processText(u.phone, 'lol', 'phone', 'imessage:GUID-2');
+  expect(sent.at(-1)).toEqual({ phone: u.phone, text: 'haha ok', content: null });
+});
+
+test('deliver: tapbacks and inline replies resolve their target message by provider id', async () => {
+  const target = { id: 'GUID-1' };
+  const s = fakeSpace({ messages: { 'GUID-1': target } });
+  await deliver(s.space, '👍', { kind: 'reaction', emoji: '👍', targetId: 'imessage:GUID-1' }, fakeSdk());
+  await deliver(s.space, "you're in!", { kind: 'reply', targetId: 'imessage:GUID-1' }, fakeSdk());
+  expect(s.sent).toEqual([
+    { kind: 'reaction', args: ['👍', target] },
+    { kind: 'reply', args: ["you're in!", target] },
+  ]);
+});
+
+test('parseSpectrumMessage: an inline reply to an older message is a threaded text', () => {
+  const event = { platform: 'imessage', direction: 'inbound', id: 'r-1', sender: { id: '+14253694262' } };
+  expect(parseSpectrumMessage({ type: 'dm' }, { ...event, content: { type: 'reply', content: { type: 'text', text: 'yes!' }, target: {} } })).toEqual({
+    from: '+14253694262',
+    text: 'yes!',
+    providerId: 'imessage:r-1',
+    threaded: true,
+  });
+  expect(parseSpectrumMessage({ type: 'dm' }, { ...event, content: { type: 'reply', content: { type: 'attachment' } } })).toBeNull();
+});
+
+test("accepted intro: each side gets the other's contact card (first + last name, phone), the numbered text as fallback", async () => {
+  await fresh();
+  const sent = capture();
+  const maya = await realUser('Maya Lopez');
+  const jordan = await realUser('Jordan de la Cruz');
+  await runIn(real, async () => respondToIntro(jordan.id, (await requestIntro(maya.id, jordan.id, 'tennis')).id, true, 'saturdays work'));
+  const toMaya = sent.find((s) => s.phone === maya.phone)!;
+  const toJordan = sent.filter((s) => s.phone === jordan.phone).at(-1)!;
+  expect(toMaya).toEqual({
+    phone: maya.phone,
+    text: `Jordan is down! they said: "saturdays work". their number: ${jordan.phone}`,
+    content: { kind: 'contact', first: 'Jordan', last: 'de la Cruz', phone: jordan.phone, caption: `Jordan is down! they said: "saturdays work". here's their contact` },
+  });
+  expect(toJordan).toEqual({
+    phone: jordan.phone,
+    text: `done! here's Maya's number: ${maya.phone}. have fun!`,
+    content: { kind: 'contact', first: 'Maya', last: 'Lopez', phone: maya.phone, caption: "done! here's Maya's contact. have fun!" },
+  });
+});
