@@ -33,6 +33,10 @@ const human = new Intl.DateTimeFormat('en-US', {
 // "Fri, Oct 23, 7:00 PM"
 export const laHuman = (d: Date | string): string => human.format(new Date(d));
 
+const day = new Intl.DateTimeFormat('en-US', { timeZone: TZ, weekday: 'short', month: 'short', day: 'numeric' });
+// "Sat, Oct 17"
+export const laDay = (d: Date | string): string => day.format(new Date(d));
+
 const longDay = new Intl.DateTimeFormat('en-US', {
   timeZone: TZ,
   weekday: 'long',

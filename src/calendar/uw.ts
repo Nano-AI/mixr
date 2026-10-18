@@ -7,6 +7,7 @@ import { poolContext, runIn } from '../context.ts';
 import { createEvent } from '../events/index.ts';
 import { embed, embedOne } from '../llm/embed.ts';
 import { dot } from '../vec.ts';
+import { bm25, LEX_WEIGHT, rareTerms, weightedRrf } from '../matching/bm25.ts';
 
 // UW's public events calendar (washington.edu/calendar runs on Trumba, web name "sea_campus"). Pulled once a day,
 // scrubbed, and archived as JSON so we keep history after events drop off the feed. The import step copies
@@ -191,46 +192,57 @@ const SKIP_TITLE =
 const SKIP_CATEGORY = /\b(important dates|deadlines|information sessions|meetings)\b/i;
 const SKIP_LOCATION = /\b(online|zoom|virtual|teams|tbd|tba)\b/i;
 
-export const isStudentRelevant = (e: UwEvent): boolean =>
-  !e.allDay &&
+// No location is fine for discovery (the feed leaves it blank for plenty of real events); online ones still go.
+const worthShowing = (e: UwEvent): boolean =>
   !!e.title &&
-  !!e.location &&
   !SKIP_TITLE.test(e.title) &&
   !SKIP_CATEGORY.test(e.category ?? '') &&
   !SKIP_LOCATION.test(e.location);
 
+// The demo import wants timed events only (an all-day one has no real start for an RSVP).
+export const isStudentRelevant = (e: UwEvent): boolean => !e.allDay && !!e.location && worthShowing(e);
+
 // ---------- campus events for discover_events (read-only) ----------
 
-const CAMPUS_MAX = 5; // tune: campus events per discover result
+const CAMPUS_MAX = 8; // tune: campus events per discover result
 const CAMPUS_WINDOW = 14 * DAY; // tune: how far ahead discover looks
 
 // Newest snapshot's student-relevant events, plus embeddings filled in on first ranked use. Reloaded when a newer
 // file shows up (or today's is rewritten). Never fetches: no snapshot = no campus events.
 let campus: { key: string; events: UwEvent[]; vecs: Map<string, number[]> } | null = null;
 
-// Upcoming (now .. +14 days) student-relevant UW calendar events, one per title. With a query: closest by embedding
-// first; without: soonest first.
-export async function campusEvents(query?: string, dir = snapshotDir()): Promise<UwEvent[]> {
+// When it's over: its end, else the end of its day (all-day) or two hours in.
+const endOf = (e: UwEvent): number => (e.endsAt ? Date.parse(e.endsAt) : Date.parse(e.startsAt) + (e.allDay ? 24 : 2) * HOUR);
+// Folds plurals so keywords meet ("hackathons" ~ "HACKATHON"). ponytail: crude stemmer, swap for a real one if misses show up.
+const fold = (text: string): string => text.replace(/\b(\w{3,}?)s\b/gi, '$1');
+
+// UW calendar events that are on now or start within 14 days (multi-day ones like a hackathon included), one per
+// title. Ranked by the request (embedding + keywords, fused), else by the student's interests (their profile
+// embedding), else soonest first.
+export async function campusEvents(query?: string, dir = snapshotDir(), interests?: number[] | null): Promise<UwEvent[]> {
   const file = newestSnapshotFile(dir);
   if (!file) return [];
   const key = `${file}:${statSync(file).mtimeMs}`;
-  if (campus?.key !== key) campus = { key, events: (JSON.parse(readFileSync(file, 'utf8')) as UwEvent[]).filter(isStudentRelevant), vecs: new Map() };
+  if (campus?.key !== key) campus = { key, events: (JSON.parse(readFileSync(file, 'utf8')) as UwEvent[]).filter(worthShowing), vecs: new Map() };
   const c = campus;
   const t = (await now()).getTime();
   const seen = new Set<string>();
   const upcoming = c.events
-    .filter((e) => Date.parse(e.startsAt) > t && Date.parse(e.startsAt) < t + CAMPUS_WINDOW)
+    .filter((e) => endOf(e) > t && Date.parse(e.startsAt) < t + CAMPUS_WINDOW)
     .sort((a, b) => a.startsAt.localeCompare(b.startsAt))
     .filter((e) => !seen.has(e.title.toLowerCase()) && !!seen.add(e.title.toLowerCase())); // weekly series: first only
-  if (!query?.trim()) return upcoming.slice(0, CAMPUS_MAX);
+  const ask = query?.trim();
+  const qv = ask ? await embedOne(ask) : interests;
+  if (!qv) return upcoming.slice(0, CAMPUS_MAX);
   const missing = upcoming.filter((e) => !c.vecs.has(e.uid));
   if (missing.length) (await embed(missing.map((e) => `${e.title}\n${e.description}`))).forEach((v, i) => c.vecs.set(missing[i].uid, v));
-  const qv = await embedOne(query.trim());
-  return upcoming
-    .map((e) => ({ e, s: dot(qv, c.vecs.get(e.uid)!) }))
-    .sort((a, b) => b.s - a.s)
-    .slice(0, CAMPUS_MAX)
-    .map((x) => x.e);
+  const byVec = upcoming.map((e, i) => ({ i, s: dot(qv, c.vecs.get(e.uid)!) })).sort((a, b) => b.s - a.s).map((x) => x.i);
+  if (!ask) return byVec.slice(0, CAMPUS_MAX).map((i) => upcoming[i]);
+  // Keywords: only words rare in this set (a "hackathon", not "event"), so a common word can't outrank meaning.
+  const docs = upcoming.map((e) => fold(`${e.title}\n${e.description}`));
+  const lex = bm25([...rareTerms(fold(ask), docs)].join(' '), docs);
+  const byLex = lex.map((s, i) => ({ i, s })).filter((x) => x.s > 0).sort((a, b) => b.s - a.s).map((x) => x.i);
+  return weightedRrf([[byVec, 1], [byLex, LEX_WEIGHT]]).slice(0, CAMPUS_MAX).map((i) => upcoming[i]);
 }
 
 export const DEMO_HOST = { name: 'UW Events', phone: '+12065550199' }; // invented demo user, fictional 555-01xx
