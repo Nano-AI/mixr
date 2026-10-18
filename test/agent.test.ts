@@ -389,3 +389,35 @@ test('replies are tidied: lowercase openers, runaway length clipped at a sentenc
   await handleInbound('+15550008201', 'poker, competitive');
   expect(await outbox('+15550008201')).toEqual(['got it. want me to look for a poker partner?']);
 });
+
+test('read-only tool calls in one turn run together; results go back in the order they were asked', async () => {
+  const meId = await makeUser('Jo', 'soccer');
+  const phone = (await one<{ phone: string }>('SELECT phone FROM users WHERE id = $1', [meId]))!.phone;
+  const { findPeople } = await import('../src/matching/index.ts');
+  let active = 0;
+  let maxActive = 0;
+  const slow = async <T>(v: T, ms: number): Promise<T> => {
+    maxActive = Math.max(maxActive, ++active);
+    await new Promise((r) => setTimeout(r, ms));
+    active--;
+    return v;
+  };
+  vi.mocked(events.discoverEvents).mockImplementationOnce(() => slow([], 30));
+  vi.mocked(findPeople).mockImplementationOnce(() => slow([{ userId: 5, name: 'Kai Smith', reason: 'plays soccer' }], 5));
+  const seen = script(
+    () => ({
+      text: '',
+      calls: [
+        { call_id: 'a', name: 'discover_events', arguments: JSON.stringify({ query: 'pickup soccer' }) },
+        { call_id: 'b', name: 'find_people', arguments: JSON.stringify({ request: 'pickup soccer' }) },
+      ],
+    }),
+    say('no games yet, but kai plays. want me to ask him, or host a soccer event?'),
+  );
+  await handleInbound(phone, 'any pickup soccer?');
+  expect(maxActive).toBe(2);
+  const out = outputs(seen[1]);
+  expect(out.map((o) => o.call_id)).toEqual(['a', 'b']);
+  expect(JSON.parse(out[0].output)).toEqual({ events: [] });
+  expect(JSON.parse(out[1].output).matches[0]).toMatchObject({ user_id: 5, name: 'Kai' });
+});

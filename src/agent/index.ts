@@ -15,6 +15,9 @@ const BUSY_REPLY = "i'm swamped right now and can't think straight. try me again
 
 export type ToolCallLog = { name: string; args: unknown; result: unknown };
 
+// Tools that only read (searches); safe to run side by side. Every other tool writes or texts someone.
+const READ_ONLY = new Set(['find_people', 'discover_events']);
+
 // A reply that's about our machinery rather than to the student: a bracketed note, tool names, "tool call".
 const TOOL_NAMES = /\b(save_profile|edit_profile|create_event|respond_to_invite|manage_event|discover_events|join_event|find_people|request_intro|respond_to_intro|block_person|unblock_person|add_requirement|remove_requirement|snooze)\b/;
 export const looksInternal = (text: string): boolean =>
@@ -127,12 +130,20 @@ async function turn(phone: string, text: string, via: 'phone' | 'dashboard', rec
       // Claude's turn goes back verbatim (thinking blocks must be passed back unmodified with tool results).
       if (res.raw !== undefined) input.push({ type: 'assistant_raw', content: res.raw });
       else if (res.text.trim()) input.push({ role: 'assistant', content: res.text });
-      for (const c of res.calls) {
+      // A run of consecutive read-only calls executes together; anything with side effects runs alone, in order.
+      const results: Awaited<ReturnType<typeof runTool>>[] = [];
+      for (let j = 0; j < res.calls.length; ) {
+        let k = j + 1;
+        if (READ_ONLY.has(res.calls[j].name)) while (k < res.calls.length && READ_ONLY.has(res.calls[k].name)) k++;
+        results.push(...(await Promise.all(res.calls.slice(j, k).map((c) => runTool(user.id, c.name, c.arguments)))));
+        j = k;
+      }
+      res.calls.forEach((c, j) => {
+        const { args, result } = results[j];
         if (res.raw === undefined) input.push({ type: 'function_call', call_id: c.call_id, name: c.name, arguments: c.arguments });
-        const { args, result } = await runTool(user.id, c.name, c.arguments);
         toolCalls.push({ name: c.name, args, result });
         input.push({ type: 'function_call_output', call_id: c.call_id, output: JSON.stringify(result) });
-      }
+      });
     }
   } catch (e) {
     error = e instanceof Error ? e.message : String(e);
