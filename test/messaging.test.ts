@@ -335,6 +335,24 @@ test('only @uw.edu addresses get a code', async () => {
   expect(codes).toHaveLength(0);
 });
 
+// Temporary judge bypass: remove with JUDGE_CODE after judging.
+test('DUBHACKS26 at the email step finishes onboarding without an email; a wrong word is still rejected', async () => {
+  for (const t of ['hi', 'yes', 'Ana Lee', 'DUBHACKS25']) await say(t);
+  expect(await lastOut()).toBe("that needs to be a @uw.edu address. what's your UW email?");
+  await say('dubhacks26');
+  expect(await user()).toMatchObject({ step: null, emailVerified: false, email: null });
+  expect(await lastOut()).toBe(braindumpPrompt('Ana Lee'));
+  expect(codes).toHaveLength(0);
+});
+
+test('DUBHACKS26 at the code step finishes onboarding too', async () => {
+  await toVerify();
+  await say('DUBHACKS26');
+  expect(await user()).toMatchObject({ step: null, emailVerified: false });
+  expect(await lastOut()).toBe(braindumpPrompt('Ana Lee'));
+  expect(await one(`SELECT 1 FROM email_codes`)).toBeUndefined();
+});
+
 test('email delivery failure fails closed: no code stored, not verified', async () => {
   setCodeSender(async () => {
     throw new Error('SMTP down');
