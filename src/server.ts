@@ -1,117 +1,54 @@
-import { emailConfigured } from './messaging/email.ts';
-import { db } from './db.ts';
-import { handleInbound } from './messaging/router.ts';
-import { connectPhoton } from './messaging/photon.ts';
-import { retryFailed } from './messaging/send.ts';
-import { createServer } from './messaging/http.ts';
-import { integrationStatus, tick } from './messaging/services.ts';
-import { moveCompletedProfilesToChat } from './messaging/state.ts';
+import { pathToFileURL } from 'node:url';
+import { Hono } from 'hono';
+import { cors } from 'hono/cors';
+import { serve } from '@hono/node-server';
+import { config } from './config.ts';
+import { dashboardApi } from './http/dashboard.ts';
+import { publicApi, setReady } from './http/public.ts';
+import { authApi, requireAdmin } from './http/auth.ts';
+import { dashboardStatic } from './http/static.ts';
+import { adminApi } from './http/admin.ts';
+import { startMessaging } from './messaging/photon.ts';
+import { startTicker, stopTicker } from './runtime.ts';
+// Imported for their side effects too: each registers its job handlers at load time.
+import './profiles/index.ts';
+import './relay/index.ts';
+import './events/index.ts';
 
-const transport = process.env.TRANSPORT ?? 'photon';
-if (!['console', 'photon'].includes(transport))
-  throw Error('TRANSPORT must be console or photon');
-process.env.TRANSPORT = transport;
-if (
-  process.env.NODE_ENV === 'production' &&
-  (!process.env.ADMIN_TOKEN || !process.env.DB_PATH)
-)
-  throw Error('Production requires ADMIN_TOKEN and persistent DB_PATH');
-let ready = false;
-const server = createServer(() => ready);
-let connection: Awaited<ReturnType<typeof connectPhoton>> | undefined;
-let stopping = false;
-let working: Promise<void> | undefined;
-let interval: ReturnType<typeof setInterval> | undefined;
-async function maintenance() {
-  if (working) return working;
-  working = (async () => {
-    await retryFailed();
-    await tick(new Date());
-  })();
-  try {
-    await working;
-  } catch {
-    console.error('Maintenance failed; will retry next minute.');
-  } finally {
-    working = undefined;
-  }
-}
-async function stop() {
-  if (stopping) return;
-  stopping = true;
-  ready = false;
-  if (interval) clearInterval(interval);
-  const deadline = setTimeout(() => process.exit(1), 15000).unref();
-  await connection?.stop();
-  // SDK stream closure does not drain our asynchronous handler.
-  await connection?.finished.catch(() => {});
-  await working;
-  server.close(() => {
-    db.close();
-    clearTimeout(deadline);
+// The monolith: public routes (website join, health), the admin-only dashboard API, and the background ticker.
+// Hostname-agnostic: it serves whatever Host it's reached on (a tunnel subdomain or api.joinmixr.club).
+
+const errMsg = (e: unknown): string => (e instanceof Error ? e.message : String(e));
+
+export const app = new Hono();
+
+app.onError((e, c) => c.json({ ok: false, error: errMsg(e) }, 500));
+
+app.route('/', publicApi);
+app.route('/auth', authApi);
+
+app.use('/api/*', cors({ origin: (o) => (/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(o) ? o : null), credentials: true }));
+app.use('/api/*', requireAdmin);
+app.route('/api/admin', adminApi);
+app.route('/api', dashboardApi);
+// Last: owns GET /, /dashboard and /dashboard/* (the built dashboard).
+app.route('/', dashboardStatic);
+
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  const server = serve({ fetch: app.fetch, port: config.port, hostname: config.host }, (info) => {
+    console.log(`mixr listening on ${config.host}:${info.port} (transport: ${config.transport})`);
   });
-  server.closeIdleConnections();
-}
-process.once('SIGINT', () => {
-  void stop();
-});
-process.once('SIGTERM', () => {
-  void stop();
-});
-try {
-  const resumed = moveCompletedProfilesToChat();
-  if (resumed) console.info('Completed profiles moved from deferred scheduling to chat:', resumed);
-  db.prepare(
-    "UPDATE inbound_processing SET status='failed',error='Process interrupted; inspect before replay' WHERE status='processing'",
-  ).run();
-  if (transport === 'photon') connection = await connectPhoton(handleInbound);
-  ready = true;
-  server.on('error', () => {
-    console.error('HTTP listener failed.');
-    process.exitCode = 1;
-    void stop();
-  });
-  server.listen(
-    Number(process.env.PORT ?? 3000),
-    process.env.HOST ?? '127.0.0.1',
-    () =>
-      console.info(
-        `Mixr ready (${transport}); health endpoint on port ${process.env.PORT ?? 3000}.`,
-      ),
-  );
-  console.info('Teammate modules available:', integrationStatus);
-  console.info('Conversation configuration:', {
-    provider: process.env.LLM === 'fake' ? 'offline fake' : 'Claude',
-    model: process.env.ANTHROPIC_MODEL || 'claude-haiku-5-5',
-    keyPresent: !!process.env.ANTHROPIC_API_KEY?.trim(),
-    dailyRequestCap: process.env.CLAUDE_DAILY_REQUEST_LIMIT || '50',
-  });
-  if (!emailConfigured())
-    console.warn(
-      'Email verification is unconfigured; onboarding will wait at email verification.',
-    );
-  interval = setInterval(() => {
-    void maintenance();
-  }, 60_000);
-  if (connection)
-    connection.finished.then(
-      () => {
-        if (!stopping) {
-          console.error('Photon stream ended.');
-          process.exitCode = 1;
-          void stop();
-        }
-      },
-      () => {
-        console.error('Photon stream failed.');
-        process.exitCode = 1;
-        void stop();
-      },
-    );
-} catch {
-  console.error(
-    'Mixr startup failed. Check credentials, database path, and Photon access.',
-  );
-  process.exitCode = 1;
-  await stop();
+  // iMessage (no-op unless TRANSPORT=photon); it reconnects on its own if the stream drops.
+  const messaging = startMessaging();
+  startTicker();
+  setReady(true);
+  const stop = async () => {
+    setReady(false);
+    stopTicker();
+    setTimeout(() => process.exit(1), 15_000).unref();
+    await messaging.stop().catch(() => {});
+    server.close(() => process.exit(0));
+  };
+  process.once('SIGINT', () => void stop());
+  process.once('SIGTERM', () => void stop());
 }

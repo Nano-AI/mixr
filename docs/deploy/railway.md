@@ -1,3 +1,5 @@
+> **Status:** not used right now. mixr runs as a monolith on polarcrest (see README → Deploy). This guide predates the integration branch (it describes the SQLite build) and is kept as a starting point if we move to Railway later.
+
 # Deploying mixr on Railway
 
 The bot runs as one always-on Node process with one SQLite file. Railway fits: persistent volume, long-running process, HTTPS on a custom domain. (Vercel doesn't: serverless functions have no persistent disk and can't run the 60s `tick` loop.)

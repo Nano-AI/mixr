@@ -2,6 +2,25 @@
 
 The team plan for the hackathon MVP. Every task, test, and exact interface is in [`docs/superpowers/plans/2026-10-17-mixr-mvp.md`](docs/superpowers/plans/2026-10-17-mixr-mvp.md). This page is the overview.
 
+## Integration status (branch `integration`, 2026-10-17)
+
+The `integration` branch replaces the original SQLite meetups/matching design with John's simulator build and ports Wayne's messaging layer onto it. What changed versus the plan below:
+
+| Area | Original plan | Now |
+|---|---|---|
+| Events | Planner auto-proposes meetups from availability slots | Students host events by text; mixr invites the right people in hidden rounds (HyDE + Rocchio), RSVPs in natural language |
+| Matching | One vector per interest, cosine + Elo | One vector per person (canonical profile text), pgvector recall top 40 → Claude rerank; blocks and special requests enforced before ranking |
+| DB | `node:sqlite` | PGlite (embedded Postgres + pgvector) |
+| LLM | Haiku for extraction | Claude Haiku 5.5 for the agent and pipeline (1000 req/day cap); OpenAI embeddings |
+| Messaging | Photon webhook | Wayne's Spectrum gRPC adapter, consent, UW email codes, STOP/START, outbox (ported) |
+| Join | Text a shared number | Website registers the phone with Photon (shared line) and shows the person's own number; they text first |
+| Hosting | Railway | Monolith on polarcrest (systemd, auto-restart, health watchdog, nightly snapshots); Railway later, maybe |
+| Demo | Seeded data | 50 hand-written demo students in a separate pool; dashboard can act as any user |
+
+Live: `https://mixr-api.johnomeara.com` (dashboard at `/dashboard`). Landing preview: Vercel builds `integration` as a preview; `main` deploys joinmixr.club.
+
+Still to do: point `api.joinmixr.club` at the tunnel (Cloudflare for SaaS) · merge `integration` → `main` when the team is ready (that ships the landing page) · live multi-phone run-through · Photon plan upgrade if we need more than 10 users.
+
 ## MVP goal
 
 A student texts their interests, gets a compatible 1:1 or small-group proposal, accepts a time and place, and receives a confirmed meetup. No human organizer is involved.

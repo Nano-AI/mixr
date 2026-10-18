@@ -1,0 +1,187 @@
+import { afterEach, beforeEach, expect, test } from 'vitest';
+import { fresh } from './helpers.ts';
+import { getUserByPhone, one, q } from '../src/db/index.ts';
+import { config } from '../src/config.ts';
+import { publicApi } from '../src/http/public.ts';
+import { adminApi } from '../src/http/admin.ts';
+import { setPhotonFetch } from '../src/messaging/photon-api.ts';
+
+// POST /join (website) and the admin messaging views. Photon is always a fake fetch here: the real API has a
+// 10-user cap and every new registration uses a slot.
+
+const PROJECT = '00000000-0000-0000-0000-000000000000';
+const original = { ...config, joinOrigins: [...config.joinOrigins] };
+let ip = 0;
+
+beforeEach(async () => {
+  await fresh();
+  ip++;
+});
+afterEach(() => {
+  Object.assign(config, original);
+  setPhotonFetch(null);
+  delete process.env.DEV_JOIN_NUMBER;
+});
+
+const join = (body: unknown, headers: Record<string, string> = {}) =>
+  publicApi.request('/join', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'CF-Connecting-IP': `10.0.0.${ip}`, ...headers },
+    body: typeof body === 'string' ? body : JSON.stringify(body),
+  });
+
+type Call = { url: string; init: RequestInit };
+function photon(respond: (call: Call) => Response | Promise<Response>) {
+  config.transport = 'photon';
+  config.photonProjectId = PROJECT;
+  config.photonProjectSecret = 'test-secret';
+  const calls: Call[] = [];
+  setPhotonFetch((async (url: string | URL | Request, init?: RequestInit) => {
+    const call = { url: String(url), init: init ?? {} };
+    calls.push(call);
+    return respond(call);
+  }) as typeof fetch);
+  return calls;
+}
+const json = (status: number, body: unknown) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
+const created = (phoneNumber: string, id = '11111111-2222-4333-8444-555555555555') =>
+  json(200, {
+    succeed: true,
+    data: { id, projectId: PROJECT, type: 'shared', firstName: null, lastName: null, email: null, phoneNumber, assignedPhoneNumber: '+16285550199', meta: null, createdAt: '2026-10-17T00:00:00Z' },
+  });
+
+test('sim transport: a stand-in number and sms link, a real user waiting at consent, and no text sent', async () => {
+  const res = await join({ phone: '(425) 555-0100' });
+  expect(res.status).toBe(200);
+  expect(await res.json()).toEqual({ ok: true, number: '+15555550100', link: 'sms:+15555550100&body=hi%20mixr' });
+  expect(await getUserByPhone('+14255550100')).toMatchObject({ seeded: false, step: 'consent', joinedVia: 'web', assignedNumber: '+15555550100' });
+  expect((await q(`SELECT 1 FROM messages`)).length).toBe(0);
+  expect((await q(`SELECT 1 FROM message_jobs`)).length).toBe(0);
+
+  process.env.DEV_JOIN_NUMBER = '+12065550199';
+  expect(await (await join({ phone: '1-425-555-0100' })).json()).toEqual({ ok: true, number: '+12065550199', link: 'sms:+12065550199&body=hi%20mixr' });
+  expect((await q(`SELECT 1 FROM users`)).length).toBe(1);
+});
+
+test('US numbers normalize to +1; anything else must be +E.164', async () => {
+  for (const phone of ['4255550101', '425.555.0102', '+1 (425) 555-0103', '14255550104', '+447700900123']) expect((await join({ phone })).status).toBe(200);
+  ip++;
+  for (const body of [{ phone: '555-0100' }, { phone: 42 }, {}, 'not json', { phone: '2' + '0'.repeat(10) }]) {
+    const res = await join(body);
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ ok: false, error: 'Enter a US phone number.' });
+  }
+  expect((await q(`SELECT phone FROM users ORDER BY id`)).map((r) => r.phone)).toEqual(['+14255550101', '+14255550102', '+14255550103', '+14255550104', '+447700900123']);
+});
+
+test('bodies over 1KB are refused', async () => {
+  const res = await join({ phone: '4255550100', pad: 'x'.repeat(2000) });
+  expect(res.status).toBe(413);
+  expect((await q(`SELECT 1 FROM users`)).length).toBe(0);
+});
+
+test('rate limit: 5 tries per IP per 10 minutes, keyed on CF-Connecting-IP, then X-Forwarded-For', async () => {
+  for (let i = 0; i < 5; i++) expect((await join({ phone: `42555501${10 + i}` })).status).toBe(200);
+  const res = await join({ phone: '4255550199' });
+  expect(res.status).toBe(429);
+  expect((await res.json()).ok).toBe(false);
+  expect((await join({ phone: '4255550199' }, { 'CF-Connecting-IP': '10.9.9.9' })).status).toBe(200);
+
+  // Without Cloudflare's header, the first X-Forwarded-For hop is the client.
+  const xff = (n: number) => join({ phone: `42555502${10 + n}` }, { 'CF-Connecting-IP': '', 'X-Forwarded-For': '192.0.2.7, 10.0.0.1' });
+  for (let i = 0; i < 5; i++) expect((await xff(i)).status).toBe(200);
+  expect((await xff(9)).status).toBe(429);
+});
+
+test('CORS: only the configured origins (plus localhost outside production)', async () => {
+  const preflight = (origin: string) => publicApi.request('/join', { method: 'OPTIONS', headers: { Origin: origin, 'Access-Control-Request-Method': 'POST' } });
+  const ok = await preflight('https://joinmixr.club');
+  expect(ok.status).toBe(204);
+  expect(ok.headers.get('access-control-allow-origin')).toBe('https://joinmixr.club');
+  expect(ok.headers.get('access-control-allow-methods')).toBe('POST');
+  expect(ok.headers.get('access-control-allow-headers')).toBe('Content-Type');
+  expect(ok.headers.get('vary')).toBe('Origin');
+  expect((await preflight('https://evil.example')).headers.get('access-control-allow-origin')).toBeNull();
+  expect((await preflight('http://localhost:5173')).headers.get('access-control-allow-origin')).toBe('http://localhost:5173');
+  config.production = true;
+  expect((await preflight('http://localhost:5173')).headers.get('access-control-allow-origin')).toBeNull();
+
+  const post = await join({ phone: '4255550104' }, { Origin: 'https://www.joinmixr.club' });
+  expect(post.headers.get('access-control-allow-origin')).toBe('https://www.joinmixr.club');
+  // Errors carry CORS headers too, so the page can show them.
+  expect((await join({ phone: 'nope' }, { Origin: 'https://joinmixr.club' })).headers.get('access-control-allow-origin')).toBe('https://joinmixr.club');
+});
+
+test('photon: registers a shared user, stores the assignment, answers with the number and tap-to-text link', async () => {
+  const calls = photon(() => created('+14255550100'));
+  const res = await join({ phone: '425-555-0100' });
+  expect(res.status).toBe(200);
+  expect(await res.json()).toEqual({
+    ok: true,
+    number: '+16285550199',
+    link: 'https://spectrum.photon.codes/users/11111111-2222-4333-8444-555555555555/redirect?msg=hi%20mixr',
+  });
+  expect(calls).toHaveLength(1);
+  expect(calls[0].url).toBe(`https://spectrum.photon.codes/projects/${PROJECT}/users/`);
+  expect(calls[0].init.method).toBe('POST');
+  const headers = new Headers(calls[0].init.headers);
+  expect(headers.get('authorization')).toBe(`Basic ${Buffer.from(`${PROJECT}:test-secret`).toString('base64')}`);
+  expect(JSON.parse(String(calls[0].init.body))).toEqual({ type: 'shared', phoneNumber: '+14255550100' });
+  expect(await getUserByPhone('+14255550100')).toMatchObject({ seeded: false, step: 'consent', joinedVia: 'web', assignedNumber: '+16285550199' });
+  expect((await one(`SELECT photon_user_id FROM users WHERE phone = '+14255550100'`))!.photon_user_id).toBe('11111111-2222-4333-8444-555555555555');
+  expect((await q(`SELECT 1 FROM messages`)).length).toBe(0); // they text first
+
+  // Already registered (and already onboarded): same answer, progress untouched.
+  await q(`UPDATE users SET step = NULL, email_verified = true WHERE phone = '+14255550100'`);
+  const again = await join({ phone: '+14255550100' });
+  expect(again.status).toBe(200);
+  expect((await again.json()).number).toBe('+16285550199');
+  expect(await getUserByPhone('+14255550100')).toMatchObject({ step: null, emailVerified: true });
+});
+
+test('photon: plan cap reached -> 409 full, nobody created', async () => {
+  photon(() => json(403, { succeed: false, data: null, code: 'FORBIDDEN', message: 'Project has reached maxSharedUsers (10)' }));
+  const res = await join({ phone: '4255550100' });
+  expect(res.status).toBe(409);
+  expect(await res.json()).toEqual({ ok: false, full: true, error: "mixr is full right now — we're letting more people in soon." });
+  expect((await q(`SELECT 1 FROM users`)).length).toBe(0);
+});
+
+test('photon: other failures -> 502 with a generic message', async () => {
+  const failures = [
+    () => json(500, { succeed: false, data: null, code: 'INTERNAL', message: 'boom' }),
+    () => json(400, { succeed: false, data: null, code: 'VALIDATION_ERROR', message: 'phoneNumber exceeds maxLength' }),
+    () => json(429, { succeed: false, data: null, code: 'RATE_LIMITED', message: 'rate limit exceeded' }),
+    () => json(200, { succeed: true, data: { id: 'x' } }),
+    () => {
+      throw new TypeError('fetch failed');
+    },
+  ];
+  for (const [i, respond] of failures.entries()) {
+    photon(respond);
+    const res = await join({ phone: `42555501${10 + i}` });
+    expect(res.status).toBe(502);
+    expect(await res.json()).toEqual({ ok: false, error: 'Something went wrong. Try again in a minute.' });
+  }
+  expect((await q(`SELECT 1 FROM users`)).length).toBe(0);
+});
+
+test('photon: never called for real from tests', async () => {
+  config.transport = 'photon';
+  config.photonProjectId = PROJECT;
+  config.photonProjectSecret = 'test-secret';
+  setPhotonFetch(null);
+  expect((await join({ phone: '4255550100' })).status).toBe(502);
+});
+
+test('admin: delivery records without text; unfinished inbound only', async () => {
+  const u = await one<{ id: number }>(`INSERT INTO users (phone, seeded) VALUES ('+14255550100', false) RETURNING id`);
+  await q(`INSERT INTO message_jobs (user_id, dedupe_key, text, status) VALUES ($1, 'k1', 'secret text', 'sent')`, [u!.id]);
+  await q(`INSERT INTO inbound_messages (provider_id, phone, status) VALUES ('a', '+14255550100', 'done'), ('b', '+14255550100', 'failed'), ('c', '+14255550100', 'processing')`);
+  const jobs = await (await adminApi.request('/messages')).json();
+  expect(jobs).toHaveLength(1);
+  expect(jobs[0]).toMatchObject({ userId: u!.id, dedupeKey: 'k1', status: 'sent' });
+  expect(JSON.stringify(jobs)).not.toContain('secret text');
+  const inbound = await (await adminApi.request('/inbound')).json();
+  expect(inbound.map((r: { providerId: string }) => r.providerId).sort()).toEqual(['b', 'c']);
+});
