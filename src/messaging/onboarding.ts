@@ -21,6 +21,12 @@ const EMAIL_MAX = 254;
 
 export const CONSENT =
   "hey! i'm mixr. i find UW students with shared interests and help organize meetups. Reply YES to opt in. Message frequency varies. Reply STOP anytime.";
+// WELCOME_TEXT=on: mixr's first text after a website join, sent before they've texted. It doubles as the consent
+// disclosure, so their YES opts them in and a reply that isn't YES gets the ask again, not a second hello.
+// Text-only (no link): Photon's deliverability guide says links in a first message hurt.
+export const WELCOME =
+  "hey, it's mixr! you just signed up on the mixr site. i find UW students with shared interests and help organize meetups. reply YES to opt in. msg frequency varies. reply STOP to opt out";
+const CONSENT_AGAIN = "reply YES to opt in and i'll get you set up. reply STOP anytime.";
 const CONSENT_WORDS = ['YES', 'Y', 'I AGREE', 'OPT IN'];
 const ASK_NAME = "what's your full name? (first and last)";
 const NAME_AGAIN = `what's your full name? (first and last, just letters, up to ${NAME_MAX} characters)`;
@@ -76,11 +82,16 @@ export async function onboard(user: User, text: string): Promise<string> {
 }
 
 async function takeConsent(user: User, word: string, t: Date): Promise<string> {
-  // A YES only counts once they've seen what they're agreeing to (a first text of "yes" gets the disclosure).
-  const prompted = await one(`SELECT 1 FROM messages WHERE user_id = $1 AND direction = 'out' AND text = $2 LIMIT 1`, [user.id, CONSENT]);
-  if (!prompted || !CONSENT_WORDS.includes(word)) {
+  // A YES only counts once they've seen what they're agreeing to (a first text of "yes" gets the disclosure): the
+  // consent text, or the welcome unless its delivery is known to have not gone through.
+  const seen = await q<{ text: string }>(
+    `SELECT DISTINCT m.text FROM messages m LEFT JOIN message_jobs j ON j.message_id = m.id
+     WHERE m.user_id = $1 AND m.direction = 'out' AND (m.text = $2 OR (m.text = $3 AND (j.id IS NULL OR j.status = 'sent')))`,
+    [user.id, CONSENT, WELCOME],
+  );
+  if (!seen.length || !CONSENT_WORDS.includes(word)) {
     if (user.step !== 'consent') await setStep(user.id, 'consent');
-    return CONSENT;
+    return seen.some((r) => r.text === WELCOME) ? CONSENT_AGAIN : CONSENT;
   }
   await q(`UPDATE users SET consent_at = $2, step = 'name' WHERE id = $1`, [user.id, t.toISOString()]);
   return `you're in! ${ASK_NAME}`;

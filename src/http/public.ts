@@ -2,8 +2,11 @@ import { Hono, type Context, type MiddlewareHandler } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { getConnInfo } from '@hono/node-server/conninfo';
 import { config } from '../config.ts';
-import { q } from '../db/index.ts';
+import { one, q } from '../db/index.ts';
+import { poolContext, runIn } from '../context.ts';
 import { redirectLink, registerSharedUser } from '../messaging/photon-api.ts';
+import { WELCOME } from '../messaging/onboarding.ts';
+import { send } from '../transport/index.ts';
 
 // Public, unauthenticated routes: the website's join endpoint and the health check.
 
@@ -15,8 +18,9 @@ export const setReady = (v: boolean): void => void (ready = v);
 publicApi.get('/health', (c) => c.json({ ready }, ready ? 200 : 503));
 
 // POST /join {phone} from the website. Registers the number with Photon's shared line (which assigns the number
-// they'll text mixr at) and creates the real user, who then texts FIRST: /join itself never sends a text.
-//   200 {ok:true, number, link}  link = tap-to-text deep link with "hi mixr" prefilled
+// they'll text mixr at) and creates the real user. By default they text first and /join sends nothing; with
+// WELCOME_TEXT=on, mixr texts first: one welcome (which is also the consent ask) to someone it has never texted.
+//   200 {ok:true, number, link, welcome}  link = tap-to-text deep link with "hi mixr" prefilled; welcome = a text is on its way
 //   400 invalid number · 409 {full:true} plan cap reached · 413 body too big · 429 rate limited · 502 upstream failure
 // Every valid number gets the same shape of answer, registered before or not.
 
@@ -97,6 +101,36 @@ async function upsertJoined(phone: string, photonUserId: string | null, assigned
   );
 }
 
+// WELCOME_TEXT=on: queue the welcome for someone mixr has never texted (repeat joins and onboarded users get
+// nothing). Returns whether one is on its way. Delivery runs after the response; failures are logged, never thrown.
+async function welcome(phone: string): Promise<boolean> {
+  if (!config.welcomeText) return false;
+  try {
+    const u = await one<{ id: number }>(
+      `SELECT id FROM users u WHERE phone = $1 AND NOT seeded AND NOT opted_out
+       AND NOT EXISTS (SELECT 1 FROM messages m WHERE m.user_id = u.id AND m.direction = 'out')`,
+      [phone],
+    );
+    if (!u) return false;
+    const key = `welcome:${u.id}`;
+    void runIn(poolContext('real'), () => send(u.id, WELCOME, { dedupeKey: key }))
+      .then(async () => {
+        // The outbox swallows provider errors into the job row; surface them here. No job = sim transport.
+        const j = await one<{ status: string; error: string | null }>(`SELECT status, error FROM message_jobs WHERE dedupe_key = $1`, [key]);
+        if (!j || j.status === 'sent') return;
+        console.warn(
+          `Welcome text for user ${u.id} not delivered (${j.status}${j.error ? `: ${j.error}` : ', Photon not connected; the ticker retries'}). ` +
+            `Photon may refuse to start a conversation with a number that hasn't texted; set WELCOME_TEXT=off if this keeps happening.`,
+        );
+      })
+      .catch((e) => console.error(`Welcome text for user ${u.id} failed: ${e instanceof Error ? e.message : String(e)}`));
+    return true;
+  } catch (e) {
+    console.error(`Welcome text check failed: ${e instanceof Error ? e.message : String(e)}`);
+    return false;
+  }
+}
+
 publicApi.options('/join', joinHeaders, (c) => {
   c.header('Access-Control-Allow-Methods', 'POST');
   c.header('Access-Control-Allow-Headers', 'Content-Type');
@@ -119,7 +153,7 @@ publicApi.post(
         const env = process.env.DEV_JOIN_NUMBER?.trim();
         const number = env && /^\+[1-9]\d{7,14}$/.test(env) ? env : DEV_JOIN_NUMBER;
         await upsertJoined(phone, null, number);
-        return c.json({ ok: true, number, link: `sms:${number}&body=${encodeURIComponent(JOIN_MSG)}` });
+        return c.json({ ok: true, number, link: `sms:${number}&body=${encodeURIComponent(JOIN_MSG)}`, welcome: await welcome(phone) });
       }
       const r = await registerSharedUser(phone);
       if (r.kind === 'full') {
@@ -131,7 +165,7 @@ publicApi.post(
         return c.json({ ok: false, error: FAILED }, 502);
       }
       await upsertJoined(phone, r.id, r.assignedPhoneNumber);
-      return c.json({ ok: true, number: r.assignedPhoneNumber, link: redirectLink(r.id, JOIN_MSG) });
+      return c.json({ ok: true, number: r.assignedPhoneNumber, link: redirectLink(r.id, JOIN_MSG), welcome: await welcome(phone) });
     } catch (e) {
       console.error(`Join failed: ${e instanceof Error ? e.message : String(e)}`);
       return c.json({ ok: false, error: FAILED }, 502);

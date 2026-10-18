@@ -155,7 +155,7 @@ If mixr needs more than 10 real users, the path is a Photon 2.0 Pro plan on the 
 
 ### Privacy and consent
 
-* Opt-in only: people join through the site and text first. mixr never texts first. No directory scraping.
+* Opt-in only: people join through the site and text first. mixr never texts first unless `WELCOME_TEXT=on`, which sends one welcome (with the opt-in ask and STOP) right after someone joins. No directory scraping.
 * Texts to other people use first names. A full name and phone number are shared only when both sides of an intro agree.
 * `STOP` is honored immediately and suppresses anything queued. `START` resumes.
 * A verified @uw.edu email proves inbox access, not enrollment. Codes are hashed, never stored or logged.
@@ -227,6 +227,7 @@ You can run all of mixr on a laptop with no iMessage at all: `TRANSPORT=sim` kee
    | `EMBEDDING_MODEL`, `EMBEDDING_DIMS` | OpenAI embedding model and vector size. |
    | `EMAIL_PROVIDER` | `gmail` or `resend` for verification codes. |
    | `JOIN_ORIGINS` | CORS origins allowed to call `POST /join`. |
+   | `WELCOME_TEXT` | `on` = mixr texts first: one welcome (the opt-in ask) right after a website join. Off by default. |
    | `DEV_JOIN_NUMBER` | With `TRANSPORT=sim`, the number `/join` hands out. |
    | `ADMIN_TOKEN` | Dashboard login. Optional locally, required in production. |
    | `UW_CALENDAR` | Daily snapshot of UW's public events calendar into `data/uw-calendar/` (on in production; `npm run import:uw-events` loads upcoming ones into the demo pool). |
@@ -266,7 +267,7 @@ Once someone is verified, they just text. "pickup soccer mostly, also need peopl
 ### How people join
 
 1. On [joinmixr.club](https://joinmixr.club) they enter their phone number. The server registers it with Photon (iMessage shared line), which assigns them their own mixr number.
-2. The site shows that number with a "text mixr" button and a contact card. They text first; mixr never texts first.
+2. The site shows that number with a "text mixr" button and a contact card. They text first. With `WELCOME_TEXT=on`, mixr texts them first instead: one welcome that asks them to reply YES.
 3. Over iMessage: opt in with YES, then full name, then @uw.edu email, then the 6-digit code. After that the agent takes the braindump.
 
 ```mermaid

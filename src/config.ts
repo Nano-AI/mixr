@@ -36,6 +36,9 @@ export const config = {
   imessageShareCard: !/^(0|off|false|no)$/i.test(env.IMESSAGE_SHARE_CARD ?? ''),
   // Daily pull + archive of UW's public events calendar (src/calendar/uw.ts). Default: on in production only.
   uwCalendar: env.UW_CALENDAR ? !/^(0|off|false|no)$/i.test(env.UW_CALENDAR) : env.NODE_ENV === 'production' && !env.VITEST,
+  // mixr texts first: one welcome right after someone joins on the website (src/http/public.ts). Default off;
+  // WELCOME_TEXT=on to try it.
+  welcomeText: env.WELCOME_TEXT ? !/^(0|off|false|no)$/i.test(env.WELCOME_TEXT) : false,
   joinOrigins: (env.JOIN_ORIGINS ?? 'https://joinmixr.club,https://www.joinmixr.club')
     .split(',')
     .map((o) => o.trim())
