@@ -30,7 +30,7 @@ const isStop = (word: string): boolean => STOP_WORDS.has(word) || STOP_WORDS.has
 
 export const STOP_ACK = "you're unsubscribed from mixr and won't get any more texts. Reply START to come back.";
 export const HELP_TEXT =
-  "mixr connects UW students with people and events that match their interests: text me what you're into or what you want to do, and i'll find your people. Message frequency varies. Reply STOP to unsubscribe.";
+  "mixr connects UW students with people and events that fit their interests. text me what you're into and i'll find your people. questions? hello@joinmixr.club. msg frequency varies. reply STOP to unsubscribe.";
 const SITE_URL = 'https://www.joinmixr.club';
 const WELCOME_BACK = "welcome back to mixr! you'll get texts from me again. Reply STOP anytime to unsubscribe.";
 const OOPS = 'sorry, something went wrong on my end. mind sending that again?';

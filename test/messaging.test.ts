@@ -342,6 +342,7 @@ test('HELP answers without the agent and without moving onboarding', async () =>
   await say('help');
   expect(await lastOut()).toBe(HELP_TEXT);
   expect(HELP_TEXT).toMatch(/STOP/);
+  expect(HELP_TEXT).toMatch(/hello@joinmixr\.club/);
   expect((await user()).step).toBe('name');
   // Onboarded users too.
   await realUser('+12065551111', { name: 'Kai', step: null, verified: true });

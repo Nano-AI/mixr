@@ -97,6 +97,10 @@ CREATE TABLE IF NOT EXISTS events (
   created_at TIMESTAMPTZ NOT NULL
 );
 
+-- Imported events (UW campus calendar): the feed's UID, so re-importing never duplicates. NULL = made in mixr.
+ALTER TABLE events ADD COLUMN IF NOT EXISTS source_uid TEXT;
+CREATE UNIQUE INDEX IF NOT EXISTS events_source_uid ON events(source_uid) WHERE source_uid IS NOT NULL;
+
 CREATE TABLE IF NOT EXISTS event_invites (
   event_id INTEGER NOT NULL REFERENCES events(id),
   user_id INTEGER NOT NULL REFERENCES users(id),

@@ -11,6 +11,7 @@ import { adminApi } from './http/admin.ts';
 import { startMessaging } from './messaging/photon.ts';
 import { startTicker, stopTicker } from './runtime.ts';
 import { recoverInterrupted } from './transport/outbox.ts';
+import { startUwCalendar } from './calendar/uw.ts';
 // Imported for their side effects too: each registers its job handlers at load time.
 import './profiles/index.ts';
 import './relay/index.ts';
@@ -44,6 +45,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   const messaging = startMessaging();
   startTicker();
   setReady(true);
+  startUwCalendar(); // UW_CALENDAR: daily campus-calendar snapshot (on in production)
   const stop = async () => {
     setReady(false);
     stopTicker();

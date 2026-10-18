@@ -34,6 +34,8 @@ export const config = {
   // Apple's "Share Name and Photo" after verification. Off (IMESSAGE_SHARE_CARD=off) if the shared line shows
   // the wrong identity; see docs/messaging-operations.md.
   imessageShareCard: !/^(0|off|false|no)$/i.test(env.IMESSAGE_SHARE_CARD ?? ''),
+  // Daily pull + archive of UW's public events calendar (src/calendar/uw.ts). Default: on in production only.
+  uwCalendar: env.UW_CALENDAR ? !/^(0|off|false|no)$/i.test(env.UW_CALENDAR) : env.NODE_ENV === 'production' && !env.VITEST,
   joinOrigins: (env.JOIN_ORIGINS ?? 'https://joinmixr.club,https://www.joinmixr.club')
     .split(',')
     .map((o) => o.trim())
