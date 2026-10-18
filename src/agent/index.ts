@@ -28,15 +28,6 @@ export const looksInternal = (text: string): boolean =>
 const NUDGE =
   "(system note, not from the student: your last reply described tool calls instead of making them, and the student can't see tools. If you need a tool, call it now; then reply to the student in plain words.)";
 
-// Activity searches always surface hosting explicitly. If the model's reply forgot, add a plain line (a
-// statement, not a second question) so the option is never missing.
-const HOST_LINE = 'or i can host an event for this, just say the word.';
-export function withHostOffer(reply: string, calls: ToolCallLog[]): string {
-  const searched = calls.some((c) => c.name === 'find_people' && (c.args as { request?: unknown })?.request && !(c.result as { error?: unknown })?.error);
-  if (!reply || !searched || /\bhost/i.test(reply)) return reply;
-  return `${reply} ${HOST_LINE}`;
-}
-
 // House style for every agent text: lowercase-casual like the scripted copy, and never a runaway wall of text.
 // ponytail: a fixed list of sentence openers, not NLP; names and acronyms that start a sentence stay as they are.
 const OPENERS = new Set(
@@ -196,7 +187,7 @@ async function turn(phone: string, text: string, via: 'phone' | 'dashboard', rec
     throw e;
   }
 
-  reply = withHostOffer(tidy(reply), toolCalls);
+  reply = tidy(reply);
   if (reply) await send(user.id, reply, celebrated ? { content: { kind: 'effect', effect: 'confetti' } } : {});
   await trace('agent', user.id, { userId: user.id, phone, text, toolCalls, reply, ...(error ? { error } : {}) });
   await runDue();

@@ -81,21 +81,3 @@ test('update_description re-targets the event and reaches out to newly fitting p
   expect((named.result as any).error).toMatch(/name other students/);
 });
 
-test('activity searches always end up offering to host an event, even if the model forgets', async () => {
-  const { withHostOffer } = await import('../src/agent/index.ts');
-  const search = [{ name: 'find_people', args: { request: 'tennis players around 4.5' }, result: { matches: [] } }];
-  const forgot = withHostOffer('ethan plays 4.5. want me to ask him?', search);
-  expect(forgot).toMatch(/host an event/);
-  const already = 'want me to ask ethan, or host a tennis event for you?';
-  expect(withHostOffer(already, search)).toBe(already); // not doubled
-  expect(withHostOffer('here are some people like you', [{ name: 'find_people', args: { request: null }, result: {} }])).not.toMatch(/host/);
-  expect(withHostOffer('sure', [])).toBe('sure');
-
-  await fresh();
-  await seed();
-  const maya = (await getUserByPhone('+12065550101'))!.id;
-  const r = (await runTool(maya, 'find_people', JSON.stringify({ request: 'tennis players' }))).result as any;
-  expect(r.also_offer).toMatch(/host .*event/);
-  const general = (await runTool(maya, 'find_people', JSON.stringify({ request: null }))).result as any;
-  expect(general.also_offer).toBeUndefined();
-});
