@@ -24,11 +24,41 @@ const NUDGE =
 
 // Activity searches always surface hosting explicitly. If the model's reply forgot, add a plain line (a
 // statement, not a second question) so the option is never missing.
-const HOST_LINE = "or i can host an event for this and invite people who'd be into it, just say the word.";
+const HOST_LINE = 'or i can host an event for this, just say the word.';
 export function withHostOffer(reply: string, calls: ToolCallLog[]): string {
   const searched = calls.some((c) => c.name === 'find_people' && (c.args as { request?: unknown })?.request && !(c.result as { error?: unknown })?.error);
   if (!reply || !searched || /\bhost/i.test(reply)) return reply;
   return `${reply} ${HOST_LINE}`;
+}
+
+// A tool already texted the user about this turn's event (already_texted, e.g. the number swap on an accepted
+// intro). If that was the only work done and they didn't ask anything, the model's reply could only repeat it.
+export function alreadyTold(inbound: string, calls: ToolCallLog[]): boolean {
+  const r = (c: ToolCallLog) => (c.result ?? {}) as { already_texted?: unknown; error?: unknown };
+  return calls.some((c) => r(c).already_texted) && calls.every((c) => r(c).already_texted || r(c).error) && !inbound.includes('?');
+}
+
+// House style for every agent text: lowercase-casual like the scripted copy, and never a runaway wall of text.
+// ponytail: a fixed list of sentence openers, not NLP; names and acronyms that start a sentence stay as they are.
+const OPENERS = new Set(
+  ('got nobody done nice sure yes yep yeah no nope want sounds okay ok cool awesome great hey hi hello you that this there it just here ' +
+    'what how who when where totally perfect can let looks glad happy thanks sorry oh also or and but so btw all any some someone anyone ' +
+    'nothing noted added saved unfortunately right fair gotcha alright already still if once not none your we they since plus then sweet ' +
+    'heads found looking quick welcome')
+    .split(' '),
+);
+const MAX_REPLY = 480; // tune: ~3 SMS segments; anything longer is the model rambling (or cut off at max_tokens)
+export function tidy(text: string): string {
+  let t = text
+    .trim()
+    .replace(/(^|[.!?]\s+)([A-Z][a-z]*)(?=['’\s,.!?:]|$)/g, (m, pre: string, w: string) => (OPENERS.has(w.toLowerCase()) ? pre + w.toLowerCase() : m))
+    .replace(/\bI\b/g, 'i');
+  if (t.length > MAX_REPLY) {
+    const cut = t.slice(0, MAX_REPLY);
+    const end = Math.max(cut.lastIndexOf('.'), cut.lastIndexOf('!'), cut.lastIndexOf('?'));
+    t = end > MAX_REPLY / 3 ? cut.slice(0, end + 1) : cut.slice(0, cut.lastIndexOf(' '));
+  }
+  return t;
 }
 
 // Per-phone promise chain: two texts from one phone run one after the other, different phones run concurrently.
@@ -116,7 +146,7 @@ async function turn(phone: string, text: string, via: 'phone' | 'dashboard', rec
     throw e;
   }
 
-  reply = withHostOffer(reply, toolCalls);
+  reply = alreadyTold(text, toolCalls) ? '' : withHostOffer(tidy(reply), toolCalls);
   if (reply) await send(user.id, reply);
   await trace('agent', user.id, { userId: user.id, phone, text, toolCalls, reply, ...(error ? { error } : {}) });
   await runDue();

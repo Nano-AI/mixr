@@ -14,7 +14,7 @@ import { laHuman } from './time.ts';
 
 // What the agent should offer next to people-search results for an activity (see prompt: Meeting people).
 export const HOST_OFFER_HINT =
-  'end with two clear options in one question: connect with a match, OR "want me to host a <activity> event for you? i\'ll invite people who\'d be into it and handle all the texting". use the words "host" and "event".';
+  'offer both options in one short question: connect with a match, or host a <activity> event (use the words "host" and "event"), e.g. "want me to ask ethan, or host a tennis event for you?"';
 
 const MAX_CAPACITY = 100; // tune: largest guest count an SMS-created event may ask for
 const MAX_SNOOZE_DAYS = 60; // tune: longest pause
@@ -300,7 +300,9 @@ export const TOOLS: ToolDef[] = [
     description: 'Ask a matched person if they are open to connecting with the user. mixr texts them and reports back; numbers are only shared if they say yes.',
     parameters: obj({
       target_user_id: int('user_id of the person (from find_people results).'),
-      reason: str('Why they should meet, phrased for the other person, e.g. "a 4.5 hitting partner for weekend doubles".'),
+      reason: str(
+        'What the user is looking for, as a short noun phrase (under 10 words) that completes "<user> is looking for ...", e.g. "a 4.5 hitting partner for weekend doubles" or "someone to build side projects with". Not a sentence, and don\'t start with their name.',
+      ),
     }),
     run: async (ctx, a) => {
       const u = await activeMe(ctx);
@@ -333,7 +335,14 @@ export const TOOLS: ToolDef[] = [
       if (typeof a.accept !== 'boolean') throw new ToolError('accept must be true or false');
       const message = typeof a.message === 'string' && a.message.trim() ? a.message.trim() : undefined;
       const intro = await respondToIntro(u.id, a.intro_id, a.accept, message);
-      return { ok: true, status: intro.status };
+      // On accept the relay has already texted them the other person's number; the agent must not confirm it again.
+      return {
+        ok: true,
+        status: intro.status,
+        ...(intro.status === 'connected'
+          ? { already_texted: "they already got mixr's text with the other person's number. don't confirm it again; reply only if their message asked something else" }
+          : {}),
+      };
     },
   },
   {

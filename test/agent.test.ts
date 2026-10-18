@@ -273,7 +273,7 @@ test('context block lists open invites with ids and recent find_people results',
   expect(seen[0].input.slice(0, -1)).toEqual([
     { role: 'user', content: 'anyone to play tennis with?' },
     // an activity search always surfaces hosting; the scripted reply didn't, so the fallback line was added
-    { role: 'assistant', content: "kai plays 4.5, want an intro? or i can host an event for this and invite people who'd be into it, just say the word." },
+    { role: 'assistant', content: 'kai plays 4.5, want an intro? or i can host an event for this, just say the word.' },
     { role: 'user', content: 'yes kai' },
   ]);
 });
@@ -324,4 +324,68 @@ test('a reply that narrates tool calls is never sent: the model is asked once mo
   const out = await outbox('+15550007002');
   expect(out).toHaveLength(1);
   expect(out[0]).not.toMatch(/find_people|\[/);
+});
+
+test('an accepted intro is confirmed once: the relay already texted them, so the agent does not narrate it', async () => {
+  const intro = { id: 7, requesterId: 99, targetId: 0, reason: 'hackathon teammates', status: 'target_asked', targetMessage: null };
+  vi.mocked(relay.pendingIntrosFor).mockImplementation(async () => [intro as any]);
+  vi.mocked(relay.respondToIntro).mockImplementation(async (targetId: number) => {
+    const { send } = await import('../src/transport/index.ts');
+    await send(targetId, "done! here's John's number: +14255550000. have fun!");
+    return { ...intro, targetId, status: 'connected' } as any;
+  });
+  try {
+    const seen = script(
+      () => call('respond_to_intro', { intro_id: 7, accept: true, message: null }),
+      () => ({ text: 'Done, I passed it along and shared your numbers with John, so you two can take it from here.', calls: [] }),
+    );
+    await handleInbound('+15550008001', 'yes');
+    expect(JSON.parse(outputs(seen[1])[0].output)).toMatchObject({ ok: true, status: 'connected', already_texted: expect.any(String) });
+    expect(await outbox('+15550008001')).toEqual(["done! here's John's number: +14255550000. have fun!"]);
+
+    // If they also asked something, the answer still goes out.
+    script(
+      () => call('respond_to_intro', { intro_id: 7, accept: true, message: null }),
+      say('catan is fri 7pm at odegaard'),
+    );
+    await handleInbound('+15550008002', "sure! when's catan again?");
+    expect((await outbox('+15550008002')).at(-1)).toBe('catan is fri 7pm at odegaard');
+  } finally {
+    vi.mocked(relay.pendingIntrosFor).mockImplementation(async () => []);
+    vi.mocked(relay.respondToIntro).mockReset();
+  }
+});
+
+test('the prompt asks for short, lowercase, one-question texts with no recap or sales talk', async () => {
+  const seen = script(say('hey'));
+  await handleInbound('+15550008101', 'hi');
+  const p = seen[0].instructions;
+  expect(p).toMatch(/160 characters/);
+  expect(p).toMatch(/one question/i);
+  expect(p).toMatch(/lowercase/);
+  expect(p).toMatch(/recap/i);
+  expect(p).toMatch(/bad: "Got it: photography/); // good-vs-bad examples from the real transcript
+  expect(p.match(/handle all the texting/g)).toHaveLength(2); // only as things not to say
+  const { HOST_OFFER_HINT } = await import('../src/agent/tools.ts');
+  expect(HOST_OFFER_HINT).not.toMatch(/handle all the texting/);
+  expect(p).not.toMatch(/tell them you passed it along/);
+  const hint = seen[0].tools.find((t) => t.name === 'request_intro')!.parameters as any;
+  expect(hint.properties.reason.description).toMatch(/not a sentence|noun phrase/i);
+});
+
+test('replies are tidied: lowercase openers, runaway length clipped at a sentence', async () => {
+  const { tidy } = await import('../src/agent/index.ts');
+  expect(tidy("Got it: photography and poker. Nobody's around yet. I'll text you when someone fits.")).toBe(
+    "got it: photography and poker. nobody's around yet. i'll text you when someone fits.",
+  );
+  // Names and acronyms stay as they are.
+  expect(tidy('John is down! AI hackathon at the HUB, Aditya.')).toBe('John is down! AI hackathon at the HUB, Aditya.');
+  const long = 'this is a sentence that goes on for a while. '.repeat(20).trim();
+  const out = tidy(long);
+  expect(out.length).toBeLessThanOrEqual(480);
+  expect(out.endsWith('.')).toBe(true);
+
+  script(say('Got it. Want me to look for a poker partner?'));
+  await handleInbound('+15550008201', 'poker, competitive');
+  expect(await outbox('+15550008201')).toEqual(['got it. want me to look for a poker partner?']);
 });
