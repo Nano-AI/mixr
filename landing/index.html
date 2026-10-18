@@ -15,27 +15,35 @@
 </head>
 <body>
   <header class="top">
-    <a class="brand" href="/" aria-label="mixr home">
-      <svg class="mark" viewBox="322 263 612 612" aria-hidden="true"><rect x="322" y="263" width="612" height="612" rx="160"/><path d="M506 428C500 428 498 431 498 437V451C498 457 500 459 506 459H514C541 459 555 471 567 497L607 578L480 741C478 744 479 745 483 745H538C543 745 546 744 549 740L629 625L664 698C683 738 704 747 744 747L784 745C790 745 792 743 792 737V723C792 717 790 714 784 715H775C749 715 733 702 720 677L667 569L772 432C775 428 774 427 770 427H716C710 427 708 428 705 433L645 522L619 465C604 433 583 426 548 427Z"/></svg>
-      <span class="brand-name">mixr</span>
-    </a>
+    <div class="top-in">
+      <a class="brand" href="/" aria-label="mixr home">
+        <svg class="mark" viewBox="322 263 612 612" aria-hidden="true"><rect x="322" y="263" width="612" height="612" rx="160"/><path d="M506 428C500 428 498 431 498 437V451C498 457 500 459 506 459H514C541 459 555 471 567 497L607 578L480 741C478 744 479 745 483 745H538C543 745 546 744 549 740L629 625L664 698C683 738 704 747 744 747L784 745C790 745 792 743 792 737V723C792 717 790 714 784 715H775C749 715 733 702 720 677L667 569L772 432C775 428 774 427 770 427H716C710 427 708 428 705 433L645 522L619 465C604 433 583 426 548 427Z"/></svg>
+        <span class="brand-name">mixr</span>
+      </a>
+      <nav class="top-actions">
+        <a class="nav-link" href="mailto:hello@joinmixr.club">For campuses &amp; teams</a>
+        <a class="nav-cta" href="#join" id="toJoin">Text mixr</a>
+      </nav>
+    </div>
   </header>
 
   <main>
     <section class="scroll" id="scroll">
       <div class="stage">
         <div class="glow" id="glow" aria-hidden="true"><canvas id="bg"></canvas></div>
-        <p class="lede">The campus organizer you text.</p>
-        <a class="hero-cta" href="mailto:hello@joinmixr.club">Bring mixr to your campus or team</a>
+        <div class="hero-clip"><div class="hero">
+          <h1 class="lede">The campus organizer you text.</h1>
+          <p class="sub">Say what you're into. It finds your people and plans the meetup.</p>
+        </div></div>
 
         <div class="phone" id="phone">
           <div class="body">
-            <i class="cam"><b></b><b></b><b></b></i><i class="btn action"></i><i class="btn vol-up"></i><i class="btn vol-down"></i><i class="btn power"></i>
+            <i class="cam"><b></b><b></b><b></b></i><i class="back-mark"><svg class="bm" viewBox="322 263 612 612" aria-hidden="true"><rect x="322" y="263" width="612" height="612" rx="160"/><path d="M506 428C500 428 498 431 498 437V451C498 457 500 459 506 459H514C541 459 555 471 567 497L607 578L480 741C478 744 479 745 483 745H538C543 745 546 744 549 740L629 625L664 698C683 738 704 747 744 747L784 745C790 745 792 743 792 737V723C792 717 790 714 784 715H775C749 715 733 702 720 677L667 569L772 432C775 428 774 427 770 427H716C710 427 708 428 705 433L645 522L619 465C604 433 583 426 548 427Z"/></svg></i><i class="btn vol-up"></i><i class="btn vol-down"></i><i class="btn power"></i>
           </div>
 
           <div class="face">
             <div class="screen">
-              <div class="island"></div>
+              <div class="punch"></div>
 
               <div class="statusbar" aria-hidden="true">
                 <span class="clock" data-clock>9:41</span>
@@ -77,14 +85,15 @@
 
                 <div class="thread" id="thread" role="log" aria-live="polite" aria-label="Conversation with mixr">
                   <div class="rail" id="rail">
-                    <p class="stamp"><b>iMessage</b><br>Today <span data-clock>9:41</span></p>
+                    <p class="stamp"><b>Text Message</b><br>Today <span data-clock>9:41</span></p>
                     <p class="b them" data-step>hey, it's mixr. what have you been wanting to do more of?</p>
                     <p class="b me" data-step>pickup soccer mostly. also need people to study for 332 with</p>
+                    <p class="receipt" data-step><span class="dl">Delivered</span><span class="rd">Read <span data-clock>9:41</span></span></p>
                     <p class="typing them" data-step data-typing><i></i><i></i><i></i></p>
                     <p class="b them" data-step>found 3 people who want to play thursday</p>
                     <p class="b them" data-step>5pm at the IMA fields work for you?</p>
                     <p class="b me" data-step>yeah I'm down</p>
-                    <p class="receipt" data-step>Delivered</p>
+                    <p class="receipt" data-step><span class="dl">Delivered</span><span class="rd">Read <span data-clock>9:41</span></span></p>
                     <p class="typing them" data-step data-typing><i></i><i></i><i></i></p>
                     <p class="b them" data-step>you're in with maya, jordan and priya. I'll text you an hour before, and I'm still looking for your 332 people</p>
                     <p class="typing them" data-step data-typing><i></i><i></i><i></i></p>
@@ -117,6 +126,7 @@
   </main>
 
   <footer class="foot">
+    <p class="uw"><img src="brand/uw.svg" alt="" height="18" onerror="this.remove()">Started at the University of Washington</p>
     <p>When you send your number, mixr texts you to confirm. Msg &amp; data rates may apply. Reply STOP anytime to opt out. UW students only for now.</p>
   </footer>
 </body>
