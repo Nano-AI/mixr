@@ -455,10 +455,6 @@ a { color: inherit; }
   font: 350 clamp(36px, 9.6vw, 60px)/1.02 var(--serif); font-optical-sizing: auto; letter-spacing: -.035em;
   text-wrap: balance; outline: none; /* takes focus when the screen opens, but isn't a control */
 }
-.last-kicker {
-  display: table; margin-bottom: 18px; padding: 8px 14px; border-radius: 999px;
-  background: var(--l-btn); color: var(--l-btn-ink); font: 600 15px/1.2 var(--sf); letter-spacing: -.01em;
-}
 .last-why {
   margin-top: 16px; max-width: 30em;
   font: 400 clamp(18px, 4.8vw, 21px)/1.45 var(--serif); font-optical-sizing: auto; color: var(--l-soft); text-wrap: pretty;
@@ -491,9 +487,10 @@ a { color: inherit; }
 }
 
 /* the main action on a phone: big and in thumb reach */
+.last-acts:has(> :not([hidden])) { display: flex; flex-direction: column; gap: 12px; margin-top: 14px; }
 .last-go {
   display: flex; align-items: center; justify-content: center;
-  min-height: 60px; margin-top: 14px; padding: 16px 28px; border-radius: 999px;
+  min-height: 60px; padding: 16px 28px; border-radius: 999px;
   background: var(--l-btn); color: var(--l-btn-ink); text-decoration: none; text-align: center;
   font: 500 21px/1.1 var(--serif); font-optical-sizing: auto; letter-spacing: -.01em;
   box-shadow: 0 16px 34px -16px var(--l-shadow);
@@ -502,8 +499,14 @@ a { color: inherit; }
 .last-go:active { scale: .98; }
 .last-num:focus-visible, .last-go:focus-visible { outline: 3px solid var(--blue); outline-offset: 3px; }
 
-.last-save { margin-top: 16px; font: 400 17px/1.45 var(--serif); font-optical-sizing: auto; color: var(--l-soft); text-wrap: pretty; }
-.last-save a { color: var(--l-ink); white-space: nowrap; text-decoration-thickness: 1px; text-underline-offset: .18em; }
+.last-contact {
+  display: flex; align-items: center; justify-content: center;
+  min-height: 60px; padding: 16px 28px; border-radius: 999px; cursor: pointer;
+  font: 500 21px/1.1 var(--serif); font-optical-sizing: auto; letter-spacing: -.01em;
+  color: var(--l-ink); background: transparent; border: 1.5px solid var(--l-line, rgba(0,0,0,.18));
+}
+.last-contact:hover { background: rgba(127,127,127,.08); }
+.last-contact[hidden] { display: none; }
 
 .last-qr { display: flex; flex-direction: column; align-items: center; gap: 14px; margin-top: 32px; }
 /* the QR keeps its own white tile and quiet zone in dark mode too */
@@ -534,14 +537,16 @@ a { color: inherit; }
   padding: 12px 2px; border: 0; background: none; cursor: pointer; color: var(--l-ink);
   font: 600 15px/1 var(--sf); text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: .2em;
 }
-.last-save a:focus-visible, .last-more summary:focus-visible, .last-over button:focus-visible { outline: 2px solid var(--blue); outline-offset: 3px; border-radius: 6px; }
+.last-contact:focus-visible, .last-more summary:focus-visible, .last-over button:focus-visible { outline: 2px solid var(--blue); outline-offset: 3px; border-radius: 6px; }
 
-/* wide, with a mouse: the QR stands beside the words, and the button sizes to its label */
+/* wide, with a mouse: the QR stands beside the words */
 @media (min-width: 860px) {
   .last:not(.by-touch) .last-in { max-width: 62rem; grid-template-columns: minmax(0, 1fr) auto; column-gap: clamp(48px, 7vw, 96px); }
   .last:not(.by-touch) .last-qr { margin-top: 0; }
   .last:not(.by-touch) .last-code { width: 264px; }
-  .last:not(.by-touch) .last-go { display: inline-flex; min-width: 280px; }
+  /* the two buttons share a row at equal widths, and stack full width if the row gets too narrow */
+  .last:not(.by-touch) .last-acts { flex-flow: row wrap; gap: 10px; }
+  .last:not(.by-touch) .last-acts > * { flex: 1 1 220px; }
   .last:not(.by-touch) .last-over { grid-column: 1 / -1; margin-top: 36px; }
 }
 
