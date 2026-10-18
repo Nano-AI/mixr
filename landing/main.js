@@ -1,7 +1,15 @@
 import { animate, createTimeline, stagger, utils } from 'https://cdn.jsdelivr.net/npm/animejs@4.5.0/dist/bundles/anime.esm.min.js';
 import { startGlow } from './glow.js';
 
-const API = location.hostname.endsWith('joinmixr.club') ? 'https://api.joinmixr.club' : 'http://localhost:3000';
+// sign-up server: the live one on joinmixr.club, a local one anywhere else.
+// TODO: switch to https://api.joinmixr.club once that hostname points at the server.
+// Overrides for testing: window.MIXR_API (set before this script), or ?api=https://… on any host but
+// joinmixr.club (there, a shared link could send people's numbers elsewhere).
+// ?mock=ok|full|error|offline skips the network and answers with a canned response.
+const query = new URLSearchParams(location.search);
+const PROD = /(^|\.)joinmixr\.club$/.test(location.hostname);
+const API = (window.MIXR_API || (!PROD && query.get('api')) || (PROD ? 'https://mixr-api.johnomeara.com' : 'http://localhost:8787')).replace(/\/+$/, '');
+const MOCK = query.get('mock');
 const SMS = document.body.dataset.sms; // set data-sms="+1..." on <body> to offer a text-us fallback
 
 const $ = (s) => document.querySelector(s);
@@ -144,7 +152,7 @@ function openKeypad() {
   // if nothing gets typed for a while, mixr starts typing again, like someone waiting on the other end
   if (!nudged) {
     nudged = true;
-    setTimeout(() => !digits && !busy && kbOn && !joined && say("just the 10 digits. I'll text you right after"), 9000);
+    setTimeout(() => !digits && !busy && kbOn && !joined && say("just the 10 digits. I'll give you a number to text me at"), 9000);
   }
   keypad.style.height = 'auto';
   const h = keypad.offsetHeight;
@@ -392,13 +400,71 @@ function bubble(cls, content) {
   return p;
 }
 
-const say = async (content) => {
+const sleep = (ms) => new Promise((r) => setTimeout(r, reduced ? 0 : ms));
+const typing = () => {
   const dots = bubble('typing them', '');
   dots.innerHTML = '<i></i><i></i><i></i>';
-  await new Promise((r) => setTimeout(r, reduced ? 0 : 900));
-  dots.remove();
-  return bubble('b them', content);
+  return dots;
 };
+const say = async (content, cls = 'b them') => {
+  const dots = typing();
+  await sleep(900);
+  dots.remove();
+  return bubble(cls, content);
+};
+
+// POST {phone} → 200 {ok, number, link} | 409 {full} | 400/429/5xx {error}. mixr never texts first:
+// joining hands you your own mixr number, and `link` opens Messages to it with "hi mixr" typed
+const MOCKS = {
+  ok: [200, { ok: true, number: '+16285551234', link: 'sms:+16285551234&body=hi%20mixr' }],
+  full: [409, { ok: false, full: true, error: 'mixr is full.' }],
+  error: [502, { ok: false, error: "couldn't set up your line. try again in a minute" }],
+};
+async function join(phone) {
+  if (MOCK) {
+    await sleep(700);
+    if (!MOCKS[MOCK]) throw new TypeError('mock: offline'); // ?mock=offline, or any other value
+    const [status, data] = MOCKS[MOCK];
+    return { ok: status === 200, status, data };
+  }
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), 15000); // never leave them watching the typing dots
+  try {
+    const res = await fetch(`${API}/join`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ phone }),
+      signal: ctl.signal,
+    });
+    return { ok: res.ok, status: res.status, data: await res.json().catch(() => ({})) };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+// your mixr line: the number big and selectable (on a laptop you'll text it from your phone), and a
+// real link that opens Messages to it
+function lineCard(number, link) {
+  const d = String(number).replace(/\D/g, '').replace(/^1(?=\d{10}$)/, '');
+  const pretty = d.length === 10 ? fmt(d) : String(number);
+  // only hand the link to the browser if it's a web or sms link; anything else gets a plain sms: one
+  let href = `sms:${number}&body=hi%20mixr`;
+  try {
+    if (['https:', 'sms:'].includes(new URL(link).protocol)) href = link;
+  } catch {}
+  const el = (tag, cls, text) => Object.assign(document.createElement(tag), { className: cls, textContent: text });
+  const a = el('a', 'line-cta', 'text mixr');
+  a.href = href;
+  a.setAttribute('aria-label', `text mixr at ${pretty} in Messages`);
+  if (!touch) Object.assign(a, { target: '_blank', rel: 'noopener' }); // keep this page, and the number, open
+  const card = document.createDocumentFragment();
+  card.append(
+    el('span', 'line-num', pretty),
+    a,
+    el('span', 'line-note', touch ? "save this number — it's your mixr line" : "save this number — it's your mixr line. text it from your phone"),
+  );
+  return card;
+}
 
 compose.addEventListener('submit', async (e) => {
   e.preventDefault();
@@ -410,36 +476,45 @@ compose.addEventListener('submit', async (e) => {
   digits = '';
   render();
 
-  let reply;
-  let ok = false;
-  try {
-    const res = await fetch(`${API}/join`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ phone: `+1${number}` }),
-    });
-    ok = res.ok;
-    reply = ok
-      ? 'just texted you. reply there and we\'ll get started'
-      : res.status === 429
-        ? "that's a lot of tries. give it a few minutes"
-        : res.status === 400
-          ? "hm, that number didn't work. try it again?"
-          : "something broke on my end. try again in a minute";
-  } catch {
-    reply = "I can't reach my phone right now. try again in a minute";
-  }
+  // mixr "types" while the request runs, for at least a beat
+  const dots = typing();
+  const [r] = await Promise.allSettled([join(`+1${number}`), sleep(900)]);
+  dots.remove();
+  const res = r.status === 'fulfilled' ? r.value : null; // null: offline, blocked or timed out
+  const ok = res?.ok && res.data?.ok && res.data.number;
   if (ok) {
     joined = true;
     num.disabled = true;
     compose.classList.add('done');
     zoomOut();
-    const r = bubble('receipt', 'Delivered');
-    setTimeout(() => (r.textContent = `Read ${$('[data-clock]').textContent}`), reduced ? 0 : 500);
+    const rc = bubble('receipt', 'Delivered');
+    setTimeout(() => (rc.textContent = `Read ${$('[data-clock]').textContent}`), reduced ? 0 : 500);
     closeKeypad();
+    bubble('b them', "you're in! text mixr to get started:");
+    const card = await say(lineCard(res.data.number, res.data.link), 'b them line');
+    if (!touch) card.querySelector('a').focus({ preventScroll: true }); // Enter opens Messages
+    busy = false;
+    return;
   }
-  await say(reply);
-  if (!ok && SMS) {
+  const said = typeof res?.data?.error === 'string' && res.data.error; // the server's own words
+  bubble(
+    'b them',
+    !res
+      ? "I can't reach my phone right now. try again in a minute"
+      : res.status === 409 || res.data?.full
+        ? "mixr's at capacity right now — we'll open more spots soon"
+        : said ||
+          (res.status === 429
+            ? "that's a lot of tries. give it a few minutes"
+            : res.status === 400
+              ? "hm, that number didn't work. try it again?"
+              : 'something broke on my end. try again in a minute'),
+  );
+  // put the number back so trying again is one tap on send
+  digits = number;
+  render();
+  focusNum();
+  if (SMS) {
     const a = document.createElement('a');
     a.href = `sms:${SMS}&body=hi`;
     a.textContent = 'Or text me hi directly.';
