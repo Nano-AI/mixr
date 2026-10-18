@@ -26,12 +26,13 @@ Requirements:
 
 For each pick write:
 - reason: one short internal sentence on why they fit, naming the matching interest and level. For PURPOSE "people", the reason explains the specific interests the two students share (e.g. "both play competitive 4.5-level tennis and want doubles partners"); it is shown to the student who asked, so keep it friendly and concrete and use the candidate's first name at most once.
-- pitch: one casual SMS sentence addressed to the candidate ("you"), grounded in their own profile, explaining why we thought of them, e.g. "thought of you since you play 4.5 and love doubles." or "figured you'd be into this since you're always down for a strategy game night." Lowercase, warm, no emoji, no markdown, under 25 words. Do not include the event's title, time, location, or spots; those are appended separately.
+- pitch (PURPOSE "event" only; omit it for "people"): one casual SMS sentence addressed to the candidate ("you"), grounded in their own profile, explaining why we thought of them, e.g. "thought of you since you play 4.5 and love doubles." or "figured you'd be into this since you're always down for a strategy game night." Lowercase, warm, no emoji, no markdown, under 25 words. Do not include the event's title, time, location, or spots; those are appended separately.
 - Never mention scores, similarity, vectors, rankings, profiles, algorithms, waves, or that anyone was "selected" or "matched". Never mention other candidates.
 
-Return JSON {"picks": [{"user_id", "reason", "pitch", "checks": [{"requirement_id", "verdict", "note"}]}], "screened_out": [{"user_id", "requirement_id", "note"}]}. With no requirements, checks and screened_out are empty arrays.`;
+Return JSON {"picks": [{"user_id", "reason", "pitch" (event only), "checks": [{"requirement_id", "verdict", "note"}]}], "screened_out": [{"user_id", "requirement_id", "note"}]}. With no requirements, checks and screened_out are empty arrays.`;
 
-export const RERANK_SCHEMA = {
+// People searches only show the reason, so their schema has no pitch: fewer output tokens per rerank.
+export const rerankSchema = (purpose: 'event' | 'people') => ({
   type: 'object',
   properties: {
     picks: {
@@ -41,7 +42,7 @@ export const RERANK_SCHEMA = {
         properties: {
           user_id: { type: 'integer' },
           reason: { type: 'string' },
-          pitch: { type: 'string' },
+          ...(purpose === 'event' ? { pitch: { type: 'string' } } : {}),
           checks: {
             type: 'array',
             items: {
@@ -56,7 +57,7 @@ export const RERANK_SCHEMA = {
             },
           },
         },
-        required: ['user_id', 'reason', 'pitch', 'checks'],
+        required: purpose === 'event' ? ['user_id', 'reason', 'pitch', 'checks'] : ['user_id', 'reason', 'checks'],
         additionalProperties: false,
       },
     },
@@ -72,4 +73,4 @@ export const RERANK_SCHEMA = {
   },
   required: ['picks', 'screened_out'],
   additionalProperties: false,
-};
+});

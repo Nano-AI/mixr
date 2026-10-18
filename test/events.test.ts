@@ -186,7 +186,8 @@ test('first round invites clamp(ceil(cap/0.35),3,10) best matches from E0 and te
 
   // Round 1 is a single E0 recall of 40.
   expect(fakeRecall).toHaveBeenCalledTimes(1);
-  expect(fakeRecall.mock.calls[0][1]).toMatchObject({ limit: 40 });
+  // Lexical side of recall gets the host's raw title + description, not the HyDE profile.
+  expect(fakeRecall.mock.calls[0][1]).toMatchObject({ limit: 40, text: 'Tennis doubles\npretty competitive doubles at the IMA courts' });
   expect(fakeRerank.mock.calls[0][0]).toMatchObject({ purpose: 'event', k: 6 });
   expect(fakeRerank.mock.calls[0][0].target).toContain('Tennis doubles');
 
