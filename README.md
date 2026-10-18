@@ -441,7 +441,7 @@ Project link: [https://github.com/Nano-AI/mixr](https://github.com/Nano-AI/mixr)
 * [OpenAI](https://openai.com) for embeddings
 * [PGlite](https://pglite.dev) for embedded Postgres with pgvector
 * [anime.js](https://animejs.com) for the landing page animation
-* Best-README-Template, the layout this README follows
+* [Best-README-Template](https://github.com/othneildrew/Best-README-Template), the layout this README follows
 * [shields.io](https://shields.io)
 * [contrib.rocks](https://contrib.rocks)
 
