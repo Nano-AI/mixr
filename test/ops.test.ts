@@ -36,3 +36,18 @@ test('resetPhotonUsers deletes every registered user (fake API)', async () => {
     config.photonProjectSecret = saved.secret;
   }
 });
+
+test('deleteRealUser removes exactly one real user and their data; refuses demo users', async () => {
+  const { deleteRealUser } = await import('../src/ops/resetReal.ts');
+  await fresh();
+  const demo = await makeUser('Demo Dana', 'tennis');
+  const [{ id: a }] = await q<{ id: number }>(`INSERT INTO users (phone, name, seeded) VALUES ('+14255550001', 'A', false) RETURNING id`);
+  const [{ id: b }] = await q<{ id: number }>(`INSERT INTO users (phone, name, seeded) VALUES ('+14255550002', 'B', false) RETURNING id`);
+  await q(`INSERT INTO messages (user_id, direction, text, sim_time) VALUES ($1, 'in', 'hi', now()), ($2, 'in', 'hi', now())`, [a, b]);
+  expect(await deleteRealUser('+14255550001')).toEqual({ deleted: true });
+  expect((await q('SELECT id FROM users ORDER BY id')).map((r) => r.id)).toEqual([demo, b]);
+  expect((await q('SELECT user_id FROM messages')).map((r) => r.user_id)).toEqual([b]);
+  expect(await deleteRealUser('+14255550009')).toEqual({ deleted: false });
+  const demoPhone = (await q<{ phone: string }>('SELECT phone FROM users WHERE id = $1', [demo]))[0].phone;
+  await expect(deleteRealUser(demoPhone)).rejects.toThrow(/demo/);
+});
