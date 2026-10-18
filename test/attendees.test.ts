@@ -91,3 +91,18 @@ test('context flags the first text and goes after the conversation history', asy
   expect((later.at(-1) as { content: string }).content).toContain('returning user');
   expect(later[0]).toMatchObject({ role: 'user', content: 'hi' });
 });
+
+test('context lists which mixr features they have used and which they have not tried yet', async () => {
+  await fresh();
+  const maya = await makeUser('Maya Chen', 'Core Interests:\n[1] Competitive tennis, USTA 4.5 (Level: Advanced).');
+  const { trace } = await import('../src/trace.ts');
+  const { featureUse } = await import('../src/agent/context.ts');
+  expect((await featureUse(maya)).used).toEqual([]);
+
+  await trace('agent', maya, { toolCalls: [{ name: 'find_people', args: {}, result: {} }] });
+  await createEvent(maya, { title: 'Doubles', description: 'competitive doubles', startsAt: new Date(T0.getTime() + 30 * HOUR), location: 'IMA', capacity: 3 });
+  const f = await featureUse(maya);
+  expect(f.used).toEqual(['finding people to meet (intros)', 'hosting an event (mixr invites people who fit)']);
+  expect(f.notYet).toContain("browsing what's going on (discover)");
+  expect(await contextBlock((await getUser(maya))!, T0)).toContain('not tried yet (candidates for one relevant tip):');
+});

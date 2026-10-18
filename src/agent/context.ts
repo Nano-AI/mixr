@@ -53,8 +53,34 @@ async function recentResults(userId: number, now: Date): Promise<Recent> {
   return { people: [...people.values()].slice(0, 6), events: [...events.values()].slice(0, 6) };
 }
 
+// What they've already done with mixr, so the agent can surface what they haven't (one relevant tip at a time).
+const FEATURES: { label: string; tools: string[]; sql?: string }[] = [
+  { label: 'finding people to meet (intros)', tools: ['find_people', 'request_intro'] },
+  { label: 'hosting an event (mixr invites people who fit)', tools: ['create_event'], sql: 'SELECT 1 FROM events WHERE host_id = $1 LIMIT 1' },
+  { label: "browsing what's going on (discover)", tools: ['discover_events', 'join_event'] },
+  { label: 'going to an event', tools: [], sql: "SELECT 1 FROM event_invites WHERE user_id = $1 AND status = 'yes' LIMIT 1" },
+  { label: 'special requests for who gets invited (e.g. "advanced players only")', tools: ['add_requirement'], sql: 'SELECT 1 FROM requirements WHERE owner_id = $1 LIMIT 1' },
+  { label: 'pausing texts (snooze)', tools: ['snooze'] },
+];
+
+export async function featureUse(userId: number): Promise<{ used: string[]; notYet: string[] }> {
+  const rows = await q<{ name: string }>(
+    `SELECT DISTINCT c->>'name' AS name FROM traces t, jsonb_array_elements(coalesce(t.data->'toolCalls', '[]'::jsonb)) c
+     WHERE t.kind = 'agent' AND t.ref_id = $1`,
+    [userId],
+  );
+  const called = new Set(rows.map((r) => r.name));
+  const used: string[] = [];
+  const notYet: string[] = [];
+  for (const f of FEATURES) {
+    const did = f.tools.some((t) => called.has(t)) || (f.sql ? (await q(f.sql, [userId])).length > 0 : false);
+    (did ? used : notYet).push(f.label);
+  }
+  return { used, notYet };
+}
+
 export async function contextBlock(user: User, now: Date): Promise<string> {
-  const [allInvites, intros, hosted, plans, recent, texts, blocks, reqs] = await Promise.all([
+  const [allInvites, intros, hosted, plans, recent, texts, blocks, reqs, features] = await Promise.all([
     safe(() => openInvitesFor(user.id)),
     safe(() => pendingIntrosFor(user.id)),
     safe(() => hostedEventsFor(user.id)),
@@ -63,6 +89,7 @@ export async function contextBlock(user: User, now: Date): Promise<string> {
     q<{ n: number }>(`SELECT count(*)::int AS n FROM messages WHERE user_id = $1 AND direction = 'in'`, [user.id]),
     safe(() => blocksOf(user.id)),
     safe(() => requirementsOwnedBy(user.id)),
+    featureUse(user.id),
   ]);
   // Accepted invites show up under plans (with the roster); here only the ones still waiting on them.
   const invites = allInvites.filter((e) => e.inviteStatus !== 'yes');
@@ -81,6 +108,8 @@ export async function contextBlock(user: User, now: Date): Promise<string> {
   if (user.snoozedUntil && user.snoozedUntil > now) L.push(`snoozed: yes, paused until ${laHuman(user.snoozedUntil)} (no invites or intro suggestions until then)`);
   else L.push('snoozed: no');
   L.push(user.canonicalProfile ? `profile (internal format, paraphrase casually if you mention it):\n${user.canonicalProfile}` : 'profile: none yet');
+  L.push(`mixr features they've used: ${features.used.join('; ') || 'none yet'}`);
+  L.push(`not tried yet (candidates for one relevant tip): ${features.notYet.join('; ') || 'nothing, they know it all'}`);
 
   L.push('');
   if (invites.length) {
