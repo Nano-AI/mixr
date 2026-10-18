@@ -258,6 +258,20 @@ test("an action with mixr's own confirmation is sent as-is, with no second model
   await handleInbound(phone, "i'm back");
   expect(seen).toHaveLength(1);
   expect(['welcome back, texts are back on', "you're back on. hmu anytime"]).toContain((await outbox(phone)).at(-1));
+
+  // A question in their text doesn't change that: the model decides. No text from it -> the canned reply.
+  script(() => call('snooze', { until: null }));
+  await handleInbound(phone, "i'm back! anything fun this week?");
+  expect(['welcome back, texts are back on', "you're back on. hmu anytime"]).toContain((await outbox(phone)).at(-1));
+});
+
+test('action + text in the same response: the model chose to say something, so its text goes out instead of the canned reply', async () => {
+  const meId = await makeUser('Jo', 'tennis');
+  const phone = (await one<{ phone: string }>('SELECT phone FROM users WHERE id = $1', [meId]))!.phone;
+  const seen = script(() => ({ ...call('snooze', { until: null }), text: "you're back on. catan is fri 7pm at odegaard" }));
+  await handleInbound(phone, "i'm back. when's catan?");
+  expect(seen).toHaveLength(1);
+  expect(await outbox(phone)).toEqual(["you're back on. catan is fri 7pm at odegaard"]);
 });
 
 test('context block lists open invites with ids and recent find_people results', async () => {
@@ -346,19 +360,16 @@ test('an accepted intro is confirmed once: the relay already texted them, so the
     return { ...intro, targetId, status: 'connected' } as any;
   });
   try {
-    const seen = script(
-      () => call('respond_to_intro', { intro_id: 7, accept: true, message: null }),
-      () => ({ text: 'Done, I passed it along and shared your numbers with Jordan, so you two can take it from here.', calls: [] }),
-    );
+    // already_texted alone: nothing more goes out, and the model isn't asked again.
+    const seen = script(() => call('respond_to_intro', { intro_id: 7, accept: true, message: null }));
     await handleInbound('+15550008001', 'yes');
-    expect(JSON.parse(outputs(seen[1])[0].output)).toMatchObject({ ok: true, status: 'connected', already_texted: expect.any(String) });
+    expect(seen).toHaveLength(1);
+    const trace = await one<{ data: { toolCalls: { result: unknown }[] } }>(`SELECT data FROM traces WHERE kind = 'agent' ORDER BY id DESC LIMIT 1`);
+    expect(trace!.data.toolCalls[0].result).toMatchObject({ ok: true, status: 'connected', already_texted: expect.any(String) });
     expect(await outbox('+15550008001')).toEqual(["done, here's Jordan's number: +14255550000. have fun"]);
 
-    // If they also asked something, the answer still goes out.
-    script(
-      () => call('respond_to_intro', { intro_id: 7, accept: true, message: null }),
-      say('catan is fri 7pm at odegaard'),
-    );
+    // already_texted + text in the same response (they also asked something): the text goes out.
+    script(() => ({ ...call('respond_to_intro', { intro_id: 7, accept: true, message: null }), text: 'catan is fri 7pm at odegaard' }));
     await handleInbound('+15550008002', "sure! when's catan again?");
     expect((await outbox('+15550008002')).at(-1)).toBe('catan is fri 7pm at odegaard');
   } finally {
@@ -397,7 +408,10 @@ test('replies are tidied: lowercase openers, runaway length clipped at a sentenc
   // Names and acronyms stay as they are.
   expect(tidy('Jordan is down! AI hackathon at the HUB, Sam.')).toBe('Jordan is down! AI hackathon at the HUB, Sam.');
   expect(tidy('Bet, asked Casey. Ngl that sounds fun. Lowkey jealous. Fr.')).toBe('bet, asked Casey. ngl that sounds fun. lowkey jealous. fr.');
-  expect(tidy("bet, asked Casey. i'll leave the trash talk out. i'll get back to you when they answer.")).toBe('bet, asked Casey.');
+  // Formatting only: tidy never decides content, so no sentence is dropped.
+  expect(tidy("bet, asked Casey. i'll leave the trash talk out. i'll get back to you when they answer.")).toBe(
+    "bet, asked Casey. i'll leave the trash talk out. i'll get back to you when they answer.",
+  );
   expect(tidy("i'll get back to you")).toBe("i'll get back to you");
   expect(tidy("you're in. i'll lyk if anything changes")).toBe("you're in. i'll lyk if anything changes");
   const long = 'this is a sentence that goes on for a while. '.repeat(20).trim();

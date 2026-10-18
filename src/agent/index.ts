@@ -5,7 +5,6 @@ import { recordInbound, send } from '../transport/index.ts';
 import { runDue } from '../jobs/index.ts';
 import { llm, LlmBudgetError, type AgentInputItem } from '../llm/index.ts';
 import { trace } from '../trace.ts';
-import { isFreshAccept } from '../events/copy.ts';
 import { buildInput } from './context.ts';
 import { INSTRUCTIONS } from './prompt.ts';
 import { agentTools, runTool } from './tools.ts';
@@ -18,6 +17,9 @@ export type ToolCallLog = { name: string; args: unknown; result: unknown };
 
 // Tools that only read (searches); safe to run side by side. Every other tool writes or texts someone.
 const READ_ONLY = new Set(['find_people', 'discover_events']);
+// How a reply goes out (a tapback, a screen effect), not an action.
+const STYLE = new Set(['react', 'celebrate']);
+type Result = { reply?: unknown; already_texted?: unknown; error?: unknown };
 
 // A reply that's about our machinery rather than to the student: a bracketed note, tool names, "tool call".
 const TOOL_NAMES = /\b(save_profile|edit_profile|create_event|respond_to_invite|manage_event|discover_events|join_event|find_people|request_intro|respond_to_intro|block_person|unblock_person|add_requirement|remove_requirement|snooze)\b/;
@@ -35,13 +37,6 @@ export function withHostOffer(reply: string, calls: ToolCallLog[]): string {
   return `${reply} ${HOST_LINE}`;
 }
 
-// A tool already texted the user about this turn's event (already_texted, e.g. the number swap on an accepted
-// intro). If that was the only work done and they didn't ask anything, the model's reply could only repeat it.
-export function alreadyTold(inbound: string, calls: ToolCallLog[]): boolean {
-  const r = (c: ToolCallLog) => (c.result ?? {}) as { already_texted?: unknown; error?: unknown };
-  return calls.some((c) => r(c).already_texted) && calls.every((c) => r(c).already_texted || r(c).error) && !inbound.includes('?');
-}
-
 // House style for every agent text: lowercase-casual like the scripted copy, and never a runaway wall of text.
 // ponytail: a fixed list of sentence openers, not NLP; names and acronyms that start a sentence stay as they are.
 const OPENERS = new Set(
@@ -51,16 +46,12 @@ const OPENERS = new Set(
     'heads found looking quick welcome are is do does did have has would could should which tell bet ngl lowkey fr asked say lol idk')
     .split(' '),
 );
-const NARRATION = /\b(leave|leaving|left|keep|keeping|kept) (the |that |all )?.{0,30}\bout\b|get back to you|keep you posted|you two can (take it|sort)|sort out the details|as soon as (they|he|she) (answer|reply|respond)/i;
 const MAX_REPLY = 480; // tune: ~3 SMS segments; anything longer is the model rambling (or cut off at max_tokens)
 export function tidy(text: string): string {
   let t = text
     .trim()
     .replace(/(^|[.!?]\s+)([A-Z][a-z]*)(?=['’\s,.!?:]|$)/g, (m, pre: string, w: string) => (OPENERS.has(w.toLowerCase()) ? pre + w.toLowerCase() : m))
     .replace(/\bI\b/g, 'i');
-  // Narration about what mixr did behind the scenes adds nothing; drop those sentences (never the whole text).
-  const kept = t.split(/(?<=[.!?])\s+/).filter((s) => !NARRATION.test(s));
-  if (kept.length) t = kept.join(' ');
   if (t.length > MAX_REPLY) {
     const cut = t.slice(0, MAX_REPLY);
     const end = Math.max(cut.lastIndexOf('.'), cut.lastIndexOf('!'), cut.lastIndexOf('?'));
@@ -68,16 +59,6 @@ export function tidy(text: string): string {
   }
   return t;
 }
-
-// Effects stay rare: only the reply confirming a seat they just got (RSVP yes or a discover join) or the one that
-// finishes onboarding. Never a second effect in a turn whose number swap (already_texted) already had one.
-export const confetti = (calls: ToolCallLog[]): boolean => {
-  const r = (c: ToolCallLog) => (c.result ?? {}) as { detail?: unknown; onboarded?: unknown; already_texted?: unknown };
-  if (calls.some((c) => r(c).already_texted)) return false;
-  return calls.some(
-    (c) => ((c.name === 'respond_to_invite' || c.name === 'join_event') && isFreshAccept(String(r(c).detail ?? ''))) || (c.name === 'save_profile' && r(c).onboarded === true),
-  );
-};
 
 // Per-phone promise chain: two texts from one phone run one after the other, different phones run concurrently.
 const chains = new Map<string, Promise<void>>();
@@ -119,9 +100,15 @@ async function turn(phone: string, text: string, via: 'phone' | 'dashboard', rec
   let error: string | undefined;
   let nudged = false;
   let reacted = false;
-  // At most one tapback per turn: a second react call is refused instead of run.
+  let celebrated = false; // the agent asked for confetti; it rides on whatever text this turn sends
+  // At most one tapback and one effect per turn: a second call is refused instead of run.
   const run = async (c: { name: string; arguments: string }) => {
-    if (c.name !== 'react') return runTool(user.id, c.name, c.arguments, text);
+    if (c.name === 'celebrate' && celebrated) return { args: c.arguments, result: { error: 'already celebrating this turn; one effect per turn' } };
+    if (c.name !== 'react') {
+      const r = await runTool(user.id, c.name, c.arguments, text);
+      if (c.name === 'celebrate') celebrated = true;
+      return r;
+    }
     if (reacted) return { args: c.arguments, result: { error: 'you already reacted to this text; one tapback per turn' } };
     const r = await runTool(user.id, c.name, c.arguments, text);
     reacted = !(r.result as { error?: unknown }).error;
@@ -162,26 +149,35 @@ async function turn(phone: string, text: string, via: 'phone' | 'dashboard', rec
         results.push(...(await Promise.all(res.calls.slice(j, k).map(run))));
         j = k;
       }
+      const acted = results.map((r, j) => ({ name: res.calls[j].name, result: (r.result ?? {}) as Result })).filter((c) => !STYLE.has(c.name));
+      // An effect asked for alongside an action that failed has nothing to celebrate: refuse it, and say so.
+      const cj = res.calls.findIndex((c, j) => c.name === 'celebrate' && !(results[j].result as Result).error);
+      if (cj >= 0 && acted.some((c) => c.result.error)) {
+        celebrated = false;
+        results[cj] = { ...results[cj], result: { error: 'not celebrated: an action in the same response failed' } };
+      }
       res.calls.forEach((c, j) => {
         const { args, result } = results[j];
         if (res.raw === undefined) input.push({ type: 'function_call', call_id: c.call_id, name: c.name, arguments: c.arguments });
         toolCalls.push({ name: c.name, args, result });
         input.push({ type: 'function_call_output', call_id: c.call_id, output: JSON.stringify(result) });
       });
-      // A tapback alone with no text is the whole answer (the text needed none): end the turn silently. A tapback
-      // with text is a tapback plus that text as the reply.
-      if (res.calls.length === 1 && res.calls[0].name === 'react' && !(toolCalls.at(-1)!.result as { error?: unknown }).error) {
-        if (!res.text.trim()) break;
-        if (!looksInternal(res.text)) {
-          reply = res.text.trim();
+      const said = looksInternal(res.text) ? '' : res.text.trim();
+      if (!acted.length) {
+        // Only a tapback and/or an effect: the text that came with it is the reply. A tapback alone with no text is
+        // the whole answer (the text needed none): end the turn silently.
+        if (said) {
+          reply = said;
           break;
         }
+        if (!res.text.trim() && res.calls.every((c, j) => c.name === 'react' && !(results[j].result as Result).error)) break;
+        continue;
       }
-      // Every action in this round came back with mixr's own confirmation and they didn't ask anything: send that
-      // as-is. Saves a model call, and the model can't narrate a reply it doesn't write. A tapback rides along.
-      const canned = results.filter((_, j) => res.calls[j].name !== 'react').map((r) => (r.result as { reply?: unknown; error?: unknown }) ?? {});
-      if (!text.includes('?') && canned.length && canned.every((r) => typeof r.reply === 'string' && !r.error)) {
-        reply = canned.map((r) => r.reply).join(' ');
+      // Every action came back with mixr's own confirmation (reply) or already texted them (already_texted). Text the
+      // model wrote in that same response is its choice to say something more (an answer to their question): send
+      // it. No text: send the confirmations as-is (nothing for already_texted). Either way, no second model call.
+      if (acted.every((c) => !c.result.error && (typeof c.result.reply === 'string' || c.result.already_texted))) {
+        reply = said || acted.flatMap((c) => (typeof c.result.reply === 'string' ? [c.result.reply] : [])).join(' ');
         break;
       }
     }
@@ -197,8 +193,8 @@ async function turn(phone: string, text: string, via: 'phone' | 'dashboard', rec
     throw e;
   }
 
-  reply = alreadyTold(text, toolCalls) ? '' : withHostOffer(tidy(reply), toolCalls);
-  if (reply) await send(user.id, reply, confetti(toolCalls) ? { content: { kind: 'effect', effect: 'confetti' } } : {});
+  reply = withHostOffer(tidy(reply), toolCalls);
+  if (reply) await send(user.id, reply, celebrated ? { content: { kind: 'effect', effect: 'confetti' } } : {});
   await trace('agent', user.id, { userId: user.id, phone, text, toolCalls, reply, ...(error ? { error } : {}) });
   await runDue();
 }

@@ -185,9 +185,9 @@ degrades to plain texts. Used today:
 - mixr's contact card (name, `landing/brand/mixr-contact.jpg`, the user's assigned
   number) right after verification, once per user; skipped without an assigned number;
 - the other person's contact card (first + last name, phone) on both sides of an accepted intro,
-  its caption sent with confetti (`captionEffect`; plain caption if the effect fails);
-- confetti on the agent's reply confirming a newly claimed event seat or finishing onboarding
-  (at most one effect per turn);
+  its caption sent as a plain bubble first;
+- confetti when the agent's `celebrate` tool asks for it (a seat they just got, finishing
+  signup, an intro that went through): it rides on that turn's text, at most one per turn;
 - a joinmixr.club link preview after the HELP text;
 - tapbacks: the agent's `react` tool (❤️ 👍 😂 ‼️) tapbacks the text it is answering,
   alone instead of a filler reply, or before a short reply when the text has an emotional

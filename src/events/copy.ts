@@ -33,9 +33,6 @@ export const hostThinPool = (going: number): string =>
 export const guestAccepted = (e: EventCopy, host: string): string =>
   `you're in for ${e.title}! ${e.when} at ${e.location}. ${host} is hosting`;
 
-// A fresh "you're in" (not "already in"): the agent's confirmation of it goes out with confetti.
-export const isFreshAccept = (detail: string): boolean => detail.startsWith("you're in for ");
-
 export const guestAlreadyIn = (e: EventCopy): string => `you're already in for ${e.title} — ${e.when} at ${e.location}`;
 
 export const guestWaitlisted = (title: string): string => `${title} just filled up, i'll keep you in mind if a spot opens`;

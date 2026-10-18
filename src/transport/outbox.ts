@@ -12,7 +12,7 @@ const RETRY_WINDOW_H = 24; // tune: older failures are left alone (stale context
 
 // Native iMessage extras for one outbound job. `text` is always stored too: it's the log line and the plain
 // fallback the deliverer sends if Photon rejects (or doesn't support) the rich form. `caption`, when set, goes out
-// as a plain bubble right before the rich part (with confetti when `captionEffect` is set).
+// as a plain bubble right before the rich part.
 export const TAPBACKS = ['❤️', '👍', '😂', '‼️'] as const;
 export type Tapback = (typeof TAPBACKS)[number];
 export type RichContent = (
@@ -23,7 +23,7 @@ export type RichContent = (
   | { kind: 'poll'; title: string; options: string[] }
   | { kind: 'richlink'; url: string } // link preview
   | { kind: 'share_contact' } // Apple's Share Name and Photo; best effort, no text fallback
-) & { caption?: string; captionEffect?: 'confetti' };
+) & { caption?: string };
 
 type Deliverer = (phone: string, text: string, content: RichContent | null) => Promise<void>;
 let deliverer: Deliverer | null = null;
