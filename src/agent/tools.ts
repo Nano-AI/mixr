@@ -3,6 +3,7 @@ import { now } from '../clock.ts';
 import { buildProfile, editProfile } from '../profiles/index.ts';
 import { runDue } from '../jobs/index.ts';
 import { createEvent, discoverEvents, joinEvent, manageEvent, respondToInvite, type ManageAction } from '../events/index.ts';
+import { calendarLink } from '../events/copy.ts';
 import { findPeople } from '../matching/index.ts';
 import { groundedNote, IntroLimitError, pendingIntrosFor, requestIntro, respondToIntro } from '../relay/index.ts';
 import { addRequirement, blockedEitherWay, blockPerson, removeRequirement, RequirementError, unblockPerson, validate } from '../requirements/index.ts';
@@ -203,6 +204,7 @@ export const TOOLS: ToolDef[] = [
         capacity: e.capacity,
         status: e.status,
         invited_now: invitedNow,
+        calendar_link: calendarLink(e),
         first_round:
           invitedNow === 0
             ? 'nobody on mixr fits yet; mixr keeps an eye out as people join. offer to loosen it (e.g. open up the level or vibe) if that makes sense'
@@ -284,6 +286,7 @@ export const TOOLS: ToolDef[] = [
           location: e.location,
           about: scrubPii(e.description, 160),
           url: e.url,
+          calendar_link: calendarLink(e),
         })),
       };
     },

@@ -33,6 +33,7 @@ const eventCopy = async (ev: EventFull): Promise<copy.EventCopy> => ({
   title: ev.title,
   when: copy.fmtWhen(ev.startsAt, await now()),
   location: ev.location,
+  cal: copy.calendarLink(ev),
 });
 
 // HyDE → E0 = Et → save → schedule wave 1 now (+ close_event at startsAt).

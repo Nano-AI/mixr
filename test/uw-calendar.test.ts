@@ -181,3 +181,14 @@ test('campus events: a newer snapshot replaces the cached one', async () => {
   writeFileSync(join(dir, '2026-10-02.json'), JSON.stringify([uwEvent('n1', 'Chess Club Social', 5)]));
   expect((await runIn(real, () => campusEvents(undefined, dir))).map((e) => e.uid)).toEqual(['n1']);
 });
+
+test('calendarLink prefills a Google Calendar event: 2h default, all-day uses dates, end exclusive', async () => {
+  const { calendarLink } = await import('../src/events/copy.ts');
+  const u = new URL(calendarLink({ title: 'catan night', startsAt: '2026-10-23T02:00:00.000Z', location: 'HUB 145' }));
+  expect(u.host).toBe('calendar.google.com');
+  expect(u.searchParams.get('dates')).toBe('20261023T020000Z/20261023T040000Z');
+  expect(u.searchParams.get('text')).toBe('catan night');
+  expect(u.searchParams.get('location')).toBe('HUB 145');
+  const d = new URL(calendarLink({ title: 'deadline', startsAt: '2026-10-23T07:00:00.000Z', location: '', allDay: true }));
+  expect(d.searchParams.get('dates')).toBe('20261023/20261024');
+});

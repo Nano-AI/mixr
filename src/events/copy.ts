@@ -16,7 +16,20 @@ export const firstName = (name: string | null | undefined): string => (name ?? '
 
 const spots = (n: number) => `${n} spot${n === 1 ? '' : 's'}`;
 
-export type EventCopy = { title: string; when: string; location: string };
+export type EventCopy = { title: string; when: string; location: string; cal?: string };
+
+// Google Calendar "add event" link: a prefilled event, no sign-in on our side. Opens the Calendar app or the web.
+// ponytail: mixr events have no end time, so they get a 2h block; store an end time if hosts start giving one.
+const DEFAULT_HOURS = 2;
+const gcalStamp = (d: Date) => d.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
+export function calendarLink(e: { title: string; startsAt: Date | string; endsAt?: Date | string | null; location: string; allDay?: boolean }): string {
+  const start = new Date(e.startsAt);
+  const end = e.endsAt ? new Date(e.endsAt) : new Date(start.getTime() + (e.allDay ? 24 : DEFAULT_HOURS) * 3600_000);
+  // All-day events use dates only, end exclusive (Google's format).
+  const dates = e.allDay ? `${gcalStamp(start).slice(0, 8)}/${gcalStamp(end).slice(0, 8)}` : `${gcalStamp(start)}/${gcalStamp(end)}`;
+  const q = new URLSearchParams({ action: 'TEMPLATE', text: e.title, dates, location: e.location });
+  return `https://calendar.google.com/calendar/render?${q}`;
+}
 
 export const inviteText = (pitch: string, e: EventCopy, spotsLeft: number): string =>
   `${pitch.trim()} ${e.title} — ${e.when} at ${e.location}. ${spots(spotsLeft)} left, you down?`.replace(/\s+/g, ' ');
@@ -31,7 +44,7 @@ export const hostThinPool = (going: number): string =>
   `found ${going} so far — the pool for this is pretty thin right now, i'll keep an eye out`;
 
 export const guestAccepted = (e: EventCopy, host: string): string =>
-  `you're in for ${e.title}! ${e.when} at ${e.location}. ${host} is hosting`;
+  `you're in for ${e.title}! ${e.when} at ${e.location}. ${host} is hosting${e.cal ? `. add it to your calendar: ${e.cal}` : ''}`;
 
 export const guestAlreadyIn = (e: EventCopy): string => `you're already in for ${e.title} — ${e.when} at ${e.location}`;
 
