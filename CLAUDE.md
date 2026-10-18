@@ -11,4 +11,6 @@ This applies to code, tests, fixtures, eval data, prompt examples, docs, commit 
 - **No card numbers, keys or tokens.** `.env*` stays out of git.
 - **Real chats are inspiration only.** When a bug shows up in a real conversation, rewrite the repro with invented names and wording before it goes into a test or eval case.
 
+**One exception: the team section of the About page** (`landing/about.html`). Team members are credited there by name, with a role and only the profile links they gave us (LinkedIn, personal site). Nothing scraped from those profiles, no emails or phone numbers, and nowhere else in the repo.
+
 Before every commit, grep the diff for names you've seen in chat or screenshots, phone numbers outside 555, and emails outside example.com. Subagents must be told this rule in their prompt.
