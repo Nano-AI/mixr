@@ -7,7 +7,7 @@ import type { RichContent } from '../transport/outbox.ts';
 import { handleInbound } from '../agent/index.ts';
 import { openInvitesFor, respondToInvite } from '../events/index.ts';
 import type { User } from '../types.ts';
-import { CODE_PLACEHOLDER, CONSENT, keyword, onboard, stepPrompt } from './onboarding.ts';
+import { CODE_PLACEHOLDER, CONSENT, WELCOME, keyword, onboard, stepPrompt } from './onboarding.ts';
 
 // The single entry for every inbound text: iMessage (Photon) and the dashboard.
 //   1. validate; for iMessage, persist the provider id first (duplicates are processed once)
@@ -102,7 +102,8 @@ async function realTurn(user: User, text: string, via: Via, providerId?: string)
   const command = isStop(word) || word === 'HELP' || (user.optedOut && word === 'START');
   // Recorded exactly once, here (the agent is told it already is). Verification codes never reach the log.
   const redact = user.step === 'verify' && !command && word !== 'EMAIL';
-  await recordInbound(user.id, redact ? CODE_PLACEHOLDER : text, via);
+  const inboundId = await recordInbound(user.id, redact ? CODE_PLACEHOLDER : text, via);
+  await dropStaleWelcome(user.id, inboundId);
 
   const reply = (body: string, content?: RichContent) => send(user.id, body, { ...(providerId ? { dedupeKey: `reply:${providerId}` } : {}), content });
   if (isStop(word)) {
@@ -125,6 +126,16 @@ async function realTurn(user: User, text: string, via: Via, providerId?: string)
     return false;
   }
   return true;
+}
+
+// A welcome still waiting to go out (on Photon's shared line mixr can't text someone first, so it's refused until they
+// do) would land out of context once they've texted: it's dropped, and this conversation onboards them instead.
+async function dropStaleWelcome(userId: number, inboundId: number): Promise<void> {
+  await q(
+    `UPDATE message_jobs SET status = 'suppressed', error = 'suppressed: they texted in before the welcome went out'
+     WHERE user_id = $1 AND status = 'pending' AND message_id < $2 AND right(text, length($3::text)) = $3::text`,
+    [userId, inboundId, WELCOME],
+  );
 }
 
 // Per-person flood guard: past RATE_LIMIT texts in an hour, mixr says so once and then stays quiet until the

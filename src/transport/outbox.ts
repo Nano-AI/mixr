@@ -31,16 +31,22 @@ let deliverer: Deliverer | null = null;
 // The Photon adapter registers itself once connected. Without one, jobs wait as 'pending' for the retry loop.
 export const setDeliverer = (fn: Deliverer | null): void => void (deliverer = fn);
 
+// Whether a text to this user, sent now, is queued for delivery rather than only logged: Photon, the real pool, a
+// delivering context, not the person the dashboard is acting as, and a real user who hasn't opted out.
+export async function deliversTo(userId: number, opts: { evenIfOptedOut?: boolean } = {}): Promise<boolean> {
+  const ctx = context();
+  if (config.transport !== 'photon' || ctx.pool !== 'real' || !ctx.deliver || ctx.quietUser === userId) return false;
+  const u = await one<{ seeded: boolean; opted_out: boolean }>('SELECT seeded, opted_out FROM users WHERE id = $1', [userId]);
+  return !!u && !u.seeded && (!u.opted_out || !!opts.evenIfOptedOut);
+}
+
 export async function queueDelivery(
   userId: number,
   messageId: number | null,
   text: string,
   opts: { dedupeKey?: string; evenIfOptedOut?: boolean; content?: RichContent },
 ): Promise<void> {
-  const ctx = context();
-  if (config.transport !== 'photon' || ctx.pool !== 'real' || !ctx.deliver || ctx.quietUser === userId) return;
-  const u = await one<{ phone: string; seeded: boolean; opted_out: boolean }>('SELECT phone, seeded, opted_out FROM users WHERE id = $1', [userId]);
-  if (!u || u.seeded || (u.opted_out && !opts.evenIfOptedOut)) return;
+  if (!(await deliversTo(userId, opts))) return;
   const job = await one<{ id: number }>(
     `INSERT INTO message_jobs (user_id, message_id, dedupe_key, text, even_if_opted_out, content, created_at)
      VALUES ($1, $2, $3, $4, $5, $6, now()) ON CONFLICT (dedupe_key) DO NOTHING RETURNING id`,

@@ -24,6 +24,9 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS joined_via TEXT;          -- 'web' | 
 -- The service their texts arrive on (Photon's sender.service on the last inbound); NULL = unknown. Picks what
 -- rich content deliver() sends (src/messaging/photon.ts).
 ALTER TABLE users ADD COLUMN IF NOT EXISTS service TEXT CHECK (service IN ('imessage', 'rcs', 'sms'));
+-- An operator's one-time note (POST /api/admin/note): leads the next text that's actually delivered to them, then
+-- cleared. NULL = none. src/transport/index.ts send().
+ALTER TABLE users ADD COLUMN IF NOT EXISTS pending_note TEXT;
 -- One verified UW email per person (the onboarding code claims it atomically; this is the backstop).
 CREATE UNIQUE INDEX IF NOT EXISTS users_verified_email ON users(lower(email)) WHERE email_verified;
 
