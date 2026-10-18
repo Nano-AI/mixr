@@ -1,4 +1,4 @@
-import type { PersonMatch, RecallHit, RerankPick } from '../types.ts';
+import type { PersonFit, PersonMatch, RecallHit, RerankPick } from '../types.ts';
 import { getUser, q, toVec } from '../db/index.ts';
 import { now } from '../clock.ts';
 import { currentPool } from '../context.ts';
@@ -106,6 +106,8 @@ function fallbackPick(purpose: RerankReq['purpose'], c: RecallHit): RerankPick {
 // May return fewer than k (drops poor fits). Fallback without LLM: top-k by similarity, template pitch.
 // rules: text requirements. The LLM returns a verdict per pick and lists who fails; code enforces 'must' (only
 // 'pass' survives), orders by 'prefer' passes, and records verdicts under `context` so later rounds skip the fails.
+// People searches: the LLM also grades each pick's fit to the ask (strong/partial) and counts the requester's interests
+// they share; code orders by those, so an adjacent-field hunch can't outrank someone who does the thing or shares more.
 export type RerankReq = {
   purpose: 'event' | 'people';
   target: string;
@@ -116,7 +118,14 @@ export type RerankReq = {
   context?: string;
 };
 
-type LlmPick = { user_id: number; reason: string; pitch?: string; checks: { requirement_id: number; verdict: Verdict; note: string }[] };
+type LlmPick = {
+  user_id: number;
+  reason: string;
+  pitch?: string;
+  fit?: PersonFit;
+  shared?: number;
+  checks: { requirement_id: number; verdict: Verdict; note: string }[];
+};
 type LlmOut = { picks: LlmPick[]; screened_out: { user_id: number; requirement_id: number; note: string }[] };
 
 export async function rerank(req: RerankReq): Promise<RerankPick[]> {
@@ -149,7 +158,7 @@ export async function rerank(req: RerankReq): Promise<RerankPick[]> {
         if (byId.has(id) && ruleIds.has(Number(s.requirement_id))) screened.push({ userId: id, requirementId: Number(s.requirement_id), verdict: 'fail', reason: s.note });
       }
       const seen = new Set<number>();
-      const scored: { pick: RerankPick; preferPasses: number }[] = [];
+      const scored: { pick: RerankPick; preferPasses: number; partial: number; shared: number }[] = [];
       for (const p of r?.picks ?? []) {
         const id = Number(p.user_id);
         if (!byId.has(id) || seen.has(id)) continue;
@@ -159,20 +168,27 @@ export async function rerank(req: RerankReq): Promise<RerankPick[]> {
         // Enforced here, not by the model's discretion: every 'must' rule needs an explicit pass.
         if (must.some((m) => verdict.get(m.id) !== 'pass')) continue;
         const fb = fallbackPick(req.purpose, byId.get(id)!);
+        const fit = req.purpose === 'people' && (p.fit === 'strong' || p.fit === 'partial') ? p.fit : undefined;
+        const shared = req.purpose === 'people' && Number.isFinite(Number(p.shared)) ? Math.max(0, Math.floor(Number(p.shared))) : undefined;
         scored.push({
           pick: {
             userId: id,
             reason: p.reason?.trim() || fb.reason,
             pitch: p.pitch?.trim() || fb.pitch,
             ...(rules.length ? { checks: rules.map((rule) => ({ requirementId: rule.id, verdict: verdict.get(rule.id) ?? 'unknown' })) } : {}),
+            ...(fit ? { fit } : {}),
+            ...(shared !== undefined ? { shared } : {}),
           },
           preferPasses: prefer.filter((x) => verdict.get(x.id) === 'pass').length,
+          partial: fit === 'partial' ? 1 : 0,
+          shared: shared ?? 0,
         });
       }
-      // Stable: the model's order, then more 'prefer' passes first.
+      // Stable: strong fits before partial ones, then more 'prefer' passes, then more shared interests, then the
+      // model's order. (Events have no fit/shared, so for them it's prefer passes, then the model's order.)
       picks = scored
         .map((s, i) => ({ ...s, i }))
-        .sort((a, b) => b.preferPasses - a.preferPasses || a.i - b.i)
+        .sort((a, b) => a.partial - b.partial || b.preferPasses - a.preferPasses || b.shared - a.shared || a.i - b.i)
         .slice(0, k)
         .map((s) => s.pick);
     } catch {
@@ -199,7 +215,7 @@ export async function rerank(req: RerankReq): Promise<RerankPick[]> {
     rules: rules.map((x) => ({ id: x.id, strength: x.strength, criterion: x.criterion })),
     screenedOut: screened.filter((x) => x.verdict === 'fail').map((x) => ({ userId: x.userId, name: byId.get(x.userId)?.name ?? '', requirementId: x.requirementId, note: x.reason ?? null })),
     unverifiable: !usedLlm && must.length > 0,
-    picks: picks.map((p) => ({ userId: p.userId, name: byId.get(p.userId)?.name ?? '', reason: p.reason, pitch: p.pitch, checks: p.checks })),
+    picks: picks.map((p) => ({ userId: p.userId, name: byId.get(p.userId)?.name ?? '', reason: p.reason, pitch: p.pitch, checks: p.checks, fit: p.fit, shared: p.shared })),
   });
   return picks;
 }
@@ -228,5 +244,5 @@ export async function findPeople(userId: number, request?: string, k?: number): 
   const rules = await standingTextRules(userId);
   const picks = await rerank({ purpose: 'people', target, candidates, k: k ?? PEOPLE_K, refId: userId, rules, context: `people:${userId}` });
   const names = new Map(candidates.map((c) => [c.userId, c.name]));
-  return picks.map((p) => ({ userId: p.userId, name: firstName(names.get(p.userId)), reason: p.reason }));
+  return picks.map((p) => ({ userId: p.userId, name: firstName(names.get(p.userId)), reason: p.reason, ...(p.fit ? { fit: p.fit } : {}) }));
 }

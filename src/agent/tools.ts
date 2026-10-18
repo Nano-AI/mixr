@@ -14,6 +14,11 @@ import { laHuman } from './time.ts';
 import { send } from '../transport/index.ts';
 import { TAPBACKS, type Tapback } from '../transport/outbox.ts';
 
+// How to present people-search results (see prompt: Meeting people). Production: the model dropped the top match and
+// told the student the second one was "into organic chem" when his reason said nothing of the kind.
+export const PRESENT_HINT =
+  'name them in this order (best first), up to 3, each with only what its reason says. if every match has fit partial, first say nobody does exactly that yet, then present them as the closest options';
+
 // What the agent should offer next to people-search results for an activity (see prompt: Meeting people).
 export const HOST_OFFER_HINT =
   'offer both options in one short question: connect with a match, or host a <activity> event (use the words "host" and "event"), e.g. "want me to ask ethan, or host a tennis event for you?"';
@@ -285,14 +290,16 @@ export const TOOLS: ToolDef[] = [
   {
     name: 'find_people',
     description:
-      'Search for people the user might want to meet, optionally for something specific ("someone to hit with at 4.5", "jazz people", "people who play pickup soccer"). Returns up to 3 matches with first names and why. Also use it to check whether anyone is into an activity before suggesting they host it.',
+      'Search for people the user might want to meet, optionally for something specific ("someone to hit with at 4.5", "jazz people", "people who play pickup soccer"). Returns up to 3 matches, best first, with first names, why, and fit (strong = does what they asked; partial = close but not exactly it). Also use it to check whether anyone is into an activity before suggesting they host it.',
     parameters: obj({ request: nstr('What kind of person they want to meet, or null for general matches from their profile.') }),
     run: async (ctx, a) => {
       const u = await activeMe(ctx);
       const request = typeof a.request === 'string' && a.request.trim() ? a.request.trim() : undefined;
       const matches = await findPeople(u.id, request, 3);
       return {
-        matches: matches.map((m) => ({ user_id: m.userId, name: firstName(m.name), reason: m.reason })),
+        // Best first. fit tells the agent whether to present a match as the real thing or as the closest option.
+        matches: matches.map((m) => ({ user_id: m.userId, name: firstName(m.name), reason: m.reason, ...(m.fit ? { fit: m.fit } : {}) })),
+        ...(matches.length ? { present: PRESENT_HINT } : {}),
         // Searching for an activity is the moment to introduce hosting, so say it in plain words.
         ...(request ? { also_offer: HOST_OFFER_HINT } : {}),
       };

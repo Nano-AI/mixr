@@ -45,12 +45,23 @@ export function weightedRrf(rankings: [ids: number[], weight: number][]): number
   return [...score.keys()].sort((a, b) => score.get(b)! - score.get(a)!);
 }
 
+// Words that frame an ask ("study partners", "a group for", "people who", "someone casual") rather than name an
+// interest. Rarity can't tell them apart in a small pool: with 5 candidates any word in one profile is "rare", and in
+// the real pool "group" (from "group outings with friends") lifted the least similar person to #2 for a chem study
+// group ask. They never earn a lexical boost; the vector side still reads them.
+export const ASK_WORDS = new Set(
+  ('looking find meet people person someone somebody anyone anybody others folks friend friends partner partners buddy buddies ' +
+    'group groups study studying together any other interests interest match casual casually fun chill social new weekend weekends')
+    .split(' '),
+);
+
 // Query terms rare enough in this candidate set to be worth a lexical boost: a course code, a club, a rating.
-// Common words in a chatty ask ("new", "weekends", "casually") stay with the vector side.
+// Common words in a chatty ask ("new", "weekends", "casually") stay with the vector side, as do ASK_WORDS.
 export function rareTerms(query: string, docs: string[], maxShare = RARE_SHARE): Set<string> {
   const toks = docs.map((d) => new Set(tokenize(d)));
   const cap = Math.max(1, Math.floor(docs.length * maxShare));
   return new Set([...new Set(tokenize(query))].filter((w) => {
+    if (ASK_WORDS.has(w)) return false;
     const n = toks.filter((t) => t.has(w)).length;
     return n > 0 && n <= cap;
   }));
