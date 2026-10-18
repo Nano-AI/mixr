@@ -337,6 +337,7 @@ test('email delivery failure fails closed: no code stored, not verified', async 
 
 test('HELP answers without the agent and without moving onboarding', async () => {
   noAgent();
+  capture();
   for (const t of ['hi', 'yes']) await say(t);
   await say('help');
   expect(await lastOut()).toBe(HELP_TEXT);
@@ -346,6 +347,9 @@ test('HELP answers without the agent and without moving onboarding', async () =>
   await realUser('+12065551111', { name: 'Kai', step: null, verified: true });
   await say('HELP', undefined, '+12065551111');
   expect(await lastOut('+12065551111')).toBe(HELP_TEXT);
+  // Delivered with a joinmixr.club link preview after the text (plain HELP_TEXT is the fallback).
+  const [job] = await q<{ text: string; content: unknown }>(`SELECT text, content FROM message_jobs ORDER BY id DESC LIMIT 1`);
+  expect(job).toEqual({ text: HELP_TEXT, content: { kind: 'richlink', url: 'https://www.joinmixr.club', caption: HELP_TEXT } });
 });
 
 test('STOP: opted out, acknowledged (delivered), seats released, pending invites declined, queued texts suppressed', async () => {
