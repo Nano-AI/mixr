@@ -105,6 +105,18 @@ a { color: inherit; }
 .dots button[aria-current]::before { opacity: 1; scale: 1.25; }
 .dots button:focus-visible { outline: 2px solid currentColor; outline-offset: -2px; border-radius: 50%; }
 
+/* swipe cue on the hero: bobs until the first move, tap to advance */
+.more {
+  position: fixed; z-index: 5; left: 50%; bottom: calc(52px + env(safe-area-inset-bottom)); translate: -50% 0;
+  width: 44px; height: 44px; border: 0; padding: 0; background: none; color: var(--fg); cursor: pointer;
+  display: grid; place-items: center; opacity: .7; transition: opacity .4s;
+  mix-blend-mode: difference; /* like .origin: stays readable over the pale phone back */
+  animation: bob 2.2s ease-in-out infinite;
+}
+.more:focus-visible { outline: 2px solid currentColor; border-radius: 50%; }
+.moved .more { opacity: 0; pointer-events: none; }
+@keyframes bob { 50% { transform: translateY(6px); } }
+
 /* tooltip pointing at the message field once the keypad is up; --hint-y is set from the field's position */
 .hint {
   position: absolute; z-index: 2; top: var(--hint-y, 60%); right: calc(100% - var(--hint-x, 30%) + 18px);
@@ -369,12 +381,12 @@ a { color: inherit; }
 .send:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; border-radius: 50%; }
 
 /* the "type here" moment */
-.compose.ready .field { animation: invite 2.4s ease-in-out 2; }
+.compose.ready .field { animation: invite 2.4s ease-in-out infinite; }
 /* joined: the thread is done, nothing more to type */
 .compose.done { pointer-events: none; opacity: .5; }
-@keyframes invite { 50% { box-shadow: 0 0 0 4px rgba(10,124,255,.12); } }
+@keyframes invite { 50% { border-color: var(--blue); box-shadow: 0 0 0 4px rgba(10,124,255,.18); } }
 
 @media (prefers-reduced-motion: reduce) {
-  .dots { display: none; }
+  .dots, .more { display: none; }
   .typing i, .compose.ready .field { animation: none; }
 }
