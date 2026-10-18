@@ -4,11 +4,12 @@ import { startGlow } from './glow.js';
 // sign-up server: api.joinmixr.club on joinmixr.club, a local one anywhere else.
 // Overrides for testing: window.MIXR_API (set before this script), or ?api=https://… on any host but
 // joinmixr.club (there, a shared link could send people's numbers elsewhere).
-// ?mock=ok|welcome|full|error|offline skips the network and answers with a canned response.
+// ?mock=ok|welcome|full|error|offline skips the network and answers with a canned response. Off joinmixr.club the
+// default is ?mock=ok (a demo works with no backend); pass ?api=… or set MIXR_API to use a real one.
 const query = new URLSearchParams(location.search);
 const PROD = /(^|\.)joinmixr\.club$/.test(location.hostname);
 const API = (window.MIXR_API || (!PROD && query.get('api')) || (PROD ? 'https://api.joinmixr.club' : 'http://localhost:8787')).replace(/\/+$/, '');
-const MOCK = query.get('mock');
+const MOCK = query.get('mock') ?? (PROD || window.MIXR_API || query.get('api') ? null : 'ok');
 const SMS = document.body.dataset.sms; // set data-sms="+1..." on <body> to offer a text-us fallback
 
 const $ = (s) => document.querySelector(s);
