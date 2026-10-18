@@ -458,10 +458,10 @@ Project link: [https://github.com/Nano-AI/mixr](https://github.com/Nano-AI/mixr)
 [stars-url]: https://github.com/Nano-AI/mixr/stargazers
 [issues-shield]: https://img.shields.io/github/issues/Nano-AI/mixr.svg?style=for-the-badge
 [issues-url]: https://github.com/Nano-AI/mixr/issues
-[product-cover]: docs/images/01-cover.png
-[how-it-works]: docs/images/02-how-it-works.png
-[under-the-hood]: docs/images/03-under-the-hood.png
-[product-screenshot]: docs/images/04-landing.png
+[product-cover]: docs/images/01-cover.jpg
+[how-it-works]: docs/images/02-how-it-works.jpg
+[under-the-hood]: docs/images/03-under-the-hood.jpg
+[product-screenshot]: docs/images/04-landing.jpg
 [TypeScript]: https://img.shields.io/badge/TypeScript-3178C6?style=for-the-badge&logo=typescript&logoColor=white
 [TypeScript-url]: https://www.typescriptlang.org
 [Node.js]: https://img.shields.io/badge/Node.js-5FA04E?style=for-the-badge&logo=nodedotjs&logoColor=white
