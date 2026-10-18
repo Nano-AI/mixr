@@ -1,6 +1,7 @@
 import { test, expect, describe } from 'vitest';
 import { fresh, makeUser, axis, T0 } from './helpers.ts';
 import { recall, rerank, findPeople, topInterest } from '../src/matching/index.ts';
+import { bm25, rrf, tokenize } from '../src/matching/bm25.ts';
 import { getOrCreateUser, q } from '../src/db/index.ts';
 import { normalize, add } from '../src/vec.ts';
 import { requestIntro } from '../src/relay/index.ts';
@@ -52,6 +53,76 @@ describe('recall', () => {
     expect(t.data.label).toBe('test');
     expect(t.data.hits[0].similarity).toBe(0.577);
     expect(JSON.stringify(t.data).length).toBeLessThan(500);
+  });
+});
+
+describe('hybrid recall (BM25 + RRF)', () => {
+  test('tokenize keeps course numbers, decimals and short codes; drops stopwords and trailing dots', () => {
+    expect(tokenize('Looking for a CSE 332 partner, 4.0 GPA. Tennis.')).toEqual(['looking', 'cse', '332', 'partner', '4.0', 'gpa', 'tennis']);
+  });
+
+  test('bm25: the exact "332" beats a semantically similar profile without it', () => {
+    const [exact, similar, other] = bm25('CSE 332 study group', [
+      'Core Interests:\n[1] Data structures, taking 332 this quarter.',
+      'Core Interests:\n[1] Data structures and algorithms, competitive programming.',
+      'Core Interests:\n[1] Tennis.',
+    ]);
+    expect(exact).toBeGreaterThan(similar);
+    expect(similar).toBe(0);
+    expect(other).toBe(0);
+  });
+
+  test('bm25: rare terms weigh more than common ones (IDF); empty inputs are safe', () => {
+    const docs = ['tennis 332', 'tennis chess', 'tennis jazz', 'tennis climbing'];
+    const s = bm25('tennis 332', docs);
+    expect(s[0]).toBeGreaterThan(s[1]);
+    expect(s[1]).toBeGreaterThan(0); // common term still counts, just less
+    expect(bm25('chess', docs)[1]).toBeGreaterThan(bm25('tennis', docs)[1]);
+    expect(bm25('', docs)).toEqual([0, 0, 0, 0]);
+    expect(bm25('x', [])).toEqual([]);
+  });
+
+  test('rrf: sums 1/(60+rank); ids missing from a ranking get no term; ties keep first ranking order', () => {
+    // vector: 1,2,3,4; lexical: only 4. 4 -> 1/64 + 1/61 beats 1 -> 1/61.
+    expect(rrf([1, 2, 3, 4], [4])).toEqual([4, 1, 2, 3]);
+    expect(rrf([1, 2], [2, 1])).toEqual([1, 2]);
+    expect(rrf([1, 2, 3])).toEqual([1, 2, 3]);
+  });
+
+  test('an exact-term profile with lower cosine still makes the top `limit`; similarity stays the real cosine', async () => {
+    await fresh();
+    const a = await makeUser('A', 'Core Interests:\n[1] Data structures and algorithms.', axis(0));
+    await makeUser('B', 'Core Interests:\n[1] Competitive programming.', mix(axis(0), axis(3)));
+    await makeUser('C', 'Core Interests:\n[1] Systems programming.', mix(axis(0), axis(4)));
+    const x = await makeUser('X', 'Core Interests:\n[1] Taking CSE 332 this quarter.', axis(1));
+
+    expect((await recall(axis(0), { limit: 2 })).map((h) => h.userId)).not.toContain(x);
+    const hits = await recall(axis(0), { limit: 2, text: 'cse 332 study buddy', refId: 9, label: 'people: cse 332' });
+    expect(hits.map((h) => h.userId)).toEqual([x, a]);
+    expect(hits[0].similarity).toBeCloseTo(0, 5);
+    expect(hits[1].similarity).toBeCloseTo(1, 5);
+    const [t] = await q<{ data: any }>(`SELECT data FROM traces WHERE kind = 'recall' AND ref_id = 9`);
+    expect(t.data.lexical).toBe('X (cse, 332)');
+    expect(t.data.limit).toBe(2);
+  });
+
+  test("a 'rather not' person gets no lexical boost", async () => {
+    await fresh();
+    await makeUser('A', 'a', axis(0));
+    const x = await makeUser('X', 'cse 332', axis(1));
+    const hits = await recall(axis(0), { limit: 1, text: '332', filter: { excludeIds: [], avoidIds: [x] } });
+    expect(hits.map((h) => h.userId)).not.toContain(x);
+  });
+
+  test('without text: same rows and trace as plain vector recall', async () => {
+    await fresh();
+    await makeUser('A', 'cse 332', axis(1));
+    await makeUser('B', 'b', axis(0));
+    const plain = await recall(axis(0), { limit: 1 });
+    const blank = await recall(axis(0), { limit: 1, text: '  ' });
+    expect(blank).toEqual(plain);
+    const ts = await q<{ data: any }>(`SELECT data FROM traces WHERE kind = 'recall'`);
+    expect(ts.every((t) => !('lexical' in t.data))).toBe(true);
   });
 });
 
@@ -173,5 +244,7 @@ describe('findPeople', () => {
     expect(res).toEqual([{ userId: baker, name: 'Bea', reason: 'you both love sourdough' }]);
     expect(input).toContain('PURPOSE: people');
     expect(input).toContain('Looking for: sourdough baking bread');
+    const [t] = await q<{ data: any }>(`SELECT data FROM traces WHERE kind = 'recall'`);
+    expect(t.data.lexical).toBe('Bea (sourdough, baking, bread)'); // the ask feeds BM25
   });
 });
