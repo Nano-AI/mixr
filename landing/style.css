@@ -315,6 +315,20 @@ a { color: inherit; }
 
 .b a { color: inherit; }
 
+/* joined: mixr hands you your own line, a number to save and a button that opens Messages */
+.b.line { max-width: 82%; display: flex; flex-direction: column; align-items: flex-start; gap: 9px; padding: 11px 14px 12px; }
+.line-num {
+  font: 600 28px/1.1 var(--sf); letter-spacing: -.02em; font-variant-numeric: tabular-nums;
+  white-space: nowrap; -webkit-user-select: all; user-select: all; cursor: text;
+}
+.line .line-cta {
+  align-self: stretch; padding: 11px 16px; border-radius: 999px;
+  background: var(--blue); color: #fff; text-align: center; text-decoration: none;
+  font: 600 17px/1 var(--sf); letter-spacing: -.2px;
+}
+.line .line-cta:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+.line-note { font-size: 13px; line-height: 17px; letter-spacing: -.08px; color: #6e6e73; }
+
 .compose { flex: none; display: flex; align-items: flex-end; gap: 9px; padding: 8px 12px 30px; background: #fff; }
 .chat.kb .compose { padding-bottom: 8px; }
 
