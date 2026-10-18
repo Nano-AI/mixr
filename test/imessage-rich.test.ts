@@ -1,5 +1,5 @@
 import { test, expect, afterEach, vi } from 'vitest';
-import { fresh } from './helpers.ts';
+import { axis, fresh } from './helpers.ts';
 import { q, toVec } from '../src/db/index.ts';
 import { poolContext, runIn } from '../src/context.ts';
 import { config } from '../src/config.ts';
@@ -8,6 +8,7 @@ import { retryPending, setDeliverer, type RichContent } from '../src/transport/o
 import { deliver, type Sdk, type SpaceLike } from '../src/messaging/photon.ts';
 import { fakeEmbed } from '../src/llm/embed.ts';
 import { requestIntro, respondToIntro } from '../src/relay/index.ts';
+import { confetti, handleInbound } from '../src/agent/index.ts';
 
 // Native iMessage extras: rich content rides on outbound jobs, the Photon deliverer builds the SDK object and
 // falls back to the plain text. Photon is never called: a capturing deliverer, or deliver() with a fake space.
@@ -141,6 +142,36 @@ test('deliver: plain text, rich content, and the text fallback when Photon rejec
   s = fakeSpace({ reject: ['text'] });
   await expect(deliver(s.space, 'x', { kind: 'effect', effect: 'confetti' }, fakeSdk(['effect']))).rejects.toThrow(/refused/);
   warn.mockRestore();
+});
+
+test('confetti only on the reply confirming a seat they just got', async () => {
+  const fake = await fresh();
+  const sent = capture();
+  const host = await realUser('Hana Host');
+  const guest = await realUser('Gus Guest');
+  const v = toVec(axis(0));
+  const [ev] = await q<{ id: number }>(
+    `INSERT INTO events (host_id, title, raw_description, starts_at, location, capacity, hyde_profile, initial_embedding, current_embedding, wave_number, created_at)
+     VALUES ($1, 'catan night', 'd', $2, 'the hub', 3, 'h', $3, $3, 1, now()) RETURNING id`,
+    [host.id, new Date(Date.now() + 48 * 3600_000).toISOString(), v],
+  );
+  await q(`INSERT INTO event_invites (event_id, user_id, wave, pitch, invited_at) VALUES ($1, $2, 1, 'p', now())`, [ev.id, guest.id]);
+  let n = 0;
+  fake.agentHandler = () =>
+    ++n % 2 === 1
+      ? { text: '', calls: [{ call_id: `c${n}`, name: 'respond_to_invite', arguments: JSON.stringify({ event_id: ev.id, response: 'yes' }) }] }
+      : { text: "you're in! catan night at the hub", calls: [] };
+  await handleInbound(guest.phone, 'yes!', 'phone');
+  expect(sent.find((s) => s.phone === guest.phone)).toEqual({
+    phone: guest.phone,
+    text: "you're in! catan night at the hub",
+    content: { kind: 'effect', effect: 'confetti' },
+  });
+  expect(sent.find((s) => s.phone === host.phone)?.content).toBeNull(); // the host's update stays plain
+  // Saying yes again ("already in") is not a new confirmation.
+  await handleInbound(guest.phone, 'yes', 'phone');
+  expect(sent.filter((s) => s.phone === guest.phone).map((s) => s.content)).toEqual([{ kind: 'effect', effect: 'confetti' }, null]);
+  expect(confetti([{ name: 'respond_to_invite', args: {}, result: { outcome: 'waitlisted', detail: 'catan night just filled up' } }])).toBe(false);
 });
 
 test("accepted intro: each side gets the other's contact card (first + last name, phone), the numbered text as fallback", async () => {

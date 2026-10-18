@@ -5,6 +5,7 @@ import { recordInbound, send } from '../transport/index.ts';
 import { runDue } from '../jobs/index.ts';
 import { llm, LlmBudgetError, type AgentInputItem } from '../llm/index.ts';
 import { trace } from '../trace.ts';
+import { isFreshAccept } from '../events/copy.ts';
 import { buildInput } from './context.ts';
 import { INSTRUCTIONS } from './prompt.ts';
 import { agentTools, runTool } from './tools.ts';
@@ -30,6 +31,10 @@ export function withHostOffer(reply: string, calls: ToolCallLog[]): string {
   if (!reply || !searched || /\bhost/i.test(reply)) return reply;
   return `${reply} ${HOST_LINE}`;
 }
+
+// Effects stay rare: only the reply confirming a seat they just got (RSVP yes or a discover join).
+export const confetti = (calls: ToolCallLog[]): boolean =>
+  calls.some((c) => (c.name === 'respond_to_invite' || c.name === 'join_event') && isFreshAccept(String((c.result as { detail?: unknown })?.detail ?? '')));
 
 // Per-phone promise chain: two texts from one phone run one after the other, different phones run concurrently.
 const chains = new Map<string, Promise<void>>();
@@ -117,7 +122,7 @@ async function turn(phone: string, text: string, via: 'phone' | 'dashboard', rec
   }
 
   reply = withHostOffer(reply, toolCalls);
-  if (reply) await send(user.id, reply);
+  if (reply) await send(user.id, reply, confetti(toolCalls) ? { content: { kind: 'effect', effect: 'confetti' } } : {});
   await trace('agent', user.id, { userId: user.id, phone, text, toolCalls, reply, ...(error ? { error } : {}) });
   await runDue();
 }
