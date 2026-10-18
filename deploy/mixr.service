@@ -1,5 +1,5 @@
 # mixr monolith: API, dashboard, iMessage connection, background jobs.
-# Installed to ~/.config/systemd/user/ by scripts/deploy.sh. User lingering is on, so it starts at boot.
+# Installed to ~/.config/systemd/user/ by deploy/release.sh. User lingering is on, so it starts at boot.
 [Unit]
 Description=mixr monolith (API + dashboard + iMessage)
 After=network-online.target

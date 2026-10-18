@@ -1,0 +1,54 @@
+# Same checks polarcrest runs before it auto-deploys main, plus the dashboard typecheck and the landing page.
+# Offline: tests use MIXR_FAKE=1 and an in-memory DB (vitest.config.ts), so no secrets are needed.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main, integration]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      MIXR_FAKE: '1'
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            web/package-lock.json
+
+      - name: Install
+        run: npm ci
+
+      - name: Typecheck
+        run: npx tsc --noEmit
+
+      - name: Tests
+        run: npx vitest run
+
+      - name: Dashboard (typecheck + build)
+        working-directory: web
+        run: |
+          npm ci
+          npx tsc --noEmit
+          npx vite build
+
+      - name: Landing page
+        run: node --check landing/main.js
+
+      - name: Deploy scripts
+        run: for f in deploy/*.sh scripts/*.sh; do bash -n "$f"; done

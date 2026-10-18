@@ -1,0 +1,16 @@
+# Auto-deploy: ships the newest commit on main once its tests, typecheck and dashboard build pass on this box.
+# Run every 2 minutes by mixr-autodeploy.timer; the logic is deploy/release.sh, kept at ~/mixr-data/release.sh
+# (refreshed from each new release). Installed by release.sh.
+#   journalctl --user -u mixr-autodeploy -f     # what it did
+#   touch ~/mixr-data/autodeploy.paused          # stop auto-deploys (rm it to resume)
+[Unit]
+Description=mixr auto-deploy (ships main after its tests pass)
+
+[Service]
+Type=oneshot
+Environment=MIXR_AUTODEPLOY=1
+ExecStart=/bin/bash %h/mixr-data/release.sh deploy main
+# Builds and tests run next to the live server: keep them polite and bounded.
+Nice=10
+MemoryMax=3G
+TimeoutStartSec=30min

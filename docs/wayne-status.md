@@ -1,3 +1,5 @@
+> **Historical:** predates the integration branch; see the [README](../README.md).
+
 # Wayne: messaging status
 
 Audited against W1–W6 in the MVP implementation plan on 2026-10-17.
