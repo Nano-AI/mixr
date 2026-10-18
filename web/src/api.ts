@@ -105,7 +105,9 @@ export type BusEvent =
   | { type: 'message'; userId: number; phone: string; direction: 'in' | 'out'; text: string; simTime: string }
   | { type: 'trace'; kind: TraceKind; refId: number | null; data: unknown; simTime: string }
   | { type: 'clock'; now: string }
-  | { type: 'state' };
+  | { type: 'state' }
+  | { type: 'reset' } // everything was wiped: close phone panes
+  | { type: 'resync' }; // messages changed in bulk (seeding, reconnect): reload open panes
 
 // ---- fetch ----
 
@@ -152,6 +154,19 @@ let status: StreamStatus = 'connecting';
 let source: EventSource | null = null;
 let retryTimer: ReturnType<typeof setTimeout> | null = null;
 let everOpened = false;
+let lastHeard = 0;
+
+// A proxied stream can go silent without erroring (e.g. the backend restarted behind Vite). The server pings
+// every 10s; if nothing arrives for this long, drop the connection and open a fresh one.
+const STALE_MS = 25_000;
+setInterval(() => {
+  if (source && status === 'open' && Date.now() - lastHeard > STALE_MS) {
+    source.close();
+    source = null;
+    setStatus('reconnecting');
+    if (listeners.size) connect();
+  }
+}, 5_000);
 
 function setStatus(s: StreamStatus) {
   if (s === status) return;
@@ -173,13 +188,20 @@ function connect() {
   if (source) return;
   const es = new EventSource('/api/stream');
   source = es;
+  lastHeard = Date.now();
+  es.addEventListener('ping', () => void (lastHeard = Date.now()));
   es.onopen = () => {
+    lastHeard = Date.now();
     setStatus('open');
-    // After a reconnect we may have missed updates: ask everyone to refetch.
-    if (everOpened) dispatch({ type: 'state' });
+    // After a reconnect we may have missed updates (state and messages): ask everyone to reload.
+    if (everOpened) {
+      dispatch({ type: 'resync' });
+      dispatch({ type: 'state' });
+    }
     everOpened = true;
   };
   es.onmessage = (ev: MessageEvent<string>) => {
+    lastHeard = Date.now();
     try {
       dispatch(JSON.parse(ev.data) as BusEvent);
     } catch {

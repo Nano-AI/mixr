@@ -47,10 +47,11 @@ export function PhonePane({ phone, user, now, flashN, onClose, onShowUser, notif
   const sendingRef = useRef(false);
   sendingRef.current = sending;
 
-  async function loadHistory() {
+  // replace: after a bulk change (seed, reconnect) the server's history is the truth, so drop what we had.
+  async function loadHistory(replace = false) {
     try {
       const hist = await api.messages(phone);
-      setMessages((prev) => mergeMessages(hist, prev));
+      setMessages((prev) => (replace ? hist : mergeMessages(hist, prev)));
       setLoadError(null);
     } catch (e) {
       setLoadError(e instanceof Error ? e.message : String(e));
@@ -65,6 +66,7 @@ export function PhonePane({ phone, user, now, flashN, onClose, onShowUser, notif
   }, [phone]);
 
   useBus((e) => {
+    if (e.type === 'resync') return void loadHistory(true);
     if (e.type === 'state' && loadError) void loadHistory();
     if (e.type !== 'message' || e.phone !== phone) return;
     const m: Message = { direction: e.direction, text: e.text, simTime: e.simTime };

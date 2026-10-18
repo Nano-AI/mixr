@@ -39,6 +39,7 @@ export function App() {
 
   useBus((e) => {
     if (e.type === 'state') refreshSoon();
+    else if (e.type === 'reset') afterResetRef.current();
     else if (e.type === 'clock') {
       setState((s) => (s ? { ...s, now: e.now } : s));
       refreshSoon();
@@ -105,12 +106,16 @@ export function App() {
 
   const traces = useTraces(epoch);
 
+  // A reset (from this tab or another) closes every phone: those conversations no longer exist.
   const afterReset = useCallback(() => {
+    setPanes([]);
     setEpoch((e) => e + 1);
     setSelectedEventId(null);
     setSelectedUserId(null);
     void refresh();
   }, [refresh]);
+  const afterResetRef = useRef(afterReset);
+  afterResetRef.current = afterReset;
 
   const usersByPhone = useMemo(() => new Map((state?.users ?? []).map((u) => [u.phone, u])), [state]);
 

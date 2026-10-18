@@ -15,7 +15,7 @@ import './profiles/index.ts';
 import './relay/index.ts';
 import './events/index.ts';
 
-const KEEPALIVE_MS = 15_000; // tune: SSE ping interval
+const KEEPALIVE_MS = 10_000; // tune: SSE ping interval (the dashboard reconnects if it hears nothing for 25s)
 
 const iso = (v: unknown): string | null => (v ? new Date(v as string).toISOString() : null);
 const errMsg = (e: unknown): string => (e instanceof Error ? e.message : String(e));
@@ -183,6 +183,7 @@ app.get('/api/stream', (c) =>
 
 app.post('/api/reset', async (c) => {
   await reset();
+  publish({ type: 'reset' });
   publish({ type: 'clock', now: (await now()).toISOString() });
   publish({ type: 'state' });
   return c.json({ ok: true });
@@ -191,6 +192,7 @@ app.post('/api/reset', async (c) => {
 app.post('/api/seed', async (c) => {
   const { seed } = await import('./seed.ts');
   const users = await seed();
+  publish({ type: 'resync' }); // histories were written straight to the DB, not as message events
   publish({ type: 'state' });
   return c.json({ ok: true, users });
 });

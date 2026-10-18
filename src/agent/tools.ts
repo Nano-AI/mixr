@@ -1,6 +1,7 @@
 import { getUser, one, q } from '../db/index.ts';
 import { now } from '../clock.ts';
 import { buildProfile, editProfile } from '../profiles/index.ts';
+import { runDue } from '../jobs/index.ts';
 import { createEvent, discoverEvents, joinEvent, manageEvent, respondToInvite, type ManageAction } from '../events/index.ts';
 import { findPeople } from '../matching/index.ts';
 import { pendingIntrosFor, requestIntro, respondToIntro } from '../relay/index.ts';
@@ -158,15 +159,28 @@ export const TOOLS: ToolDef[] = [
       await assertShareable(u.id, `${title}\n${description}`);
       const requirements = (Array.isArray(a.requirements) ? a.requirements : []).map(toSpec);
       for (const r of requirements) await asTool(() => validate(r, 0));
-      const e = await createEvent(u.id, {
-        requirements,
-        title,
-        description,
-        startsAt,
-        location: nonEmpty(a.location, 'location'),
-        capacity: posInt(a.capacity, 'capacity', MAX_CAPACITY),
-      });
-      return { ok: true, ...eventView(e), capacity: e.capacity, status: e.status };
+      const e = await createEvent(
+        u.id,
+        { requirements, title, description, startsAt, location: nonEmpty(a.location, 'location'), capacity: posInt(a.capacity, 'capacity', MAX_CAPACITY) },
+        { quietFirstRound: true },
+      );
+      // Send the first round of invites now, so the reply can say honestly how it went.
+      await runDue();
+      const sent = await one<{ n: number }>(`SELECT count(*)::int AS n FROM event_invites WHERE event_id = $1`, [e.id]);
+      const invitedNow = sent?.n ?? 0;
+      return {
+        ok: true,
+        ...eventView(e),
+        capacity: e.capacity,
+        status: e.status,
+        invited_now: invitedNow,
+        first_round:
+          invitedNow === 0
+            ? 'nobody on mixr fits yet; mixr keeps an eye out as people join. offer to loosen it (e.g. open up the level or vibe) if that makes sense'
+            : invitedNow < e.capacity
+              ? 'fewer good fits than spots so far; mixr keeps inviting as replies come in. offer one way to widen it if it fits'
+              : 'plenty of good fits; more rounds go out automatically as people reply',
+      };
     },
   },
   {
@@ -188,19 +202,28 @@ export const TOOLS: ToolDef[] = [
   {
     name: 'manage_event',
     description:
-      'Host controls for an event the user hosts. status = who is going so far; add_spots = raise capacity by n; cancel = cancel the event and tell guests; stop_inviting = close it at the current headcount.',
+      'Host controls for an event the user hosts. status = who is going so far; add_spots = raise capacity by n; update_description = change what it is / who it is for (e.g. open it up to more levels), which immediately reaches out to newly fitting people; cancel = cancel the event and tell guests; stop_inviting = close it at the current headcount.',
     parameters: obj({
       event_id: int('event_id of an event they host (see context).'),
-      action: { type: 'string', enum: ['status', 'add_spots', 'cancel', 'stop_inviting'] },
+      action: { type: 'string', enum: ['status', 'add_spots', 'update_description', 'cancel', 'stop_inviting'] },
       n: { type: ['integer', 'null'], description: 'Spots to add for add_spots, else null.' },
+      description: nstr('For update_description: the full new description (what it is and who it is for). Else null.'),
     }),
     run: async (ctx, a) => {
       const u = await me(ctx);
       const ev = await one<{ host_id: number }>('SELECT host_id FROM events WHERE id = $1', [a.event_id]);
       if (!ev || ev.host_id !== u.id) throw new ToolError(`they don't host event ${a.event_id}`);
-      if (!['status', 'add_spots', 'cancel', 'stop_inviting'].includes(a.action)) throw new ToolError('unknown action');
+      if (!['status', 'add_spots', 'update_description', 'cancel', 'stop_inviting'].includes(a.action)) throw new ToolError('unknown action');
       const n = a.action === 'add_spots' ? posInt(a.n, 'n', MAX_CAPACITY) : undefined;
-      return { result: await manageEvent(u.id, a.event_id, a.action as ManageAction, n) };
+      let description: string | undefined;
+      if (a.action === 'update_description') {
+        description = nonEmpty(a.description, 'description');
+        const ev = await one<{ title: string }>('SELECT title FROM events WHERE id = $1', [a.event_id]);
+        await assertShareable(u.id, `${ev?.title ?? ''}\n${description}`);
+      }
+      const result = await manageEvent(u.id, a.event_id, a.action as ManageAction, n, description);
+      if (a.action === 'update_description') await runDue(); // the new round goes out now, like on creation
+      return { result };
     },
   },
   {

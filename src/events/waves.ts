@@ -85,7 +85,7 @@ const stop = async (ev: EventFull, reason: string, extra: Record<string, unknown
 };
 
 // Job 'wave' {eventId, afterWave}.
-export async function runWave(payload: { eventId: number; afterWave: number }): Promise<void> {
+export async function runWave(payload: { eventId: number; afterWave: number; quietThin?: boolean }): Promise<void> {
   const ev = await loadEvent(payload.eventId);
   // Stale or duplicate trigger (an early round already ran), or event no longer recruiting.
   if (!ev || ev.status !== 'open' || ev.waveNumber !== payload.afterWave) return;
@@ -136,7 +136,8 @@ export async function runWave(payload: { eventId: number; afterWave: number }): 
   if (!picks.length) {
     if (!ev.thinPoolNotified) {
       await q('UPDATE events SET thin_pool_notified = true WHERE id = $1', [ev.id]);
-      await send(ev.hostId, hostThinPool(going));
+      // quietThin: the host is being told in the same breath by whoever created the event (the agent's reply).
+      if (!payload.quietThin) await send(ev.hostId, hostThinPool(going));
     }
     return stop(ev, 'thin_pool', { pool: pool.length, n, pYes });
   }

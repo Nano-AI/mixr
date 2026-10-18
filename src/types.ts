@@ -84,4 +84,6 @@ export type BusEvent =
   | { type: 'message'; userId: number; phone: string; direction: 'in' | 'out'; text: string; simTime: string }
   | { type: 'trace'; kind: TraceKind; refId: number | null; data: unknown; simTime: string }
   | { type: 'clock'; now: string }
-  | { type: 'state' }; // something in users/events/invites/intros changed; refetch
+  | { type: 'state' } // something in users/events/invites/intros changed; refetch
+  | { type: 'reset' } // everything was wiped: close phone panes, reload
+  | { type: 'resync' }; // messages changed in bulk (e.g. seeding): reload open panes

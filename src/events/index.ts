@@ -36,7 +36,9 @@ const eventCopy = async (ev: EventFull): Promise<copy.EventCopy> => ({
 });
 
 // HyDE → E0 = Et → save → schedule wave 1 now (+ close_event at startsAt).
-export async function createEvent(hostId: number, d: NewEvent): Promise<EventRow> {
+// opts.quietFirstRound: the caller reports the first round itself (the agent's reply), so a thin first round
+// doesn't also send the host a separate "pool is thin" text.
+export async function createEvent(hostId: number, d: NewEvent, opts: { quietFirstRound?: boolean } = {}): Promise<EventRow> {
   const t = await now();
   const capacity = Math.max(1, Math.floor(d.capacity || 1));
   // Reject bad requirements before anything exists (0 stands in for the event id they'll get).
@@ -52,7 +54,7 @@ export async function createEvent(hostId: number, d: NewEvent): Promise<EventRow
   const ev = rowToEvent(r!);
   // Stored before the first round is scheduled, so even the first invites respect them.
   for (const spec of d.requirements ?? []) await addRequirement(hostId, spec, ev.id);
-  await schedule('wave', { eventId: ev.id, afterWave: 0 }, t);
+  await schedule('wave', { eventId: ev.id, afterWave: 0, ...(opts.quietFirstRound ? { quietThin: true } : {}) }, t);
   await schedule('close_event', { eventId: ev.id }, ev.startsAt);
   await trace('hyde', ev.id, { title: ev.title, source: hyde.source, targetProfile: hyde.text, ...(hyde.error ? { error: hyde.error } : {}) });
   publish({ type: 'state' });
@@ -169,9 +171,9 @@ export async function respondToInvite(userId: number, eventId: number, response:
   return result;
 }
 
-export type ManageAction = 'status' | 'add_spots' | 'cancel' | 'stop_inviting';
+export type ManageAction = 'status' | 'add_spots' | 'cancel' | 'stop_inviting' | 'update_description';
 // Host controls. Returns a short plain-text status for the agent to relay. Never mentions waves.
-export async function manageEvent(hostId: number, eventId: number, action: ManageAction, n?: number): Promise<string> {
+export async function manageEvent(hostId: number, eventId: number, action: ManageAction, n?: number, description?: string): Promise<string> {
   const ev = await loadEvent(eventId);
   if (!ev || ev.hostId !== hostId) return "i couldn't find that event under your name";
   const t = await now();
@@ -198,6 +200,23 @@ export async function manageEvent(hostId: number, eventId: number, action: Manag
     await triggerWaveNow(eventId, ev.waveNumber);
     publish({ type: 'state' });
     return `done — ${ev.title} now has ${capacity} spots (${going} going). i'll find more people.`;
+  }
+  if (action === 'update_description') {
+    // Who it's for lives in the description and its ideal-attendee profile (E0), so widening or narrowing
+    // means regenerating both. Et re-anchors to the new E0; anyone not yet invited is eligible again.
+    const text = (description ?? '').trim();
+    if (!text) return 'what should the new description say?';
+    const hyde = await hydeProfile({ title: ev.title, description: text, startsAt: ev.startsAt, location: ev.location, capacity: ev.capacity });
+    const e0 = await embedOne(hyde.text);
+    await q(
+      `UPDATE events SET raw_description = $2, hyde_profile = $3, initial_embedding = $4, current_embedding = $4, thin_pool_notified = false WHERE id = $1`,
+      [eventId, text, hyde.text, toVec(e0)],
+    );
+    await recomputeEt(eventId);
+    await trace('hyde', eventId, { title: ev.title, source: hyde.source, targetProfile: hyde.text, update: true });
+    if (ev.status === 'open') await triggerWaveNow(eventId, ev.waveNumber);
+    publish({ type: 'state' });
+    return `updated ${ev.title}. ${ev.status === 'open' ? "i'm reaching out to more people who fit now." : "it's full, so no new invites."}`;
   }
   if (action === 'stop_inviting') {
     await q(`UPDATE events SET capacity = $2, status = 'full', next_wave_at = NULL WHERE id = $1`, [eventId, going]);
