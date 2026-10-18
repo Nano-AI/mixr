@@ -1,0 +1,593 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>mixr walkthrough</title>
+<meta name="description" content="mixr, an iMessage agent for UW students, built at DubHacks '26. A walkthrough of the product and how it works.">
+<link rel="icon" href="img/mixr-icon.svg" type="image/svg+xml">
+<style>
+/* mixr's own look (mixr/landing/style.css): Newsreader for its voice, the system face for UI,
+   ink #22272b on the lit page, the icon's pearl gradient as the one colour field, iMessage blue for controls.
+   Layout copies the other decks here: a rail of slides, one beat per slide, arrow keys to move. */
+@font-face{font-family:"Newsreader";src:url("fonts/Newsreader-var.woff2") format("woff2");font-weight:300 500;font-style:normal;font-display:swap}
+@font-face{font-family:"Newsreader";src:url("fonts/Newsreader-Italic-var.woff2") format("woff2");font-weight:300 500;font-style:italic;font-display:swap}
+:root{
+  --page:#f5f6fb; --panel:#fff; --ink:#22272b; --muted:#5f636c; --faint:#8b8e96; --line:#e3e4ea;
+  --blue:#0a7cff; --blue-t:#0062cc; --blue-bg:#e6f0ff; --gray:#e9e9eb;
+  --peach:#ffe6cf; --pink:#ffd2ee; --lilac:#c9c4f6; --sky:#bccbff;
+  --ti-1:#f4f3ef; --ti-2:#d6d3cc; --ti-3:#a9a59d;
+  --serif:"Newsreader",Georgia,serif;
+  --sf:-apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue",system-ui,sans-serif;
+  --ease:cubic-bezier(.22,.8,.24,1);
+  color-scheme:light;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{margin:0;height:100%}
+body{background:var(--page);color:var(--ink);font:17px/1.45 var(--sf);overflow:hidden;-webkit-font-smoothing:antialiased}
+button{font:inherit;color:inherit;cursor:pointer}
+a{color:var(--blue-t)}
+:focus-visible{outline:3px solid var(--blue);outline-offset:3px}
+
+/* ═══ shell (same as the other decks) */
+.shell{display:grid;grid-template-columns:220px 1fr;height:100vh}
+.rail{border-right:1px solid var(--line);padding:26px 14px;display:flex;flex-direction:column;gap:2px;background:var(--panel);overflow:auto}
+.brand{display:flex;align-items:center;gap:9px;font:500 25px/1 var(--serif);letter-spacing:-.035em;margin:0 6px 20px}
+.brand img{width:28px;height:28px;border-radius:7px}
+.rail-g{font-size:12px;font-weight:600;color:var(--faint);margin:14px 10px 4px}
+.rail-g:first-of-type{margin-top:0}
+.rail button{all:unset;cursor:pointer;display:flex;gap:10px;padding:8px 10px;border-radius:10px;color:var(--muted);font-size:14.5px;transition:background .25s,color .25s}
+.rail button b{font-weight:500;color:var(--faint);width:16px;font-variant-numeric:tabular-nums}
+.rail button:hover{background:var(--page)}
+.rail button[aria-current=true]{background:var(--blue-bg);color:var(--blue-t);font-weight:600}
+.rail button[aria-current=true] b{color:var(--blue-t)}
+.rail button:focus-visible{outline:3px solid var(--blue)}
+.rail .hint{margin-top:auto;padding:16px 10px 0;font-size:12.5px;color:var(--faint)}
+kbd{font:12px var(--sf);border:1px solid var(--line);border-bottom-width:2px;border-radius:5px;padding:1px 6px;background:var(--page);color:var(--muted)}
+
+main{position:relative;overflow:hidden}
+.slide{position:absolute;inset:0;overflow:auto;padding:40px 52px 92px;opacity:0;visibility:hidden;transform:translateY(10px);transition:opacity .4s var(--ease),transform .4s var(--ease),visibility .4s;isolation:isolate}
+.slide:not(.on){transition-duration:.15s}
+.slide.on{opacity:1;visibility:visible;transform:none}
+.nav{position:fixed;right:20px;bottom:16px;display:flex;gap:8px;align-items:center;z-index:5;background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:5px 5px 5px 16px;box-shadow:0 8px 24px -14px rgba(34,39,43,.35)}
+.nav button{border:1px solid var(--line);background:var(--panel);border-radius:999px;width:44px;height:44px;font-size:18px}
+.nav button:hover{border-color:var(--blue);color:var(--blue-t)}
+.nav .count{font:600 13px var(--sf);color:var(--faint);margin-right:6px;font-variant-numeric:tabular-nums}
+
+/* ═══ type: mixr's voice is the serif */
+h1,h2,h3{font-family:var(--serif);font-optical-sizing:auto;font-weight:350;margin:0;text-wrap:balance}
+h2{font-size:clamp(32px,3.5vw,52px);line-height:1.04;letter-spacing:-.035em;max-width:20ch}
+h3{font-size:21px;line-height:1.2;font-weight:420;letter-spacing:-.015em}
+.line{font:400 clamp(18px,1.45vw,21px)/1.45 var(--serif);font-optical-sizing:auto;color:var(--muted);margin:14px 0 0;max-width:34em;text-wrap:pretty}
+.small{font-size:14px;color:var(--muted);line-height:1.5}
+.src{font-size:12.5px;color:var(--faint);margin:14px 0 0}
+.src code{font:12px ui-monospace,"SF Mono",Menlo,monospace}
+
+/* ═══ layouts */
+.split{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:clamp(28px,4vw,64px);align-items:center;min-height:100%}
+.split.wide{grid-template-columns:minmax(0,.9fr) minmax(0,1fr)}
+.stack{display:flex;flex-direction:column;gap:26px;min-height:100%}
+
+/* the colour field: the icon's pearl gradient, still, behind whatever is being shown */
+.stage{position:relative;display:grid;place-items:center;isolation:isolate}
+.stage::before{content:"";position:absolute;z-index:-1;inset:0 -22%;pointer-events:none;
+  background:radial-gradient(closest-side,var(--pink),var(--lilac) 42%,var(--sky) 64%,transparent);
+  filter:blur(26px);opacity:.8}
+.stage.warm::before{background:radial-gradient(closest-side,var(--peach),var(--pink) 34%,var(--lilac) 60%,transparent)}
+
+/* ═══ clip frames. The deck builds the inside from data-clip; a missing file leaves the placeholder. */
+.frame{position:relative;flex:none;margin:0;outline-offset:6px}
+.frame .scr{position:relative;overflow:hidden;background:#0b0c0f}
+.frame video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:0;transition:opacity .4s}
+.frame.ready video{opacity:1}
+.frame.ready{cursor:pointer}
+.ph{position:absolute;inset:0;display:grid;place-content:center;justify-items:center;gap:12px;text-align:center;padding:16px;
+  background:radial-gradient(120% 90% at 30% 10%,var(--peach),var(--pink) 30%,var(--lilac) 58%,var(--sky) 85%);color:var(--ink);transition:opacity .4s}
+.ph img{width:52px;height:52px;border-radius:13px;filter:drop-shadow(0 10px 18px rgba(119,119,186,.3))}
+.ph span{font:400 17px/1.3 var(--serif);letter-spacing:-.01em}
+.frame.ready .ph{opacity:0}
+.play{position:absolute;z-index:3;left:50%;top:50%;width:58px;height:58px;margin:-29px 0 0 -29px;border-radius:50%;background:rgba(255,255,255,.88);display:none;place-items:center;box-shadow:0 10px 24px -10px rgba(0,0,0,.4)}
+.play::before{content:"";margin-left:5px;border-left:17px solid var(--ink);border-top:11px solid transparent;border-bottom:11px solid transparent}
+.frame.ready.paused .play{display:grid}
+
+/* phone: not an iPhone. Pale titanium edge, a punch-hole camera, side keys, like the landing page's phone. */
+.frame[data-kind=phone]{--fh:min(calc(100vh - 150px),660px);height:var(--fh);aspect-ratio:var(--ar,.4615);padding:4px;border-radius:calc(var(--fh) * .075);
+  background:linear-gradient(135deg,#fbfaf7,var(--ti-2) 40%,#efede8 60%,var(--ti-3));box-shadow:0 50px 90px -40px rgba(40,40,80,.5),0 2px 6px rgba(40,40,80,.12)}
+.frame[data-kind=phone]::before,.frame[data-kind=phone]::after{content:"";position:absolute;width:4px;border-radius:3px}
+.frame[data-kind=phone]::before{right:-3px;top:30%;height:13%;background:linear-gradient(270deg,var(--ti-3),var(--ti-1))}
+.frame[data-kind=phone]::after{left:-3px;top:24%;height:18%;background:linear-gradient(90deg,var(--ti-3),var(--ti-1))}
+.frame[data-kind=phone] .scr{height:100%;border:7px solid #000;border-radius:calc(var(--fh) * .075 - 4px)}
+.frame[data-kind=phone] .punch{position:absolute;z-index:2;top:12px;left:50%;width:15px;height:15px;translate:-50% 0;border-radius:50%;background:radial-gradient(circle at 40% 40%,#2a2f3a 0 18%,#050608 45%)}
+.frame[data-kind=phone] .bar{display:none}
+/* desktop: a quiet browser window, 16:10 */
+.frame[data-kind=desk]{width:var(--fw,100%);border-radius:12px;background:var(--panel);border:1px solid var(--line);overflow:hidden;box-shadow:0 40px 80px -40px rgba(40,40,80,.45),0 2px 6px rgba(40,40,80,.1)}
+.frame[data-kind=desk] .scr{aspect-ratio:var(--ar,1.6)}
+.frame[data-kind=desk] .punch{display:none}
+/* a landscape clip in a phone slot: give the browser window a real width in the auto column */
+.split:not(.wide) .frame[data-kind=desk]{--fw:min(calc(50vw - 200px),calc((100vh - 220px) * 1.6))}
+.bar{height:32px;display:flex;align-items:center;gap:6px;padding:0 12px;background:#f1f2f6;border-bottom:1px solid var(--line)}
+.bar i{width:9px;height:9px;border-radius:50%;background:#d3d5dc}
+.bar span{margin:0 auto;font-size:12px;color:var(--muted);background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:2px 28px}
+
+/* ═══ 1 title */
+.s-title::before{content:"";position:absolute;z-index:-1;inset:0;pointer-events:none;
+  background:radial-gradient(90% 80% at 85% 45%,var(--pink),var(--lilac) 32%,var(--sky) 52%,transparent 78%),radial-gradient(60% 60% at 70% 95%,var(--peach),transparent 70%);opacity:.85}
+.word{display:flex;align-items:center;gap:clamp(14px,1.6vw,24px)}
+.word img{width:clamp(64px,7vw,104px);height:auto;border-radius:24%;filter:drop-shadow(0 18px 28px rgba(119,119,186,.28))}
+.word h1{font-size:clamp(96px,12vw,176px);line-height:.8;font-weight:500;letter-spacing:-.05em;padding-bottom:.08em}
+.tag{font:350 clamp(30px,3.3vw,48px)/1.08 var(--serif);font-optical-sizing:auto;letter-spacing:-.035em;margin:clamp(22px,3vh,36px) 0 0;max-width:15ch;text-wrap:balance}
+.made{font-size:14px;color:var(--muted);margin:26px 0 0}
+
+/* ═══ 2 problem */
+.thread{width:min(360px,100%);display:flex;flex-direction:column;gap:3px;font:16px/1.3 var(--sf)}
+.thread .who{font-size:11.5px;color:var(--faint);margin:9px 0 1px 14px}
+.thread .day{align-self:center;font-size:11.5px;color:var(--faint);margin:12px 0 2px}
+.b{max-width:78%;padding:8px 13px 9px;border-radius:19px;background:var(--gray);align-self:flex-start}
+.b.me{background:var(--blue);color:#fff;align-self:flex-end}
+.thread .seen{align-self:flex-end;font-size:11.5px;color:var(--faint);margin-top:2px}
+.dies{list-style:none;padding:0;margin:26px 0 0;display:grid;gap:10px;max-width:30em}
+.dies li{display:grid;grid-template-columns:22px 1fr;gap:10px;font:400 19px/1.35 var(--serif)}
+.dies li::before{content:"";width:12px;height:12px;margin-top:.42em;border-radius:50%;border:2px solid var(--blue)}
+
+/* ═══ sequences that really are sequences */
+.seq{list-style:none;padding:0;margin:24px 0 0;counter-reset:s;display:grid;gap:12px;max-width:30em}
+.seq li{counter-increment:s;display:grid;grid-template-columns:2rem 1fr;align-items:baseline;font:400 18px/1.4 var(--serif)}
+.seq li::before{content:counter(s);font:300 28px/1 var(--serif);color:var(--faint)}
+.seq small{display:block;font:14px/1.45 var(--sf);color:var(--muted);margin-top:2px}
+.facts{list-style:none;padding:0;margin:22px 0 0;display:grid;gap:8px;max-width:32em}
+.facts li{font-size:15px;color:var(--muted);padding-left:16px;position:relative}
+.facts li::before{content:"";position:absolute;left:0;top:.62em;width:6px;height:6px;border-radius:50%;background:var(--lilac)}
+.facts b{color:var(--ink);font-weight:600}
+
+/* ═══ 3 signup: browser and phone together */
+.duo{position:relative;display:flex;align-items:flex-end;justify-content:center;padding-right:clamp(80px,9vw,140px);margin-top:4px}
+.duo .frame[data-kind=desk]{--fw:min(100%,calc((100vh - 445px) * 1.6))}
+.duo .frame[data-kind=phone]{--fh:min(calc(100vh - 380px),520px);position:absolute;right:0;bottom:-14px}
+
+/* ═══ 7 matching */
+.flow{display:flex;flex-wrap:wrap;align-items:center;gap:6px 4px;margin:20px 0 0;font-size:13.5px}
+.flow span{border:1px solid var(--line);background:var(--panel);border-radius:999px;padding:4px 11px;color:var(--ink)}
+.flow span.ai{border-color:#b9b8f6;background:#f2f1ff}
+.flow i{font-style:normal;color:var(--faint)}
+.math3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin-top:22px}
+.math3>div{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px 16px 15px}
+.math3 h3{font-size:19px}
+.math3 p{font-size:13.5px;color:var(--muted);margin:8px 0 0;line-height:1.45}
+.m{font:400 clamp(15px,1.25vw,19px)/1.2 var(--serif);font-variant-numeric:lining-nums;display:flex;flex-wrap:nowrap;align-items:center;gap:5px;margin-top:12px;white-space:nowrap}
+.m i{font-style:italic}
+.m sub{font-size:.68em;vertical-align:-.3em;line-height:0}
+.ov{text-decoration:overline;text-decoration-thickness:1px}
+.fr{display:inline-flex;flex-direction:column;align-items:center;vertical-align:middle;line-height:1.15}
+.fr>span:first-child{border-bottom:1px solid currentColor;padding:0 3px 2px}
+.fr>span:last-child{padding:2px 3px 0}
+.m .big{font-size:1.5em;line-height:.8;font-weight:300}
+.sum{display:inline-flex;flex-direction:column;align-items:center;line-height:1}.sum i{font-size:.62em;margin-top:1px}
+.m .ce{font-size:1.7em;font-weight:300;line-height:.8}
+.fr .nm{font-size:.82em}
+.m .op{color:var(--muted)}
+
+.s-match .frame[data-kind=desk]{--fw:min(100%,calc((100vh - 420px) * 1.6));margin-left:auto}
+
+/* ═══ 8 per-service table */
+table.svc{border-collapse:collapse;margin:22px 0 0;font-size:14px;width:100%;max-width:34em}
+.svc th,.svc td{text-align:left;padding:7px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+.svc thead th{font-size:12.5px;color:var(--faint);font-weight:600}
+.svc tbody th{font-weight:600}
+.svc td.n{color:var(--blue-t);font-weight:600}
+.svc td.off{color:var(--faint)}
+
+/* ═══ 10 safety */
+.rules{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 40px;margin-top:28px;max-width:1000px}
+.rules div{border-top:1px solid var(--line);padding:14px 0 16px}
+.rules h3{font-size:20px}
+.rules p{margin:5px 0 0;font-size:14.5px;color:var(--muted)}
+
+/* ═══ 11 built to run */
+.run{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.05fr);gap:34px;margin-top:22px;align-items:start}
+.ship{list-style:none;padding:0;margin:22px 0 0;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:28px}
+.ship li{border-top:1px solid var(--line);padding-top:10px;font-size:14px;color:var(--muted)}
+.ship b{color:var(--ink);font-weight:600}
+.arch{display:block;width:100%;height:auto;border-radius:12px;box-shadow:0 30px 60px -36px rgba(20,20,40,.6)}
+table.ev{border-collapse:collapse;width:100%;font-size:14px}
+.ev th,.ev td{padding:7px 8px;border-bottom:1px solid var(--line);text-align:right;font-variant-numeric:tabular-nums}
+.ev th:first-child,.ev td:first-child{text-align:left}
+.ev thead th{font-size:12.5px;color:var(--faint);font-weight:600}
+.ev td.up{color:var(--blue-t);font-weight:600}
+.ev td.dn,.ev tr.honest td.dn{color:#a3361f;font-weight:600}
+.ev tr.honest td{color:var(--muted)}
+
+/* ═══ 12 team */
+.team{list-style:none;padding:0;margin:18px 0 0;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:34px;max-width:1040px}
+.team li{border-top:1px solid var(--ink);padding-top:18px}
+.team h3{font-size:clamp(26px,2.4vw,34px);letter-spacing:-.03em;font-weight:380}
+.team p{font:400 18px/1.4 var(--serif);color:var(--muted);margin:8px 0 0}
+
+/* ═══ 13 try it */
+.try{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:48px;align-items:center;min-height:100%}
+.url{display:inline-block;font:350 clamp(40px,5vw,72px)/1 var(--serif);letter-spacing:-.04em;color:var(--ink);text-decoration:none;margin-top:22px;border-bottom:2px solid var(--blue);padding-bottom:4px}
+.url:hover{color:var(--blue-t)}
+.cta{display:flex;flex-wrap:wrap;gap:12px;margin-top:30px}
+.pill{display:inline-flex;align-items:center;height:46px;padding:0 22px;border-radius:999px;font:500 16px var(--sf);text-decoration:none;border:1px solid var(--line);background:var(--panel);color:var(--ink)}
+.pill.go{background:var(--blue);border-color:var(--blue);color:#fff}
+.qrbox{width:clamp(180px,20vw,250px);padding:14px;background:#fff;border-radius:22px;box-shadow:0 40px 70px -36px rgba(40,40,80,.5)}
+.qr{display:block;width:100%;height:auto}
+
+.brand .repo{margin-left:auto;font-size:12px;font-weight:600;font-stretch:100%;letter-spacing:0;color:inherit;opacity:.7;text-decoration:none;border:1px solid currentColor;border-radius:4px;padding:2px 8px}.brand .repo:hover{opacity:1}.brand{white-space:nowrap;flex-wrap:wrap;row-gap:8px}.brand>svg{flex-shrink:0}
+.brand .repo{font-family:var(--sf)}
+
+@media (max-height:760px) and (min-width:901px){
+  .slide{padding-top:28px;padding-bottom:76px}
+  .rail{padding-top:20px}.rail button{padding:6px 10px}.brand{margin-bottom:14px}
+  .run{grid-template-columns:minmax(0,.8fr) minmax(0,1.05fr);margin-top:16px}.ev th,.ev td{padding:5px 8px}
+  .ship{margin-top:14px}
+  .line{margin-top:10px}
+  .math3{margin-top:16px}.math3>div{padding:11px 14px 12px}
+  .rules div{padding:10px 0 12px}
+}
+@media (max-width:1180px) and (min-width:901px){
+  .math3{grid-template-columns:1fr}.math3 p{margin-top:4px}
+}
+@media (max-width:900px){
+  body{overflow:auto}
+  .shell{grid-template-columns:1fr;height:auto}
+  .rail{flex-direction:row;align-items:center;overflow-x:auto;padding:10px 16px;position:sticky;top:0;z-index:4;border-right:0;border-bottom:1px solid var(--line)}
+  .rail .brand{margin:0 8px 0 0;font-size:22px;flex-wrap:nowrap}
+  .slide{overflow-x:hidden}.rail .hint,.rail-g{display:none}
+  .rail button{white-space:nowrap}
+  #railBtns{display:flex;gap:2px}
+  main{min-height:calc(100vh - 60px);min-height:calc(100dvh - 60px)}
+  .slide{padding:24px 16px 96px}
+  .split,.split.wide,.run,.try{grid-template-columns:1fr;align-content:start}
+  .split .stage,.try .qrbox{justify-self:center}
+  .frame[data-kind=phone]{--fh:min(560px,calc(100dvh - 140px))}
+  .split .frame[data-kind=desk],.split:not(.wide) .frame[data-kind=desk]{--fw:calc(100vw - 32px)}
+  .duo{padding-right:0;flex-direction:column;align-items:center;gap:24px}
+  .duo .frame[data-kind=desk]{--fw:100%}
+  .duo .frame[data-kind=phone]{position:relative;bottom:0;--fh:min(520px,calc(100dvh - 140px))}
+  .math3,.rules,.team,.ship{grid-template-columns:1fr}
+  .m{white-space:normal}
+  .stage::before{inset:-6% -6%}
+  .word h1{font-size:96px}
+}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition-duration:.01s!important;transition-delay:0s!important}}
+</style>
+</head>
+<body>
+<div class="shell">
+  <nav class="rail" aria-label="Slides">
+    <div class="brand"><img src="img/mixr-icon.svg" alt="">mixr<a class="repo" href="https://github.com/Nano-AI/mixr" target="_blank" rel="noopener">GitHub</a></div>
+    <div id="railBtns"></div>
+    <div class="hint"><kbd>←</kbd> <kbd>→</kbd> or <kbd>space</kbd><br>Click a clip to pause it.</div>
+  </nav>
+
+  <main id="deck">
+
+  <!-- 1 TITLE -->
+  <section class="slide s-title" data-title="mixr" data-group="Idea">
+    <div class="split">
+      <div>
+        <div class="word"><img src="img/mixr-icon.svg" alt=""><h1>mixr</h1></div>
+        <p class="tag">An entire social network in your messages.</p>
+        <p class="line">Text mixr what you're into. It finds UW students who want the same thing, gets you into events, and plans the meetup. No app, no forms.</p>
+        <p class="made">Built at DubHacks '26 for the Cook Smarter track and the Photon track.</p>
+      </div>
+      <div class="stage"><figure class="frame" data-clip="00-hero" data-label="hero" data-kind="phone"></figure></div>
+    </div>
+  </section>
+
+  <!-- 2 PROBLEM -->
+  <section class="slide" data-title="The problem" data-group="Idea">
+    <div class="split wide">
+      <div>
+        <h2>Meeting people is easy to want and annoying to organize.</h2>
+        <p class="line">Apps that match students already exist. What they skip is everything after "you two should hang out", and that is where most plans die:</p>
+        <ul class="dies">
+          <li>finding a time</li>
+          <li>picking a place</li>
+          <li>getting enough people to actually say yes</li>
+          <li>dealing with whoever cancels the morning of</li>
+        </ul>
+        <p class="line">mixr is an agent for that coordination work, and it lives in iMessage because students answer texts and don't open new apps.</p>
+      </div>
+      <div class="stage warm">
+        <div class="thread" aria-label="An example group chat where a plan stalls">
+          <div class="day">Monday</div>
+          <div class="who">Sam</div><div class="b">we should play pickup soccer sometime</div>
+          <div class="who">Priya</div><div class="b">yes!! i'm down</div>
+          <div class="b me">same. when?</div>
+          <div class="who">Sam</div><div class="b">this weekend?</div>
+          <div class="day">Thursday</div>
+          <div class="b me">still on for the weekend?</div>
+          <div class="seen">Delivered</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 3 SIGNUP -->
+  <section class="slide" data-title="Sign up" data-group="Product">
+    <div class="stack">
+      <div>
+        <h2>Sign up with a phone number.</h2>
+        <p class="line">At joinmixr.club you type your number. mixr registers it with Photon, hands you your own mixr line to text, and waits for you to text first. It never texts a number cold.</p>
+      </div>
+      <div class="duo stage">
+        <figure class="frame" data-clip="01-signup-desktop" data-label="sign up on the website" data-kind="desk" data-url="joinmixr.club"></figure>
+        <figure class="frame" data-clip="02-signup-phone" data-label="sign up on a phone" data-kind="phone"></figure>
+      </div>
+    </div>
+  </section>
+
+  <!-- 4 ONBOARDING -->
+  <section class="slide" data-title="Onboarding" data-group="Product">
+    <div class="split">
+      <div>
+        <h2>Onboarding is a text conversation.</h2>
+        <p class="line">Four short steps in iMessage, run by plain code rather than the model, then the agent takes over.</p>
+        <ol class="seq">
+          <li><span>Reply YES to opt in</span></li>
+          <li><span>Your full name</span></li>
+          <li><span>Your @uw.edu email<small>A branded email brings a six-digit code. Codes are hashed, never stored or logged.</small></span></li>
+          <li><span>The code<small>Verified: mixr sends its contact card.</small></span></li>
+          <li><span>Say what you're into, in your own words<small>Claude rewrites it into a profile and asks one follow-up if a skill level is missing.</small></span></li>
+        </ol>
+      </div>
+      <div class="stage"><figure class="frame" data-clip="03-onboarding" data-label="onboarding" data-kind="phone"></figure></div>
+    </div>
+  </section>
+
+  <!-- 5 INTRO -->
+  <section class="slide" data-title="Meet someone" data-group="Product">
+    <div class="split">
+      <div>
+        <h2>Meet one person, only if you both say yes.</h2>
+        <p class="line">Ask mixr to find someone. It asks them first, and shares numbers only when both sides agree. Then each of you gets the other's contact card.</p>
+        <ol class="seq">
+          <li><span>You ask for someone to climb, study or jam with</span></li>
+          <li><span>mixr finds a match and asks them</span></li>
+          <li><span>Both say yes<small>A note is passed on only in the person's own words, never one the model wrote.</small></span></li>
+          <li><span>Contact cards go both ways</span></li>
+        </ol>
+      </div>
+      <div class="stage"><figure class="frame" data-clip="04-intro" data-label="intro and contact card" data-kind="phone"></figure></div>
+    </div>
+  </section>
+
+  <!-- 6 HOST -->
+  <section class="slide" data-title="Host an event" data-group="Product">
+    <div class="split">
+      <div>
+        <h2>Host an event by describing it.</h2>
+        <p class="line">Say what, when, where and how many. mixr invites the best-matched students in quiet rounds until the event fills.</p>
+        <ul class="facts">
+          <li><b>Never over capacity.</b> Extra yeses go on a waitlist.</li>
+          <li><b>"Busy friday" is not "not my thing".</b> Guests answer in plain words, and only the second one teaches the matcher about taste.</li>
+          <li><b>Stops an hour before start.</b> No late invites.</li>
+          <li><b>Parallel 1:1 threads.</b> Group threads need a dedicated Photon line, so mixr runs each meetup as one-to-one threads and acts as the go-between.</li>
+        </ul>
+      </div>
+      <div class="stage warm"><figure class="frame" data-clip="05-host" data-label="hosting an event" data-kind="phone"></figure></div>
+    </div>
+  </section>
+
+  <!-- 7 MATCHING -->
+  <section class="slide s-match" data-title="Matching" data-group="Under the hood">
+    <div class="split wide" style="min-height:0;align-items:start">
+      <div>
+        <h2>How mixr decides who to ask.</h2>
+        <p class="line">Every student is one vector. People searches and event invites go through the same pipeline, and every step lands in a trace.</p>
+        <div class="flow" aria-label="Matching pipeline">
+          <span>Blocks and STOP removed in SQL</span><i>→</i><span>pgvector cosine</span><i>+</i><span>BM25, rare terms</span><i>→</i><span>weighted RRF</span><i>→</i><span>top 40</span><i>→</i><span class="ai">Claude rerank</span>
+        </div>
+      </div>
+      <div class="stage"><figure class="frame" data-clip="06-matching" data-label="matching trace" data-kind="desk" data-url="mixr dashboard"></figure></div>
+    </div>
+    <div class="math3">
+      <div>
+        <h3>Hybrid recall</h3>
+        <div class="m" aria-label="score of d equals the sum over rankings r of w r over 60 plus rank r of d">
+          <span><i>s</i>(<i>d</i>) =</span><span class="sum"><span class="big">Σ</span><i>r</i></span>
+          <span class="fr"><span><i>w</i><sub><i>r</i></sub></span><span>60 + rank<sub><i>r</i></sub>(<i>d</i>)</span></span>
+        </div>
+        <p>Vector rank counts 1, BM25 rank 0.5. BM25 only scores rare query terms (in 20% of profiles or fewer), so "CSE 332" or "tennis 4.0" gets found when embeddings blur it.</p>
+      </div>
+      <div>
+        <h3>Event drift (HyDE + Rocchio)</h3>
+        <div class="m" aria-label="E t equals 0.70 E0 plus 0.25 Y bar minus 0.05 N bar, normalized">
+          <span><i>E</i><sub><i>t</i></sub> =</span>
+          <span class="fr"><span>0.70 <i>E</i><sub>0</sub> + 0.25 <i class="ov">Y</i> − 0.05 <i class="ov">N</i></span><span class="nm">‖0.70 <i>E</i><sub>0</sub> + 0.25 <i class="ov">Y</i> − 0.05 <i class="ov">N</i>‖</span></span>
+        </div>
+        <p><i>E</i><sub>0</sub> embeds Claude's profile of the ideal attendee. <i class="ov">Y</i> is the mean of the yeses, <i class="ov">N</i> of "not my thing". "Busy friday" moves nothing.</p>
+      </div>
+      <div>
+        <h3>Invite round size</h3>
+        <div class="m" aria-label="n equals min of 10 and max of 3 and the ceiling of spots left over p">
+          <span><i>n</i> = min(10, max(3,</span><span class="ce">⌈</span><span class="fr"><span>spots left</span><span><i>p</i></span></span><span class="ce">⌉</span><span>))</span>
+        </div>
+        <p><i>p</i> is the event's own yes rate, clamped to 0.15–0.8, and 0.35 until five people reply. 32 candidates come from near <i>E</i><sub><i>t</i></sub> and 8 from near <i>E</i><sub>0</sub>, so early yeses can't pull it into one clique.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 8 NATIVE -->
+  <section class="slide" data-title="Native messaging" data-group="Under the hood">
+    <div class="split">
+      <div>
+        <h2>Native on iMessage, still right on Android.</h2>
+        <p class="line">mixr reads which service each person texts from and sends rich content only where it renders. Everything falls back to a plain text.</p>
+        <table class="svc">
+          <thead><tr><th></th><th>iMessage</th><th>RCS</th><th>SMS</th></tr></thead>
+          <tbody>
+            <tr><th>Tapback</th><td class="n">tapback</td><td class="n">tapback</td><td class="off">none</td></tr>
+            <tr><th>Confetti</th><td class="n">screen effect</td><td>text</td><td>text</td></tr>
+            <tr><th>Contact card</th><td class="n">vCard</td><td>text with number</td><td>text with number</td></tr>
+            <tr><th>Reply</th><td class="n">threaded</td><td>plain text</td><td>plain text</td></tr>
+            <tr><th>Link</th><td class="n">rich preview</td><td>text + URL</td><td>text + URL</td></tr>
+          </tbody>
+        </table>
+        <p class="small" style="margin-top:14px">The agent decides when a tapback says enough instead of a filler reply. Built on Photon 2.0: texts arrive over Spectrum's gRPC stream, replies leave through an outbox with retries and dedupe. The Android paths are tested in code; a run on a real Android phone is still to do.</p>
+      </div>
+      <div class="stage"><figure class="frame" data-clip="07-tapback" data-label="tapbacks and confetti" data-kind="phone"></figure></div>
+    </div>
+  </section>
+
+  <!-- 9 CAMPUS DATA -->
+  <section class="slide" data-title="Real campus data" data-group="Under the hood">
+    <div class="split">
+      <div>
+        <h2>Built on the real UW calendar.</h2>
+        <p class="line">mixr pulls UW's public events calendar once a day, scrubs it and archives it, so the history stays after events drop off the feed.</p>
+        <ul class="facts">
+          <li><b>Demo events come from it.</b> Upcoming student-friendly events are imported into the demo pool.</li>
+          <li><b>Two pools that never meet.</b> 50 hand-written demo students on a clock we can fast-forward, and real people who joined on the site. The demo pool never sends a real text.</li>
+          <li><b>Everything is inspectable.</b> The dashboard shows every recall, rerank and invite round, and a 2D map of every profile vector.</li>
+        </ul>
+      </div>
+      <div class="stage warm"><figure class="frame" data-clip="08-events" data-label="campus events" data-kind="phone"></figure></div>
+    </div>
+  </section>
+
+  <!-- 10 SAFETY -->
+  <section class="slide" data-title="Safety and privacy" data-group="Real users">
+    <h2>Hard rules live in code, not in the prompt.</h2>
+    <p class="line">A small model is easier to trust when code holds the rules it must never break.</p>
+    <div class="rules">
+      <div><h3>Numbers only on a mutual yes</h3><p>Texts use first names. A full name and number are shared only when both sides of an intro agree.</p></div>
+      <div><h3>Opt-in only</h3><p>People join on the site and text first. mixr never texts first and never scrapes a directory.</p></div>
+      <div><h3>STOP, START and HELP always work</h3><p>STOP is honored at once and cancels anything queued. None of them spend a model call.</p></div>
+      <div><h3>Caps on everything</h3><p>3 intro requests per person per 24 hours, 30 texts an hour, and a daily cap on Claude requests.</p></div>
+      <div><h3>Blocks before ranking</h3><p>Blocks and "must" requirements are filtered in SQL before the model sees a candidate. No filtering by gender or protected traits.</p></div>
+      <div><h3>Their words, not the model's</h3><p>A note passed between two people is kept only if it is the sender's own words from their text.</p></div>
+      <div><h3>Verification without storing codes</h3><p>A @uw.edu code proves inbox access. Codes are hashed, never stored or logged.</p></div>
+      <div><h3>No personal data in the repo</h3><p>Secrets and the database live on the server, never in git.</p></div>
+    </div>
+  </section>
+
+  <!-- 11 BUILT TO RUN -->
+  <section class="slide" data-title="Built to run" data-group="Real users">
+    <h2 style="max-width:none">Built to run with real users tomorrow.</h2>
+    <p class="line">It already carries real conversations on an iPhone, verification email and all.</p>
+    <div class="run">
+      <img class="arch" src="img/under-the-hood.jpg" width="1500" height="1000" alt="Architecture: a phone and joinmixr.club talk to one Node 24 server over Photon Spectrum and POST /join. The server holds the agent, matching, events, jobs and http, on PGlite with pgvector, and calls Claude Haiku and OpenAI embeddings.">
+      <div>
+        <h3>The eval harness, before and after hybrid recall</h3>
+        <p class="small" style="margin:4px 0 8px"><code style="font-size:12.5px">npm run eval</code> runs two revisions on 30 labelled queries (15 exact, 15 semantic) and 7 scripted conversations.</p>
+        <table class="ev">
+          <thead><tr><th>Metric</th><th>Before</th><th>After</th></tr></thead>
+          <tbody>
+            <tr><td>Exact-term MRR, recall stage</td><td>0.844</td><td class="up">0.967</td></tr>
+            <tr><td>Recall@10, all queries</td><td>0.973</td><td class="up">0.995</td></tr>
+            <tr><td>MRR after Claude rerank</td><td>0.983</td><td class="up">1.000</td></tr>
+            <tr><td>Reply length, characters per turn</td><td>227</td><td class="up">148</td></tr>
+            <tr><td>Claude call time, mean</td><td>3.09 s</td><td class="up">2.73 s</td></tr>
+            <tr><td>Estimated cost of the run</td><td>$0.065</td><td class="up">$0.055</td></tr>
+            <tr class="honest"><td>Semantic MRR, recall stage</td><td>0.878</td><td class="dn">0.802</td></tr>
+          </tbody>
+        </table>
+        <p class="small" style="margin-top:8px">One row got worse. After the Claude rerank, semantic MRR is 1.000 both before and after.</p>
+      </div>
+    </div>
+    <ul class="ship">
+      <li><b>235 offline tests</b> with a fake model, fake embeddings and an in-memory database. CI runs them on every pull request.</li>
+      <li><b>Auto-deploy with rollback.</b> A new commit on main is tested on the server before it goes live, and rolled back if /health doesn't answer within 45 s.</li>
+      <li><b>Room to grow.</b> Photon 2.0's free tier allows 10 registered numbers. Going past that is a plan change on the same project, not a code change.</li>
+    </ul>
+  </section>
+
+  <!-- 12 TEAM -->
+  <section class="slide" data-title="Team" data-group="Close">
+    <div class="stack" style="justify-content:center">
+    <h2>Three of us, one weekend.</h2>
+    <ul class="team">
+      <li><h3>Matching dev</h3><p>Matching, the simulator dashboard and the server.</p></li>
+      <li><h3>Agent dev</h3><p>The agent and the website.</p></li>
+      <li><h3>Messaging dev</h3><p>iMessage, onboarding and verification.</p></li>
+    </ul>
+    </div>
+  </section>
+
+  <!-- 13 TRY IT -->
+  <section class="slide s-title" data-title="Try it" data-group="Close">
+    <div class="try">
+      <div>
+        <h2>Text mixr.</h2>
+        <p class="line">Open the site on your phone, type your number, and text the line it gives you. UW students only, for now.</p>
+        <a class="url" href="https://joinmixr.club" target="_blank" rel="noopener">joinmixr.club</a>
+        <div class="cta">
+          <a class="pill go" href="https://joinmixr.club" target="_blank" rel="noopener">Open joinmixr.club</a>
+          <a class="pill" href="https://github.com/Nano-AI/mixr" target="_blank" rel="noopener">Code on GitHub</a>
+        </div>
+        <p class="small" style="margin-top:22px">The live line is capped at 10 registered numbers on Photon 2.0's free tier.</p>
+      </div>
+      <div class="qrbox"><svg class="qr" viewBox="0 0 33 33" role="img" aria-label="QR code for joinmixr.club" shape-rendering="crispEdges"><rect width="33" height="33" fill="#fff"/><path fill="#22272b" d="M4 4h1v1h-1zM5 4h1v1h-1zM6 4h1v1h-1zM7 4h1v1h-1zM8 4h1v1h-1zM9 4h1v1h-1zM10 4h1v1h-1zM14 4h1v1h-1zM17 4h1v1h-1zM18 4h1v1h-1zM22 4h1v1h-1zM23 4h1v1h-1zM24 4h1v1h-1zM25 4h1v1h-1zM26 4h1v1h-1zM27 4h1v1h-1zM28 4h1v1h-1zM4 5h1v1h-1zM10 5h1v1h-1zM12 5h1v1h-1zM17 5h1v1h-1zM22 5h1v1h-1zM28 5h1v1h-1zM4 6h1v1h-1zM6 6h1v1h-1zM7 6h1v1h-1zM8 6h1v1h-1zM10 6h1v1h-1zM12 6h1v1h-1zM14 6h1v1h-1zM16 6h1v1h-1zM18 6h1v1h-1zM20 6h1v1h-1zM22 6h1v1h-1zM24 6h1v1h-1zM25 6h1v1h-1zM26 6h1v1h-1zM28 6h1v1h-1zM4 7h1v1h-1zM6 7h1v1h-1zM7 7h1v1h-1zM8 7h1v1h-1zM10 7h1v1h-1zM12 7h1v1h-1zM14 7h1v1h-1zM15 7h1v1h-1zM17 7h1v1h-1zM19 7h1v1h-1zM20 7h1v1h-1zM22 7h1v1h-1zM24 7h1v1h-1zM25 7h1v1h-1zM26 7h1v1h-1zM28 7h1v1h-1zM4 8h1v1h-1zM6 8h1v1h-1zM7 8h1v1h-1zM8 8h1v1h-1zM10 8h1v1h-1zM13 8h1v1h-1zM15 8h1v1h-1zM16 8h1v1h-1zM17 8h1v1h-1zM22 8h1v1h-1zM24 8h1v1h-1zM25 8h1v1h-1zM26 8h1v1h-1zM28 8h1v1h-1zM4 9h1v1h-1zM10 9h1v1h-1zM13 9h1v1h-1zM14 9h1v1h-1zM18 9h1v1h-1zM22 9h1v1h-1zM28 9h1v1h-1zM4 10h1v1h-1zM5 10h1v1h-1zM6 10h1v1h-1zM7 10h1v1h-1zM8 10h1v1h-1zM9 10h1v1h-1zM10 10h1v1h-1zM12 10h1v1h-1zM14 10h1v1h-1zM16 10h1v1h-1zM18 10h1v1h-1zM20 10h1v1h-1zM22 10h1v1h-1zM23 10h1v1h-1zM24 10h1v1h-1zM25 10h1v1h-1zM26 10h1v1h-1zM27 10h1v1h-1zM28 10h1v1h-1zM12 11h1v1h-1zM14 11h1v1h-1zM15 11h1v1h-1zM19 11h1v1h-1zM4 12h1v1h-1zM10 12h1v1h-1zM12 12h1v1h-1zM13 12h1v1h-1zM17 12h1v1h-1zM18 12h1v1h-1zM19 12h1v1h-1zM20 12h1v1h-1zM21 12h1v1h-1zM22 12h1v1h-1zM25 12h1v1h-1zM26 12h1v1h-1zM27 12h1v1h-1zM4 13h1v1h-1zM6 13h1v1h-1zM9 13h1v1h-1zM11 13h1v1h-1zM12 13h1v1h-1zM19 13h1v1h-1zM23 13h1v1h-1zM24 13h1v1h-1zM25 13h1v1h-1zM26 13h1v1h-1zM27 13h1v1h-1zM6 14h1v1h-1zM8 14h1v1h-1zM9 14h1v1h-1zM10 14h1v1h-1zM11 14h1v1h-1zM13 14h1v1h-1zM15 14h1v1h-1zM18 14h1v1h-1zM19 14h1v1h-1zM21 14h1v1h-1zM24 14h1v1h-1zM25 14h1v1h-1zM27 14h1v1h-1zM28 14h1v1h-1zM4 15h1v1h-1zM8 15h1v1h-1zM9 15h1v1h-1zM12 15h1v1h-1zM13 15h1v1h-1zM18 15h1v1h-1zM21 15h1v1h-1zM24 15h1v1h-1zM25 15h1v1h-1zM28 15h1v1h-1zM4 16h1v1h-1zM5 16h1v1h-1zM7 16h1v1h-1zM10 16h1v1h-1zM12 16h1v1h-1zM16 16h1v1h-1zM22 16h1v1h-1zM23 16h1v1h-1zM28 16h1v1h-1zM4 17h1v1h-1zM5 17h1v1h-1zM7 17h1v1h-1zM8 17h1v1h-1zM11 17h1v1h-1zM14 17h1v1h-1zM19 17h1v1h-1zM20 17h1v1h-1zM23 17h1v1h-1zM27 17h1v1h-1zM4 18h1v1h-1zM9 18h1v1h-1zM10 18h1v1h-1zM13 18h1v1h-1zM15 18h1v1h-1zM16 18h1v1h-1zM17 18h1v1h-1zM19 18h1v1h-1zM20 18h1v1h-1zM23 18h1v1h-1zM24 18h1v1h-1zM25 18h1v1h-1zM27 18h1v1h-1zM28 18h1v1h-1zM4 19h1v1h-1zM6 19h1v1h-1zM7 19h1v1h-1zM8 19h1v1h-1zM9 19h1v1h-1zM12 19h1v1h-1zM15 19h1v1h-1zM18 19h1v1h-1zM20 19h1v1h-1zM21 19h1v1h-1zM22 19h1v1h-1zM23 19h1v1h-1zM25 19h1v1h-1zM26 19h1v1h-1zM28 19h1v1h-1zM4 20h1v1h-1zM6 20h1v1h-1zM7 20h1v1h-1zM8 20h1v1h-1zM9 20h1v1h-1zM10 20h1v1h-1zM13 20h1v1h-1zM14 20h1v1h-1zM15 20h1v1h-1zM20 20h1v1h-1zM21 20h1v1h-1zM22 20h1v1h-1zM23 20h1v1h-1zM24 20h1v1h-1zM26 20h1v1h-1zM12 21h1v1h-1zM13 21h1v1h-1zM14 21h1v1h-1zM16 21h1v1h-1zM17 21h1v1h-1zM20 21h1v1h-1zM24 21h1v1h-1zM4 22h1v1h-1zM5 22h1v1h-1zM6 22h1v1h-1zM7 22h1v1h-1zM8 22h1v1h-1zM9 22h1v1h-1zM10 22h1v1h-1zM13 22h1v1h-1zM14 22h1v1h-1zM15 22h1v1h-1zM20 22h1v1h-1zM22 22h1v1h-1zM24 22h1v1h-1zM28 22h1v1h-1zM4 23h1v1h-1zM10 23h1v1h-1zM13 23h1v1h-1zM14 23h1v1h-1zM16 23h1v1h-1zM17 23h1v1h-1zM19 23h1v1h-1zM20 23h1v1h-1zM24 23h1v1h-1zM27 23h1v1h-1zM28 23h1v1h-1zM4 24h1v1h-1zM6 24h1v1h-1zM7 24h1v1h-1zM8 24h1v1h-1zM10 24h1v1h-1zM16 24h1v1h-1zM18 24h1v1h-1zM19 24h1v1h-1zM20 24h1v1h-1zM21 24h1v1h-1zM22 24h1v1h-1zM23 24h1v1h-1zM24 24h1v1h-1zM26 24h1v1h-1zM27 24h1v1h-1zM28 24h1v1h-1zM4 25h1v1h-1zM6 25h1v1h-1zM7 25h1v1h-1zM8 25h1v1h-1zM10 25h1v1h-1zM13 25h1v1h-1zM14 25h1v1h-1zM18 25h1v1h-1zM19 25h1v1h-1zM20 25h1v1h-1zM21 25h1v1h-1zM22 25h1v1h-1zM27 25h1v1h-1zM28 25h1v1h-1zM4 26h1v1h-1zM6 26h1v1h-1zM7 26h1v1h-1zM8 26h1v1h-1zM10 26h1v1h-1zM13 26h1v1h-1zM15 26h1v1h-1zM16 26h1v1h-1zM20 26h1v1h-1zM25 26h1v1h-1zM26 26h1v1h-1zM28 26h1v1h-1zM4 27h1v1h-1zM10 27h1v1h-1zM14 27h1v1h-1zM15 27h1v1h-1zM18 27h1v1h-1zM20 27h1v1h-1zM21 27h1v1h-1zM23 27h1v1h-1zM24 27h1v1h-1zM28 27h1v1h-1zM4 28h1v1h-1zM5 28h1v1h-1zM6 28h1v1h-1zM7 28h1v1h-1zM8 28h1v1h-1zM9 28h1v1h-1zM10 28h1v1h-1zM12 28h1v1h-1zM17 28h1v1h-1zM18 28h1v1h-1zM20 28h1v1h-1zM21 28h1v1h-1zM25 28h1v1h-1zM28 28h1v1h-1z"/></svg></div>
+    </div>
+  </section>
+
+  </main>
+</div>
+<div class="nav"><span class="count" id="count"></span><button id="prev" aria-label="Previous slide">←</button><button id="next" aria-label="Next slide">→</button></div>
+
+<script>
+const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)];
+const RM = matchMedia('(prefers-reduced-motion: reduce)');
+
+/* ═══ clips: clips/<name>.webm|.mp4|.jpg next to this file. A file that exists plays; one that doesn't leaves the placeholder. */
+$$('.frame').forEach(f => {
+  const n = 'clips/' + f.dataset.clip;
+  f.innerHTML = `<div class="bar" aria-hidden="true"><i></i><i></i><i></i><span>${f.dataset.url || ''}</span></div>
+    <div class="scr"><video ${RM.matches ? '' : 'autoplay'} muted loop playsinline preload="metadata" poster="${n}.jpg" aria-label="Clip: ${f.dataset.label}">
+      <source src="${n}.webm" type="video/webm"><source src="${n}.mp4" type="video/mp4"></video>
+      <div class="ph"><img src="img/mixr-icon.svg" alt=""><span>Clip: ${f.dataset.label}</span></div>
+      <i class="punch"></i><span class="play" aria-hidden="true"></span></div>`;
+  const v = f.querySelector('video');
+  const live = () => v.closest('.slide').classList.contains('on');
+  v.addEventListener('loadedmetadata', () => {
+    f.classList.add('ready'); f.tabIndex = 0; f.setAttribute('role', 'button');
+    f.setAttribute('aria-label', `Clip: ${f.dataset.label}. Press to play or pause.`);
+    // the file decides the frame: portrait goes in the phone, landscape in the browser window
+    f.dataset.kind = v.videoHeight > v.videoWidth ? 'phone' : 'desk';
+    f.style.setProperty('--ar', (v.videoWidth / v.videoHeight).toFixed(4));
+    if (live() && !RM.matches) v.play().catch(() => {});
+  });
+  v.addEventListener('play', () => { if (!live() || (RM.matches && !v.dataset.asked)) v.pause(); f.classList.toggle('paused', v.paused); });
+  v.addEventListener('pause', () => f.classList.add('paused'));
+  const toggle = () => { if (!f.classList.contains('ready')) return; v.dataset.asked = 1; v.paused ? v.play().catch(() => {}) : v.pause(); };
+  f.addEventListener('click', toggle);
+  f.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); toggle(); } });
+  f.classList.add('paused');
+});
+function syncClips() {
+  $$('.frame video').forEach(v => {
+    const on = v.closest('.slide').classList.contains('on');
+    if (on && !RM.matches && v.readyState > 0) v.play().catch(() => {});
+    if (!on) { v.pause(); delete v.dataset.asked; }
+  });
+}
+
+/* ═══ nav */
+const slides = $$('.slide'); let cur = 0;
+$('#railBtns').innerHTML = slides.map((s, i) => (s.dataset.group !== slides[i - 1]?.dataset.group ? `<div class="rail-g">${s.dataset.group}</div>` : '') + `<button data-i="${i}"><b>${i + 1}</b>${s.dataset.title}</button>`).join('');
+function go(i) {
+  cur = Math.max(0, Math.min(slides.length - 1, i));
+  slides.forEach((s, j) => { s.classList.toggle('on', j === cur); s.inert = j !== cur; });
+  $$('#railBtns button').forEach((b, j) => b.setAttribute('aria-current', j === cur));
+  $('#count').textContent = `${cur + 1} / ${slides.length}`;
+  if (location.hash !== '#' + (cur + 1)) history.replaceState(null, '', '#' + (cur + 1));
+  syncClips();
+}
+$('#railBtns').onclick = e => { const b = e.target.closest('button'); if (b) go(+b.dataset.i); };
+$('#prev').onclick = () => go(cur - 1); $('#next').onclick = () => go(cur + 1);
+addEventListener('keydown', e => {
+  if (e.altKey || e.ctrlKey || e.metaKey) return;
+  const k = e.key;
+  if (k === 'ArrowRight' || k === 'ArrowDown' || k === 'PageDown' || (k === ' ' && !e.shiftKey)) { e.preventDefault(); go(cur + 1); }
+  else if (k === 'ArrowLeft' || k === 'ArrowUp' || k === 'PageUp' || (k === ' ' && e.shiftKey)) { e.preventDefault(); go(cur - 1); }
+  else if (k === 'Home') { e.preventDefault(); go(0); }
+  else if (k === 'End') { e.preventDefault(); go(slides.length - 1); }
+});
+go((+location.hash.slice(1) || 1) - 1);
+addEventListener('hashchange', () => go((+location.hash.slice(1) || 1) - 1));
+</script>
+</body>
+</html>
