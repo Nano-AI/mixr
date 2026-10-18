@@ -12,6 +12,7 @@ import { cleanName } from '../messaging/onboarding.ts';
 import { firstName } from './context.ts';
 import { laHuman } from './time.ts';
 import { send } from '../transport/index.ts';
+import { campusEvents, scrubPii } from '../calendar/uw.ts';
 import { TAPBACKS, type Tapback } from '../transport/outbox.ts';
 
 // How to present people-search results (see prompt: Meeting people). Production: the model dropped the top match and
@@ -261,13 +262,15 @@ export const TOOLS: ToolDef[] = [
   {
     name: 'discover_events',
     description:
-      'Find open upcoming events the user could join, matching what they asked for ("anything climbing this weekend?", "pickup soccer or something"). Returns up to 3 nearest events with fit (0-1, how close each is to the request). Nearest is not the same as relevant: judge each by its title/description.',
+      'Find open upcoming events the user could join, matching what they asked for ("anything climbing this weekend?", "pickup soccer or something"). Returns up to 3 nearest mixr events with fit (0-1, how close each is to the request). Nearest is not the same as relevant: judge each by its title/description. Also returns campus_events: up to 5 events from UW\'s public calendar in the next two weeks (closest to the request first, or soonest), which mixr does not host and cannot RSVP to.',
     parameters: obj({ query: nstr('What they are looking for, or null to use their profile.') }),
     run: async (ctx, a) => {
       const u = await me(ctx);
       const query = typeof a.query === 'string' && a.query.trim() ? a.query.trim() : undefined;
       if (!query && u.state !== 'active') throw new ToolError('no profile yet: ask what they are looking for, or onboard them first');
       const events = await discoverEvents(u.id, query);
+      // UW's own public calendar (read-only, no RSVP). Demo users already get these as imported demo-pool events.
+      const campus = u.seeded ? [] : await campusEvents(query);
       return {
         events: events.map((e) => ({
           ...eventView(e),
@@ -278,6 +281,13 @@ export const TOOLS: ToolDef[] = [
           fit: e.fit ?? null,
           for_who: e.forWho ?? [], // the host's requirements, safe to mention
           heads_up: e.headsUp ?? [], // people this user blocked who are going: mention before they join
+        })),
+        campus_events: campus.map((e) => ({
+          title: e.title,
+          starts_at: laHuman(e.startsAt),
+          location: e.location,
+          about: scrubPii(e.description, 160),
+          url: e.url,
         })),
       };
     },

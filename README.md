@@ -230,7 +230,7 @@ You can run all of mixr on a laptop with no iMessage at all: `TRANSPORT=sim` kee
    | `WELCOME_TEXT` | `on` = mixr texts first: one welcome (the opt-in ask) right after a website join. Off by default. |
    | `DEV_JOIN_NUMBER` | With `TRANSPORT=sim`, the number `/join` hands out. |
    | `ADMIN_TOKEN` | Dashboard login. Optional locally, required in production. |
-   | `UW_CALENDAR` | Daily snapshot of UW's public events calendar into `data/uw-calendar/` (on in production; `npm run import:uw-events` loads upcoming ones into the demo pool). |
+   | `UW_CALENDAR` | Daily snapshot of UW's public events calendar into `uw-calendar/` next to `DB_DIR` (on in production). `discover_events` shows real users upcoming ones from the newest snapshot as `campus_events`; `npm run import:uw-events` loads them into the demo pool. |
    | `PORT`, `HOST`, `DB_DIR`, `PUBLIC_URL`, `TZ` | Runtime settings. |
 4. Seed the 50 demo students (embeddings only, cached by text; free with `MIXR_FAKE=1`)
    ```sh

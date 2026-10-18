@@ -412,6 +412,7 @@ test('replies are tidied: lowercase openers, runaway length clipped at a sentenc
   expect(tidy("bet, asked Casey. i'll leave the trash talk out. i'll get back to you when they answer.")).toBe(
     "bet, asked Casey. i'll leave the trash talk out. i'll get back to you when they answer.",
   );
+  expect(tidy('Only one thing on the calendar. Tonight works, Maya. Maybe UW has more.')).toBe('only one thing on the calendar. tonight works, Maya. maybe UW has more.');
   expect(tidy("i'll get back to you")).toBe("i'll get back to you");
   expect(tidy("you're in. i'll lyk if anything changes")).toBe("you're in. i'll lyk if anything changes");
   const long = 'this is a sentence that goes on for a while. '.repeat(20).trim();
@@ -459,6 +460,6 @@ test('read-only tool calls in one turn run together; results go back in the orde
   expect(maxActive).toBe(2);
   const out = outputs(seen[1]);
   expect(out.map((o) => o.call_id)).toEqual(['a', 'b']);
-  expect(JSON.parse(out[0].output)).toEqual({ events: [] });
+  expect(JSON.parse(out[0].output)).toEqual({ events: [], campus_events: [] });
   expect(JSON.parse(out[1].output).matches[0]).toMatchObject({ user_id: 5, name: 'Kai' });
 });
