@@ -298,7 +298,7 @@ test('context block lists open invites with ids and recent find_people results',
   expect(seen[0].input.slice(0, -1)).toEqual([
     { role: 'user', content: 'anyone to play tennis with?' },
     // an activity search always surfaces hosting; the scripted reply didn't, so the fallback line was added
-    { role: 'assistant', content: 'kai plays 4.5, want an intro? or i can host an event for this, just say the word.' },
+    { role: 'assistant', content: 'kai plays 4.5, want an intro?' },
     { role: 'user', content: 'yes kai' },
   ]);
 });
@@ -391,8 +391,8 @@ test('the prompt asks for short, lowercase, one-question texts with no recap or 
   expect(p).toMatch(/Never write "i'll lmk"/);
   expect(p).not.toMatch(/get back to them/);
   expect(p).not.toMatch(/handle all the texting/);
-  const { HOST_OFFER_HINT } = await import('../src/agent/tools.ts');
-  expect(HOST_OFFER_HINT).not.toMatch(/handle all the texting/);
+  expect(p).not.toMatch(/ALWAYS offer hosting/);
+  expect(p).toMatch(/Don't repeat yourself/);
   expect(p).not.toMatch(/tell them you passed it along/);
   expect(p).toMatch(/they\/them/); // never guess a pronoun from a name
   expect(p).not.toMatch(/ask if he's down to hit/);

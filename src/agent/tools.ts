@@ -20,10 +20,6 @@ import { TAPBACKS, type Tapback } from '../transport/outbox.ts';
 export const PRESENT_HINT =
   'name them in this order (best first), up to 3, each with only what its reason says. if every match has fit partial, first say nobody does exactly that yet, then present them as the closest options';
 
-// What the agent should offer next to people-search results for an activity (see prompt: Meeting people).
-export const HOST_OFFER_HINT =
-  'offer both options in one short question: connect with a match, or host a <activity> event (use the words "host" and "event"), e.g. "want me to ask ethan, or host a tennis event for you?"';
-
 const MAX_CAPACITY = 100; // tune: largest guest count an SMS-created event may ask for
 const MAX_SNOOZE_DAYS = 60; // tune: longest pause
 
@@ -318,7 +314,6 @@ export const TOOLS: ToolDef[] = [
         matches: matches.map((m) => ({ user_id: m.userId, name: firstName(m.name), reason: m.reason, ...(m.fit ? { fit: m.fit } : {}) })),
         ...(matches.length ? { present: PRESENT_HINT } : {}),
         // Searching for an activity is the moment to introduce hosting, so say it in plain words.
-        ...(request ? { also_offer: HOST_OFFER_HINT } : {}),
       };
     },
   },
