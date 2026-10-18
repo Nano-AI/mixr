@@ -38,7 +38,12 @@ const eventCopy = async (ev: EventFull): Promise<copy.EventCopy> => ({
 // HyDE → E0 = Et → save → schedule wave 1 now (+ close_event at startsAt).
 // opts.quietFirstRound: the caller reports the first round itself (the agent's reply), so a thin first round
 // doesn't also send the host a separate "pool is thin" text.
-export async function createEvent(hostId: number, d: NewEvent, opts: { quietFirstRound?: boolean } = {}): Promise<EventRow> {
+// opts.noInvites: listed for discover only, never pushed to anyone (imported campus events).
+export async function createEvent(
+  hostId: number,
+  d: NewEvent,
+  opts: { quietFirstRound?: boolean; noInvites?: boolean } = {},
+): Promise<EventRow> {
   const t = await now();
   const capacity = Math.max(1, Math.floor(d.capacity || 1));
   // Reject bad requirements before anything exists (0 stands in for the event id they'll get).
@@ -48,13 +53,13 @@ export async function createEvent(hostId: number, d: NewEvent, opts: { quietFirs
   const r = await one(
     `INSERT INTO events (host_id, title, raw_description, starts_at, location, capacity, hyde_profile,
                          initial_embedding, current_embedding, next_wave_at, created_at)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $8, $9, $9) RETURNING *`,
-    [hostId, d.title, d.description, d.startsAt.toISOString(), d.location, capacity, hyde.text, toVec(e0), t.toISOString()],
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $8, $10, $9) RETURNING *`,
+    [hostId, d.title, d.description, d.startsAt.toISOString(), d.location, capacity, hyde.text, toVec(e0), t.toISOString(), opts.noInvites ? null : t.toISOString()],
   );
   const ev = rowToEvent(r!);
   // Stored before the first round is scheduled, so even the first invites respect them.
   for (const spec of d.requirements ?? []) await addRequirement(hostId, spec, ev.id);
-  await schedule('wave', { eventId: ev.id, afterWave: 0, ...(opts.quietFirstRound ? { quietThin: true } : {}) }, t);
+  if (!opts.noInvites) await schedule('wave', { eventId: ev.id, afterWave: 0, ...(opts.quietFirstRound ? { quietThin: true } : {}) }, t);
   await schedule('close_event', { eventId: ev.id }, ev.startsAt);
   await trace('hyde', ev.id, { title: ev.title, source: hyde.source, targetProfile: hyde.text, ...(hyde.error ? { error: hyde.error } : {}) });
   publish({ type: 'state' });

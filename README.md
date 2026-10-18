@@ -229,6 +229,7 @@ You can run all of mixr on a laptop with no iMessage at all: `TRANSPORT=sim` kee
    | `JOIN_ORIGINS` | CORS origins allowed to call `POST /join`. |
    | `DEV_JOIN_NUMBER` | With `TRANSPORT=sim`, the number `/join` hands out. |
    | `ADMIN_TOKEN` | Dashboard login. Optional locally, required in production. |
+   | `UW_CALENDAR` | Daily snapshot of UW's public events calendar into `data/uw-calendar/` (on in production; `npm run import:uw-events` loads upcoming ones into the demo pool). |
    | `PORT`, `HOST`, `DB_DIR`, `PUBLIC_URL`, `TZ` | Runtime settings. |
 4. Seed the 50 demo students (embeddings only, cached by text; free with `MIXR_FAKE=1`)
    ```sh
