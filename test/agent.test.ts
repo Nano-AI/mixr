@@ -135,7 +135,7 @@ test('save_profile needs a full name: a bare first name is sent back to ask for 
   await handleInbound('+15550005555', 'tennis 4.0');
   expect(JSON.parse(outputs(again[1])[0].output)).toMatchObject({ ok: true, name: 'Maya Lopez' });
   expect(profiles.buildProfile).toHaveBeenCalledWith(expect.any(Number), 'tennis', undefined);
-  expect((again[0].input.at(-1) as any).content).toContain('name=Maya Lopez (call them Maya)');
+  expect((again[0].input.at(-1) as any).content).toContain("name=Maya Lopez (full name on file, don't ask for it again; call them Maya)");
 });
 
 test('tool exceptions, bad JSON and unknown tools come back as {error}', async () => {
