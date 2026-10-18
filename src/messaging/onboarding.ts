@@ -25,7 +25,7 @@ export const CONSENT =
 // disclosure, so their YES opts them in and a reply that isn't YES gets the ask again, not a second hello.
 // Text-only (no link): Photon's deliverability guide says links in a first message hurt.
 export const WELCOME =
-  "hey, it's mixr! you just signed up on the mixr site. i find UW students with shared interests and help organize meetups. reply YES to opt in. msg frequency varies. reply STOP to opt out";
+  "hey, it's mixr! you just signed up on the mixr site. i find UW students with shared interests and help organize meetups. reply YES to opt in. reply STOP to opt out";
 const CONSENT_AGAIN = "reply YES to opt in and i'll get you set up. reply STOP anytime.";
 const CONSENT_WORDS = ['YES', 'Y', 'I AGREE', 'OPT IN'];
 const ASK_NAME = "what's your full name? (first and last)";
