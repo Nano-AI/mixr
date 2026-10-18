@@ -11,6 +11,8 @@ import type { RequirementSpec, RsvpResponse, User } from '../types.ts';
 import { cleanName } from '../messaging/onboarding.ts';
 import { firstName } from './context.ts';
 import { laHuman } from './time.ts';
+import { send } from '../transport/index.ts';
+import { TAPBACKS, type Tapback } from '../transport/outbox.ts';
 
 // What the agent should offer next to people-search results for an activity (see prompt: Meeting people).
 export const HOST_OFFER_HINT =
@@ -409,6 +411,25 @@ export const TOOLS: ToolDef[] = [
       if (until.getTime() - t.getTime() > MAX_SNOOZE_DAYS * 86_400_000) throw new ToolError(`max pause is ${MAX_SNOOZE_DAYS} days`);
       await q('UPDATE users SET snoozed_until = $1 WHERE id = $2', [until.toISOString(), u.id]);
       return { ok: true, snoozed_until: laHuman(until) };
+    },
+  },
+  {
+    name: 'react',
+    description:
+      'Tapback the user\'s latest text instead of replying, when it needs no answer ("thanks!", "ok", "sounds good", "lol"). This is your whole answer: the turn ends and no text is sent.',
+    parameters: obj({ emoji: { type: 'string', enum: [...TAPBACKS] } }),
+    run: async (ctx, a) => {
+      if (!TAPBACKS.includes(a.emoji)) throw new ToolError(`emoji must be one of ${TAPBACKS.join(' ')}`);
+      // The text being answered: its inbound row is 'processing' for exactly this turn (none from the dashboard).
+      const target = await one<{ provider_id: string }>(
+        `SELECT i.provider_id FROM inbound_messages i JOIN users u ON u.phone = i.phone
+         WHERE u.id = $1 AND i.status = 'processing' ORDER BY i.received_at DESC LIMIT 1`,
+        [ctx.userId],
+      );
+      const emoji = a.emoji as Tapback;
+      // Logged (and the plain fallback) as the bare emoji.
+      await send(ctx.userId, emoji, { content: { kind: 'reaction', emoji, targetId: target?.provider_id ?? null } });
+      return { ok: true, reacted: emoji };
     },
   },
 ];

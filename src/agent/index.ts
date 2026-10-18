@@ -108,6 +108,8 @@ async function turn(phone: string, text: string, via: 'phone' | 'dashboard', rec
         toolCalls.push({ name: c.name, args, result });
         input.push({ type: 'function_call_output', call_id: c.call_id, output: JSON.stringify(result) });
       }
+      // A tapback on its own is the whole answer: end the turn without text.
+      if (res.calls.length === 1 && res.calls[0].name === 'react' && !(toolCalls.at(-1)!.result as { error?: unknown }).error) break;
     }
   } catch (e) {
     error = e instanceof Error ? e.message : String(e);

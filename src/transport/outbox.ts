@@ -13,7 +13,8 @@ const RETRY_WINDOW_H = 24; // tune: older failures are left alone (stale context
 // Native iMessage extras for one outbound job. `text` is always stored too: it's the log line and the plain
 // fallback the deliverer sends if Photon rejects (or doesn't support) the rich form. `caption`, when set, goes out
 // as a plain bubble right before the rich part.
-export type Tapback = '❤️' | '👍' | '😂' | '‼️';
+export const TAPBACKS = ['❤️', '👍', '😂', '‼️'] as const;
+export type Tapback = (typeof TAPBACKS)[number];
 export type RichContent = (
   | { kind: 'contact'; first: string; last?: string; phone: string; mixrPhoto?: boolean } // vCard attachment
   | { kind: 'effect'; effect: 'confetti' } // text sent with a screen effect

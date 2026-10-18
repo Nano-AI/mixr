@@ -15,7 +15,8 @@ import { markInterrupted, processText } from './pipeline.ts';
 // https://photon.codes/docs/spectrum-ts/spaces-and-users
 // Logs never include message text, phone numbers or credentials.
 
-export type Inbound = { from: string; text: string; providerId: string };
+// threaded: the student replied inline to an earlier message (e.g. an old invite); our answer threads under it.
+export type Inbound = { from: string; text: string; providerId: string; threaded?: true };
 export type Connection = { stop: () => Promise<void>; finished: Promise<void> };
 
 const BACKOFF_MIN_MS = 1_000; // tune: first reconnect delay
@@ -32,12 +33,16 @@ export function parseSpectrumMessage(space: unknown, message: unknown): Inbound 
     direction?: unknown;
     id?: unknown;
     sender?: { id?: unknown };
-    content?: { type?: unknown; text?: unknown };
+    content?: { type?: unknown; text?: unknown; content?: { type?: unknown; text?: unknown } };
   };
   if (m.platform !== 'imessage' || m.direction !== 'inbound' || typeof m.id !== 'string' || !m.id) return null;
   if (typeof m.sender?.id !== 'string' || !/^\+[1-9]\d{7,14}$/.test(m.sender.id)) return null;
-  if (m.content?.type !== 'text' || typeof m.content.text !== 'string') return null;
-  return { from: m.sender.id, text: m.content.text, providerId: `imessage:${m.id}` };
+  const base = { from: m.sender.id, providerId: `imessage:${m.id}` };
+  if (m.content?.type === 'text' && typeof m.content.text === 'string') return { ...base, text: m.content.text };
+  // An inline reply is a text too (before, it was dropped as unsupported content).
+  const inner = m.content?.type === 'reply' ? m.content.content : undefined;
+  if (inner?.type === 'text' && typeof inner.text === 'string') return { ...base, text: inner.text, threaded: true };
+  return null;
 }
 
 // Read receipt + typing while we work. Cosmetic: an unsupported indicator never breaks message handling, and
@@ -80,26 +85,30 @@ export async function connectPhoton(onInbound: (m: Inbound) => Promise<void> = d
   const { photonProjectId: projectId, photonProjectSecret: projectSecret } = config;
   if (!projectId || !projectSecret) throw new Error('Set PROJECT_ID and PROJECT_SECRET before starting Photon');
   // Loaded lazily: tests and the sim transport never pull in the SDK.
-  const { Spectrum } = await import('spectrum-ts');
-  const { imessage } = await import('spectrum-ts/providers/imessage');
-  const app = await Spectrum({ projectId, projectSecret, providers: [imessage.config()], options: { logLevel: 'warn' } });
-  const im = imessage(app);
   const core = await import('spectrum-ts');
-  const ims = await import('spectrum-ts/providers/imessage');
-  const sdk: Sdk = { ...core, effect: ims.effect, nativeContactCard: ims.nativeContactCard, confetti: ims.imessage.effect.message.confetti };
+  const { imessage, effect, nativeContactCard } = await import('spectrum-ts/providers/imessage');
+  const app = await core.Spectrum({ projectId, projectSecret, providers: [imessage.config()], options: { logLevel: 'warn' } });
+  const im = imessage(app);
+  const sdk: Sdk = { ...core, effect, nativeContactCard, confetti: imessage.effect.message.confetti };
+  // Phone -> provider id of the inline reply being handled right now: plain texts to them thread under it.
+  const threads = new Map<string, string>();
   setDeliverer(async (phone, text, content) => {
     const user = await im.user(phone);
     const space = await im.space.create(user);
-    await deliver(space as unknown as SpaceLike, text, content, sdk);
+    const thread = threads.get(phone);
+    await deliver(space as unknown as SpaceLike, text, content ?? (thread ? { kind: 'reply', targetId: thread } : null), sdk);
   });
 
   const handle = async (m: Inbound, space: any, message: any): Promise<void> => {
+    if (m.threaded) threads.set(m.from, m.providerId);
     try {
       if (await quiet(m)) await onInbound(m);
       else await withMessageIndicators(message, space, () => onInbound(m));
       console.info('Inbound iMessage processed.');
     } catch {
       console.error('Inbound iMessage processing failed; recorded for inspection.');
+    } finally {
+      if (threads.get(m.from) === m.providerId) threads.delete(m.from);
     }
   };
 
