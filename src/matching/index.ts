@@ -40,6 +40,7 @@ export async function recall(vector: number[], opts: RecallOpts = {}): Promise<R
        AND (snoozed_until IS NULL OR snoozed_until <= $2)
        AND NOT (id = ANY($3::int[]))
        AND seeded = $7 -- demo and real users never meet
+       AND NOT opted_out -- people who texted STOP are never invited or suggested
      ORDER BY (embedding <=> $1::vector) + CASE WHEN id = ANY($5::int[]) THEN $6::float8 ELSE 0 END, id
      LIMIT $4`,
     [toVec(vector), t.toISOString(), exclude, limit, f?.avoidIds ?? [], AVOID_PENALTY, currentPool() === 'demo'],

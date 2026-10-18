@@ -32,7 +32,8 @@ const chains = new Map<string, Promise<void>>();
 //   via 'dashboard': typed in the simulator (the default, so nothing is delivered by accident). A number first
 //                    seen here joins the demo pool; for a real user it's "acting as" them: replies to them stay in
 //                    the dashboard, while everything else behaves like real life.
-export function handleInbound(phone: string, text: string, via: 'phone' | 'dashboard' = 'dashboard'): Promise<void> {
+// opts.recorded: the messaging pipeline already logged this text (it redacts codes and handles commands first).
+export function handleInbound(phone: string, text: string, via: 'phone' | 'dashboard' = 'dashboard', opts: { recorded?: boolean } = {}): Promise<void> {
   const prev = chains.get(phone) ?? Promise.resolve();
   const run = prev.then(async () => {
     const user = await getOrCreateUser(phone, { demo: via === 'dashboard' });
@@ -42,7 +43,7 @@ export function handleInbound(phone: string, text: string, via: 'phone' | 'dashb
       : via === 'phone'
         ? { pool: 'real', deliver: true }
         : { pool: 'real', deliver: true, quietUser: user.id };
-    await runIn(ctx, () => turn(phone, text, via));
+    await runIn(ctx, () => turn(phone, text, via, !!opts.recorded));
   });
   const tail = run.catch(() => {});
   chains.set(phone, tail);
@@ -52,9 +53,9 @@ export function handleInbound(phone: string, text: string, via: 'phone' | 'dashb
   return run;
 }
 
-async function turn(phone: string, text: string, via: 'phone' | 'dashboard'): Promise<void> {
+async function turn(phone: string, text: string, via: 'phone' | 'dashboard', recorded: boolean): Promise<void> {
   const user = await getOrCreateUser(phone);
-  await recordInbound(user.id, text, via);
+  if (!recorded) await recordInbound(user.id, text, via);
 
   const input: AgentInputItem[] = await buildInput(user, await now());
   const tools = agentTools();

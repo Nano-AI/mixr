@@ -21,6 +21,8 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS consent_at TIMESTAMPTZ;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS photon_user_id TEXT;      -- Photon shared-line user id
 ALTER TABLE users ADD COLUMN IF NOT EXISTS assigned_number TEXT;     -- the number this user texts mixr at
 ALTER TABLE users ADD COLUMN IF NOT EXISTS joined_via TEXT;          -- 'web' | 'imessage' | 'demo'
+-- One verified UW email per person (the onboarding code claims it atomically; this is the backstop).
+CREATE UNIQUE INDEX IF NOT EXISTS users_verified_email ON users(lower(email)) WHERE email_verified;
 
 -- Pending UW email codes (salted scrypt hash, never the code itself).
 CREATE TABLE IF NOT EXISTS email_codes (
