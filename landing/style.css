@@ -158,6 +158,8 @@ a { color: inherit; }
 /* narrow: the zoomed phone fills the width and runs under the nav, so the chrome steps aside */
 .top, .dots { transition: opacity .4s; }
 @media (max-width: 699px) { .end .top, .end .dots { opacity: 0; pointer-events: none; } }
+/* wider: the zoomed phone reaches the text links, so only the brand and the pill stay */
+.end .nav-link { opacity: 0; pointer-events: none; }
 /* read receipt: "Delivered" and "Read" share one cell and cross-fade */
 .receipt > span { grid-area: 1 / 1; }
 .receipt .rd { opacity: 0; }
@@ -408,4 +410,62 @@ a { color: inherit; }
 @media (prefers-reduced-motion: reduce) {
   .dots, .more { display: none; }
   .typing i, .compose.ready .field { animation: none; }
+}
+
+/* ── text pages (about, privacy): the homepage's lit state, one readable column that scrolls ── */
+.doc { --bg: #f5f6fb; --fg: #22272b; }
+.doc, .doc body { height: auto; overflow: visible; overscroll-behavior: auto; }
+.doc body { background: none; font: 400 19px/1.6 var(--serif); font-optical-sizing: auto; touch-action: auto; } /* html paints the page, so the glow below can sit under the text */
+/* the color field, still: the same palette as the no-WebGL fallback, fading into the page */
+.doc body::before {
+  content: ""; position: absolute; z-index: -1; inset: 0 0 auto; height: min(760px, 100svh); pointer-events: none;
+  background: radial-gradient(130% 100% at 50% -20%, #ffe6cf, #ffd2ee 24%, #c9c4f6 46%, #bccbff 62%, transparent 84%);
+  -webkit-mask-image: linear-gradient(#000 40%, transparent); mask-image: linear-gradient(#000 40%, transparent);
+  opacity: .75;
+}
+.doc .top { position: absolute; }
+.page { max-width: calc(34rem + 48px); margin: 0 auto; padding: 160px 24px 56px; }
+.page h1 {
+  font: 350 clamp(38px, 6vw, 56px)/1.05 var(--serif); font-optical-sizing: auto; letter-spacing: -.035em;
+  text-wrap: balance;
+}
+.page h2 { font: 400 27px/1.2 var(--serif); letter-spacing: -.02em; margin: 72px 0 16px; }
+.page p, .page li { text-wrap: pretty; }
+.page p + p, .page ul + p { margin-top: 14px; }
+.page .intro { margin-top: 24px; font-size: 21px; line-height: 1.55; }
+.page .meta { margin-top: 16px; color: #6b6f78; font-size: 16px; }
+.page ul { padding-left: 1.1em; }
+.page ul li + li { margin-top: 10px; }
+.page ul li::marker { color: #9a9ca3; }
+.page a { text-decoration-thickness: 1px; text-underline-offset: .18em; }
+.page a:hover { text-decoration-thickness: 2px; }
+.page a:focus-visible, .doc-foot a:focus-visible { outline: 2px solid currentColor; outline-offset: 3px; border-radius: 4px; }
+
+/* a real sequence, so real numbers: large light numerals hung in their own column */
+.steps { list-style: none; padding: 0; counter-reset: step; }
+.steps li { counter-increment: step; display: grid; grid-template-columns: 2.2rem 1fr; align-items: baseline; }
+.steps li + li { margin-top: 18px; }
+.steps li::before { content: counter(step); font: 300 34px/1 var(--serif); color: #8a8d96; }
+
+.page .team { list-style: none; padding: 0; }
+.page .team li + li { margin-top: 28px; }
+.team h3 { font: 400 23px/1.25 var(--serif); letter-spacing: -.015em; }
+.team p { margin-top: 2px; color: #4a4f57; }
+.team .links { display: flex; flex-wrap: wrap; gap: 4px 20px; margin-top: 4px; font-size: 17px; }
+
+.ask { margin-top: 80px; display: flex; flex-wrap: wrap; align-items: center; gap: 16px 24px; }
+.ask p { font-size: 23px; letter-spacing: -.015em; }
+.page .ask .nav-cta { text-decoration: none; }
+.doc-foot {
+  max-width: calc(34rem + 48px); margin: 0 auto; padding: 24px 24px calc(40px + env(safe-area-inset-bottom));
+  display: flex; flex-wrap: wrap; gap: 6px 22px; font-size: 15px; color: #6b6f78;
+}
+.doc-foot a { text-decoration: none; }
+.doc-foot a:hover { color: var(--fg); }
+.foot a { text-underline-offset: .15em; }
+@media (max-width: 640px) {
+  .page { padding: 112px 16px 40px; }
+  .page h2 { margin-top: 56px; }
+  .doc-foot { padding-left: 16px; padding-right: 16px; }
+  .doc .top-in { padding-left: 16px; padding-right: 16px; }
 }
