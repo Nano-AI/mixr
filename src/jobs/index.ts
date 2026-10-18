@@ -22,14 +22,17 @@ export async function schedule(kind: JobKind, payload: Record<string, unknown>, 
 
 // Run everything in the current pool due at or before `until`. Jobs scheduled by jobs (the next wave) also run
 // if due. Each job runs in its pool's own context, so real-pool jobs deliver even when triggered from the dashboard.
-export async function runDue(until?: Date): Promise<number> {
+// opts.eventWaves: only that event's due 'wave' jobs (an agent tool sending one event's round while the user
+// waits for the reply; everything else is left to the ticker).
+export async function runDue(until?: Date, opts: { eventWaves?: number } = {}): Promise<number> {
   const pool: Pool = currentPool();
   const end = until ?? (await now());
   let ran = 0;
   for (;;) {
     const job = await one<{ id: number; kind: JobKind; payload: any; run_at: string }>(
-      'SELECT id, kind, payload, run_at FROM jobs WHERE NOT done AND pool = $2 AND run_at <= $1 ORDER BY run_at, id LIMIT 1',
-      [end.toISOString(), pool],
+      `SELECT id, kind, payload, run_at FROM jobs WHERE NOT done AND pool = $2 AND run_at <= $1
+         AND ($3::int IS NULL OR (kind = 'wave' AND (payload->>'eventId')::int = $3)) ORDER BY run_at, id LIMIT 1`,
+      [end.toISOString(), pool, opts.eventWaves ?? null],
     );
     if (!job) break;
     await q('UPDATE jobs SET done = true WHERE id = $1', [job.id]);

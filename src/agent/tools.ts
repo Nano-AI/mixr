@@ -181,8 +181,9 @@ export const TOOLS: ToolDef[] = [
         { requirements, title, description, startsAt, location: nonEmpty(a.location, 'location'), capacity: posInt(a.capacity, 'capacity', MAX_CAPACITY) },
         { quietFirstRound: true },
       );
-      // Send the first round of invites now, so the reply can say honestly how it went.
-      await runDue();
+      // Send the first round of invites now, so the reply can say honestly how it went. Only this event's round:
+      // other due work (other events, profile evolution) is the ticker's, not this user's reply wait.
+      await runDue(undefined, { eventWaves: e.id });
       const sent = await one<{ n: number }>(`SELECT count(*)::int AS n FROM event_invites WHERE event_id = $1`, [e.id]);
       const invitedNow = sent?.n ?? 0;
       return {
@@ -239,7 +240,7 @@ export const TOOLS: ToolDef[] = [
         await assertShareable(u.id, `${ev?.title ?? ''}\n${description}`);
       }
       const result = await manageEvent(u.id, a.event_id, a.action as ManageAction, n, description);
-      if (a.action === 'update_description') await runDue(); // the new round goes out now, like on creation
+      if (a.action === 'update_description') await runDue(undefined, { eventWaves: a.event_id }); // the new round goes out now, like on creation
       return { result };
     },
   },
