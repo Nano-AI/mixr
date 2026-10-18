@@ -131,21 +131,30 @@ a { color: inherit; }
 .cursoring .more { opacity: 0; pointer-events: none; }
 @keyframes bob { 50% { transform: translateY(6px); } }
 
-/* tooltip pointing at the message field once the keypad is up; --hint-y is set from the field's position */
+/* "type your number" prompt, shown while the pad is up and the field is empty (main.js showHint).
+   Desktop: a tooltip left of the phone pointing at the field; --hint-y/--hint-x come from the field. */
 .hint {
-  position: absolute; z-index: 2; top: var(--hint-y, 60%); right: calc(100% - var(--hint-x, 30%) + 18px);
-  translate: 8px -50%; padding: 11px 16px; border-radius: 12px;
+  position: absolute; z-index: 2; top: var(--hint-y, 60%); right: calc(100% - var(--hint-x, 30%) + 22px);
+  translate: 10px -50%; padding: 18px 26px 19px; border-radius: 18px;
   background: var(--ink); color: #fff; white-space: nowrap;
-  font: 400 19px/1 var(--serif); font-optical-sizing: auto; letter-spacing: -.01em;
-  box-shadow: 0 10px 30px -10px rgba(34, 39, 43, .45);
+  font: 400 28px/1 var(--serif); font-optical-sizing: auto; letter-spacing: -.02em;
+  box-shadow: 0 14px 40px -12px rgba(34, 39, 43, .5);
   opacity: 0; transition: opacity .45s, translate .45s cubic-bezier(.2, .8, .2, 1);
   pointer-events: none;
 }
 .hint::after {
   content: ""; position: absolute; left: 100%; top: 50%; translate: -1px -50%;
-  border: 8px solid transparent; border-left-color: var(--ink);
+  border: 12px solid transparent; border-left-color: var(--ink);
 }
 .hint.on { opacity: 1; translate: 0 -50%; }
+/* no room beside the phone (main.js adds .top): a pill centered up top, in the nav's row */
+.hint.top {
+  position: fixed; top: calc(14px + env(safe-area-inset-top)); right: auto; left: 50%;
+  translate: -50% -8px; padding: 14px 22px 15px; border-radius: 999px; font-size: 24px;
+}
+.hint.top::after { display: none; }
+.hint.top.on { translate: -50% 0; }
+@media (max-width: 699px) { .hint.top { font-size: 21px; padding: 13px 20px 14px; } }
 
 .foot {
   position: fixed; z-index: 3; left: 0; right: 0; bottom: calc(14px + env(safe-area-inset-bottom));
@@ -314,8 +323,8 @@ a { color: inherit; }
 
 .b {
   position: relative; max-width: 74%;
-  padding: 7px 13px 8px; border-radius: 19px;
-  font-size: 17px; line-height: 22px; letter-spacing: -.43px;
+  padding: 8px 14px 9px; border-radius: 20px;
+  font-size: 20px; line-height: 25px; letter-spacing: -.4px; /* iOS larger text: reads at the zoomed-out scale too */
   overflow-wrap: anywhere;
   margin-top: 2px;
 }
@@ -383,13 +392,13 @@ a { color: inherit; }
 }
 .chat.kb .keypad { padding: 7px 6px 34px; }
 .key {
-  height: 50px; border: 0; border-radius: 6px; background: #fff; color: #000;
+  height: 54px; border: 0; border-radius: 7px; background: #fff; color: #000;
   box-shadow: 0 1px 0 rgba(0,0,0,.3);
   display: flex; flex-direction: column; align-items: center; justify-content: center;
-  font: 400 27px/1 var(--sf); cursor: pointer; transition: background .25s, color .25s;
+  font: 400 32px/1 var(--sf); cursor: pointer; transition: background .25s, color .25s;
   -webkit-tap-highlight-color: transparent;
 }
-.key small { font: 700 10px/1 var(--sf); letter-spacing: .14em; margin-top: 2px; }
+.key small { font: 700 11px/1 var(--sf); letter-spacing: .14em; margin-top: 2px; }
 .key.blank, .key.del { background: none; box-shadow: none; }
 .key.blank { pointer-events: none; }
 .key.down { background: var(--blue); color: #fff; transition: none; }
@@ -402,6 +411,12 @@ a { color: inherit; }
 }
 .typed { flex: 1; min-width: 0; display: flex; align-items: center; height: 34px; font: 17px/22px var(--sf); letter-spacing: -.43px; color: #000; padding: 6px 0; white-space: nowrap; }
 .typed[data-empty]::before { content: "Text Message"; color: #b9b9be; }
+/* pad up: the field is the thing to fill, so it grows and says what goes in it */
+.chat.kb .field { min-height: 46px; border-radius: 23px; padding-left: 16px; transition: border-color .3s, box-shadow .3s; }
+.chat.kb .typed { height: 44px; font-size: 23px; line-height: 28px; letter-spacing: -.3px; font-variant-numeric: tabular-nums; }
+.chat.kb .typed[data-empty]::before { content: "Your phone number"; color: #8a8a8f; letter-spacing: -.4px; }
+.chat.kb .typed::after { height: 27px; }
+.chat.kb .plus { margin-bottom: 5px; }
 /* fake caret: the field is driven by the on-screen keypad, not a native input */
 .chat.kb .typed::after { content: ""; display: inline-block; width: 2px; height: 21px; margin-left: 1px; flex: none; background: var(--blue); border-radius: 1px; animation: blink 1s steps(1) infinite; }
 .chat.kb .typed[data-empty]::after { order: -1; margin: 0 1px 0 0; }
@@ -412,14 +427,19 @@ a { color: inherit; }
 .send:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; border-radius: 50%; }
 
 /* the "type here" moment */
+.compose.ready .field, .field:focus-within { border: 1.5px solid var(--blue); box-shadow: 0 0 0 4px rgba(10,124,255,.2); }
 .compose.ready .field { animation: invite 2.4s ease-in-out infinite; }
+/* keyboard focus on the hidden input shows on the field it drives */
+.field:has(#num:focus-visible) { box-shadow: 0 0 0 4px rgba(10,124,255,.35); }
 /* joined: the thread is done, nothing more to type */
 .compose.done { pointer-events: none; opacity: .5; }
-@keyframes invite { 50% { border-color: var(--blue); box-shadow: 0 0 0 4px rgba(10,124,255,.18); } }
+@keyframes invite { 50% { box-shadow: 0 0 0 8px rgba(10,124,255,.14); } }
 
 @media (prefers-reduced-motion: reduce) {
   .dots, .more { display: none; }
   .typing i, .compose.ready .field { animation: none; }
+  .hint, .hint.on { transition: opacity .3s; translate: 0 -50%; }
+  .hint.top, .hint.top.on { translate: -50% 0; }
 }
 
 /* ── text pages (about, privacy): the homepage's lit state, one readable column that scrolls ── */
