@@ -98,6 +98,7 @@ test('onboarding happy path: consent -> name -> UW email -> code -> the agent ta
   u = await user();
   expect(u).toMatchObject({ step: 'verify', email: 'ana@uw.edu', emailVerified: false });
   expect(codes).toEqual([{ email: 'ana@uw.edu', code: expect.stringMatching(/^\d{6}$/) }]);
+  expect(await lastOut()).toMatch(/check spam or junk/);
   const row = (await one(`SELECT hash, salt FROM email_codes WHERE user_id = $1`, [u.id]))!;
   expect(row.hash).not.toContain(lastCode());
   expect(row.salt).toHaveLength(32);
