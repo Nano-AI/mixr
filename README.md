@@ -18,10 +18,10 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    Phone(["Phone"]) <--> Photon["Photon v2<br/>iMessage / SMS"] <--> MSG
+    Phone(["Phone"]) <--> Photon["Photon Spectrum<br/>iMessage"] <--> MSG
     subgraph App["One Node/TS process · shared SQLite (mixr.db)"]
         direction LR
-        MSG["messaging/<br/>webhook · router<br/>onboarding · sendMessage"]
+        MSG["messaging/<br/>event stream · router<br/>onboarding · sendMessage"]
         MEET["meetups/<br/>createProposal · recordResponse<br/>planner · tick()"]
         MAT["matching/<br/>buildProfile<br/>findCandidates"]
         MSG -- "recordResponse" --> MEET
@@ -43,7 +43,7 @@ flowchart LR
 | Runtime | Node ≥ 24, TypeScript via native type-stripping | No build step |
 | DB | `node:sqlite`, one file | 1,000 users × 384 floats ≈ 1.5 MB. No server needed |
 | Tests | `node:test` | Built in |
-| Messaging | Photon v2 (iMessage/SMS) | Hackathon track fit |
+| Messaging | Photon Spectrum (iMessage) | Authenticated inbound event stream |
 | Extraction | `@anthropic-ai/sdk`, `claude-haiku-5-5` | Braindump → structured profile |
 | Embeddings | `@huggingface/transformers`, `all-MiniLM-L6-v2` | Local, free, 384-dim |
 
@@ -51,11 +51,11 @@ flowchart LR
 
 ```bash
 npm install
-cp .env.example .env      # fill in keys
+test -f .env || cp .env.example .env  # fill in keys; preserve existing configuration
 npm test                  # all tests, in-memory DB, fake LLM
 npm run chat              # local multi-phone REPL (/as +1555..., /tick), no Photon needed
 npm run seed -- 1000      # synthetic users + matching benchmark
-npm start                 # server: POST /webhook/photon, POST /join, GET /health
+npm start                 # Spectrum event stream, POST /join, GET /health
 python3 -m http.server -d landing 4321   # landing page (joinmixr.club), static, no build
 ```
 
@@ -64,8 +64,15 @@ python3 -m http.server -d landing 4321   # landing page (joinmixr.club), static,
 Run `npm start` for the onboarding and meetup-message router. See
 [Messaging operations](docs/messaging-operations.md) for environment setup,
 team integration contracts, delivery recovery, and container deployment.
-The current Person 2/3 implementations remain stubs; verification requires
-a configured email sender.
+Meetup lifecycle, public events, and feedback are connected. John's profile
+extraction still has a stub; verification requires a configured email sender.
+See [Wayne's status](docs/wayne-status.md) for remaining demo validation.
+
+After verification, Claude Haiku chats about interests and can save draft notes
+with user-scoped tools. `PROFILE` reviews the draft; `OK` confirms it without
+asking for availability. Set `ANTHROPIC_API_KEY` in `.env`; use a workspace-scoped
+key or also set `ANTHROPIC_WORKSPACE_ID`. The default daily cap is 50 attempted
+API requests, with short bounded replies and no automatic retries.
 
 ## Spectrum iMessage connection check
 
@@ -99,7 +106,8 @@ still receives strict type checking.
 
 ## Limitations
 
-- Messaging capacity per Photon line: _TBD_
+- Sustained messaging capacity per Photon line: unmeasured. No 1,000-user
+  messaging-capacity claim is supported by the local tests.
 - `findCandidates` p95 at 1,000 users: _TBD_
 - Prior art: Ditto, lowkey, Timeleft, 222, and Husky Social all do matching. mixr's difference is **completing the meetup**.
 

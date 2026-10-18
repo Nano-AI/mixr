@@ -1,7 +1,10 @@
 import { existsSync } from 'node:fs';
 import { buildProfile, confirmProfile } from '../matching/profile.ts';
 import { openInvitations, recordResponse } from '../meetups/responses.ts';
+import { recordFeedback } from '../meetups/feedback.ts';
+import { listPublicEvents, joinEvent } from '../meetups/events.ts';
 import { sendCode } from './email.ts';
+import { converse } from './agent.ts';
 
 // Missing teammate modules are explicit integration gaps, never replacement algorithms.
 const slotsUrl = new URL('../meetups/slots.ts', import.meta.url);
@@ -19,7 +22,11 @@ export const services = {
   confirmProfile,
   openInvitations,
   recordResponse,
+  recordFeedback,
+  listPublicEvents,
+  joinEvent,
   sendCode,
+  converse,
   upcomingSlots: (now: Date): string[] => slots?.upcomingSlots(now) ?? [],
   planMeetups: async (now: Date): Promise<void> => {
     if (planner) await planner.planMeetups(now);

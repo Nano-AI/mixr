@@ -20,7 +20,8 @@
     <filter id="shadow" x="-40%" y="-30%" width="180%" height="180%" color-interpolation-filters="sRGB"><feDropShadow dx="0" dy="30" stdDeviation="31" flood-color="#7777ba" flood-opacity=".19"/><feDropShadow dx="0" dy="5" stdDeviation="6" flood-color="#a7a2ce" flood-opacity=".12"/></filter>
     <filter id="mark-depth" x="-40%" y="-30%" width="180%" height="180%" color-interpolation-filters="sRGB"><feDropShadow dx="0" dy="13" stdDeviation="12" flood-color="#8874b5" flood-opacity=".16"/></filter>
   </defs>
-  <path fill="#f9f9fb" d="M0 0H1254V1254H0Z"/><g opacity=".48" filter="url(#soft)">
+  <path fill="#f9f9fb" d="M0 0H1254V1254H0Z"/>
+  <g id="centered-logo" transform="translate(-1 -42.31)"><g opacity=".48" filter="url(#soft)">
     <ellipse cx="466" cy="861" rx="180" ry="90" fill="url(#blue)"/>
     <ellipse cx="753" cy="877" rx="170" ry="95" fill="url(#peach)"/>
   </g>
@@ -35,11 +36,12 @@
     <use href="#tile" fill="none" stroke="#fff" stroke-width="10" opacity=".22" filter="url(#refraction)"/>
   </g>
   <use href="#tile" fill="none" stroke="url(#edge)" stroke-width="1" stroke-opacity=".4"/>
-  <path d="M506 428C500 428 498 431 498 437V451C498 457 500 459 506 459H514C541 459 555 471 567 497L607 578L480 741C478 744 479 745 483 745H538C543 745 546 744 549 740L629 625L664 698C683 738 704 747 744 747L784 745C790 745 792 743 792 737V723C792 717 790 714 784 715H775C749 715 733 702 720 677L667 569L772 432C775 428 774 427 770 427H716C710 427 708 428 705 433L645 522L619 465C604 433 583 426 548 427Z" fill="url(#mark)" filter="url(#mark-depth)"/>
-<g fill="#22272b" transform="translate(480 982) scale(1.51)">
+  <path id="mixr-mark" transform="translate(-7.500000 -17.955017)" d="M506 428C500 428 498 431 498 437V451C498 457 500 459 506 459H514C541 459 555 471 567 497L607 578L480 741C478 744 479 745 483 745H538C543 745 546 744 549 740L629 625L664 698C683 738 704 747 744 747L784 745C790 745 792 743 792 737V723C792 717 790 714 784 715H775C749 715 733 702 720 677L667 569L772 432C775 428 774 427 770 427H716C710 427 708 428 705 433L645 522L619 465C604 433 583 426 548 427Z" fill="url(#mark)" filter="url(#mark-depth)"/>
+<g fill="#22272b" transform="translate(479.265 982) scale(1.51)">
     <path d="M0 62V0H8L34 42L60 0H68V62H60V15L35 54H32L8 15V62Z"/>
     <path d="M87 62V18H95V62ZM86 4A5 5 0 1 1 96 4A5 5 0 1 1 86 4Z"/>
     <path d="M109 62L126 39L110 18H120L131 33L142 18H152L136 39L154 62H144L131 45L119 62Z"/>
     <path d="M170 62V18H178V26C183 19 188 17 197 18V26C185 24 178 31 178 42V62Z"/>
+  </g>
   </g>
 </svg>
