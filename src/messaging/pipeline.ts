@@ -2,6 +2,7 @@ import { config } from '../config.ts';
 import { getOrCreateUser, getUserByPhone, one, q } from '../db/index.ts';
 import { runIn, type RunContext } from '../context.ts';
 import { recordInbound, send } from '../transport/index.ts';
+import type { RichContent } from '../transport/outbox.ts';
 import { handleInbound } from '../agent/index.ts';
 import { openInvitesFor, respondToInvite } from '../events/index.ts';
 import type { User } from '../types.ts';
@@ -29,6 +30,7 @@ const isStop = (word: string): boolean => STOP_WORDS.has(word) || STOP_WORDS.has
 export const STOP_ACK = "you're unsubscribed from mixr and won't get any more texts. Reply START to come back.";
 export const HELP_TEXT =
   "mixr connects UW students with people and events that match their interests: text me what you're into or what you want to do, and i'll find your people. Message frequency varies. Reply STOP to unsubscribe.";
+const SITE_URL = 'https://www.joinmixr.club';
 const WELCOME_BACK = "welcome back to mixr! you'll get texts from me again. Reply STOP anytime to unsubscribe.";
 const OOPS = 'sorry, something went wrong on my end. mind sending that again?';
 
@@ -101,7 +103,7 @@ async function realTurn(user: User, text: string, via: Via, providerId?: string)
   const redact = user.step === 'verify' && !command && word !== 'EMAIL';
   await recordInbound(user.id, redact ? CODE_PLACEHOLDER : text, via);
 
-  const reply = (body: string) => send(user.id, body, providerId ? { dedupeKey: `reply:${providerId}` } : {});
+  const reply = (body: string, content?: RichContent) => send(user.id, body, { ...(providerId ? { dedupeKey: `reply:${providerId}` } : {}), content });
   if (isStop(word)) {
     await optOut(user, providerId);
     return false;
@@ -113,7 +115,7 @@ async function realTurn(user: User, text: string, via: Via, providerId?: string)
     return false;
   }
   if (word === 'HELP') {
-    await reply(HELP_TEXT);
+    await reply(HELP_TEXT, { kind: 'richlink', url: SITE_URL, caption: HELP_TEXT }); // the help text, then a link preview
     return false;
   }
   if (user.step) {
