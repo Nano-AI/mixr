@@ -8,7 +8,7 @@ import { trace } from '../trace.ts';
 import { profileSlots } from '../profiles/index.ts';
 import { peopleFilter, recordScreenings, standingTextRules, type HardFilter, type JudgeRule, type Verdict } from '../requirements/index.ts';
 import { RERANK_SYSTEM, rerankSchema } from './prompts.ts';
-import { bm25, rrf, tokenize } from './bm25.ts';
+import { bm25, LEX_WEIGHT, rareTerms, tokenize, weightedRrf } from './bm25.ts';
 
 // tune: stage-1 recall size (cheap, tolerant of polymaths' diluted vectors).
 const RECALL_LIMIT = 40;
@@ -54,11 +54,12 @@ export async function recall(vector: number[], opts: RecallOpts = {}): Promise<R
   if (text) {
     // rows are already in vector order (avoid penalty included). 'Rather not' people get no lexical boost.
     const avoid = new Set(f?.avoidIds ?? []);
-    const scores = bm25(text, rows.map((r) => r.canonical_profile ?? ''));
+    const docs = rows.map((r) => r.canonical_profile ?? '');
+    const terms = rareTerms(text, docs);
+    const scores = terms.size ? bm25([...terms].join(' '), docs) : docs.map(() => 0);
     const lex = rows.map((r, i) => ({ r, s: scores[i] })).filter((x) => x.s > 0 && !avoid.has(x.r.id)).sort((a, b) => b.s - a.s);
     const byId = new Map(rows.map((r) => [r.id, r]));
-    rows = rrf(rows.map((r) => r.id), lex.map((x) => x.r.id)).slice(0, limit).map((id) => byId.get(id)!);
-    const terms = new Set(tokenize(text));
+    rows = weightedRrf([[rows.map((r) => r.id), 1], [lex.map((x) => x.r.id), LEX_WEIGHT]]).slice(0, limit).map((id) => byId.get(id)!);
     lexical = lex
       .slice(0, TRACE_HITS)
       .map((x) => `${x.r.name ?? x.r.id} (${[...new Set(tokenize(x.r.canonical_profile ?? ''))].filter((w) => terms.has(w)).join(', ')})`)

@@ -29,11 +29,29 @@ export function bm25(query: string, docs: string[]): number[] {
 }
 
 const RRF_K = 60; // tune: standard RRF damping
+export const LEX_WEIGHT = 0.5; // tune: lexical ranking's weight in the fusion (vector = 1)
+const RARE_SHARE = 0.2; // tune: a term in more than this share of candidates gets no lexical boost
 
 // Reciprocal rank fusion: score(id) = sum over rankings of 1 / (60 + rank), rank 1-based. An id absent from a
 // ranking gets no term from it. Ties keep first-seen order (pass the primary ranking first).
 export function rrf(...rankings: number[][]): number[] {
+  return weightedRrf(rankings.map((ids) => [ids, 1]));
+}
+
+// Same, with a weight per ranking (the lexical side counts less than the vector side).
+export function weightedRrf(rankings: [ids: number[], weight: number][]): number[] {
   const score = new Map<number, number>();
-  for (const ids of rankings) ids.forEach((id, i) => score.set(id, (score.get(id) ?? 0) + 1 / (RRF_K + i + 1)));
+  for (const [ids, w] of rankings) ids.forEach((id, i) => score.set(id, (score.get(id) ?? 0) + w / (RRF_K + i + 1)));
   return [...score.keys()].sort((a, b) => score.get(b)! - score.get(a)!);
+}
+
+// Query terms rare enough in this candidate set to be worth a lexical boost: a course code, a club, a rating.
+// Common words in a chatty ask ("new", "weekends", "casually") stay with the vector side.
+export function rareTerms(query: string, docs: string[], maxShare = RARE_SHARE): Set<string> {
+  const toks = docs.map((d) => new Set(tokenize(d)));
+  const cap = Math.max(1, Math.floor(docs.length * maxShare));
+  return new Set([...new Set(tokenize(query))].filter((w) => {
+    const n = toks.filter((t) => t.has(w)).length;
+    return n > 0 && n <= cap;
+  }));
 }
