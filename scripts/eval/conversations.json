@@ -1,0 +1,67 @@
+[
+  {
+    "id": "aditya-real",
+    "note": "Reproduces a real transcript: opt-in, name, braindump, levels, a people search, then accepting the intro. Goes through the deterministic onboarding (consent, name); '@verified' marks the UW email verified in the DB instead of emailing a code.",
+    "onboarding": true,
+    "turns": [
+      "hey",
+      "yes",
+      "Aditya B",
+      "@verified",
+      "I love photography, and I love programming. I also enjoy going to the gym. I love playing chess and board games, also like Poker.",
+      "Casual about chess, competitive about poker",
+      "Can you find somebody that's also into programming? I want to find someone to vibe code with",
+      "yes please, intro me to the first one"
+    ]
+  },
+  {
+    "id": "tennis-partner",
+    "turns": [
+      "hey! i'm sam lee, i play tennis around 4.0 and love board games",
+      "pretty competitive with tennis, board games are casual",
+      "anyone want to hit this weekend?",
+      "the first one sounds good, ask them"
+    ]
+  },
+  {
+    "id": "vague-music",
+    "turns": [
+      "hi",
+      "idk, music?",
+      "i play guitar a little, mostly listen to indie stuff. i'm riley moss btw",
+      "who else is into jazz?"
+    ]
+  },
+  {
+    "id": "host-event",
+    "turns": [
+      "hey this is jordan kim. into bouldering (v3ish, casual) and catan",
+      "can you host a catan night friday at 7 in the hub, like 5 people",
+      "how's it going?"
+    ]
+  },
+  {
+    "id": "block-then-search",
+    "turns": [
+      "hi im lena park, i love film photography and hiking, casual about both",
+      "never match me with alex, long story",
+      "find me someone to go on photo walks with"
+    ]
+  },
+  {
+    "id": "discover-nothing",
+    "turns": [
+      "hey i'm omar ali, i like pickup soccer and cooking. casual about soccer",
+      "is there any pickup soccer or something this weekend?",
+      "sure, put one together"
+    ]
+  },
+  {
+    "id": "gym-and-pause",
+    "turns": [
+      "yo i'm chris tan, i lift 4x a week and play valorant (gold, casual)",
+      "anyone want to be my gym buddy?",
+      "actually pause texts until monday, midterms"
+    ]
+  }
+]
