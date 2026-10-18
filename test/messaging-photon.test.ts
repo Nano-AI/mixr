@@ -3,7 +3,7 @@ import nodemailer from 'nodemailer';
 import { config } from '../src/config.ts';
 import { parseSpectrumMessage, startMessaging, withMessageIndicators, type Connection } from '../src/messaging/photon.ts';
 import { registerSharedUser, setPhotonFetch } from '../src/messaging/photon-api.ts';
-import { createEmailSender, emailConfigured } from '../src/messaging/email.ts';
+import { createEmailSender, emailConfigured, verificationEmail } from '../src/messaging/email.ts';
 
 // The Spectrum adapter's pure parts, the reconnect loop (with a fake connection), the Photon REST client (fake
 // fetch), and the email sender (nodemailer stream transport). Nothing here touches the network.
@@ -141,9 +141,24 @@ test('Gmail sender addresses the UW student and includes the code', async () => 
     mime = result.message.toString();
   })('student@uw.edu', '123456');
   expect(envelope).toEqual({ from: 'mixr.test@gmail.com', to: ['student@uw.edu'] });
-  expect(mime).toMatch(/Subject: Your mixr verification code/);
-  expect(mime).toMatch(/123456/);
+  expect(mime).toMatch(/Subject: 123456 is your mixr code/);
+  expect(mime).toMatch(/multipart\/alternative/);
+  expect(mime).toMatch(/Content-Type: text\/plain/);
+  expect(mime).toMatch(/Content-Type: text\/html/);
   expect(mime).toMatch(/10 minutes/);
+});
+
+test('verification email: code in subject (first), text and html; user strings escaped; under the Gmail clip', () => {
+  const m = verificationEmail('<b>"o\'neil"&co@uw.edu', '123456');
+  expect(m.subject).toBe('123456 is your mixr code');
+  expect(m.text).toContain('123456');
+  expect(m.text).toContain('expires in 10 minutes');
+  expect(m.html).toContain('>123456</div>'); // the code alone in its own element, easy to select
+  expect(m.html).toContain('your code is 123456'); // hidden preheader
+  expect(m.html).toContain('&lt;b&gt;&quot;o&#39;neil&quot;&amp;co@uw.edu');
+  expect(m.html).not.toContain('<b>');
+  expect(Buffer.byteLength(m.html)).toBeLessThan(100 * 1024);
+  expect(verificationEmail('a@uw.edu', '<x>').html).not.toContain('<x>');
 });
 
 test('email fails closed: missing config, unknown provider, transport errors', async () => {
