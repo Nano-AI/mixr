@@ -167,6 +167,7 @@ const hidden = steps.map((el) => -el.offsetHeight);
 const origin = (el) => (el.classList.contains('me') || el.classList.contains('receipt') ? '100% 100%' : '0% 100%');
 const root = document.documentElement;
 const hint = $('#hint');
+const stage = $('.stage');
 
 // background: 0 = black with a faint aura, 1 = the full living color field
 const reveal = { v: reduced ? 1 : 0, goal: reduced ? 1 : 0 };
@@ -238,8 +239,9 @@ if (reduced) {
     root.style.setProperty('--lit', x * x * (3 - 2 * x));
     const on = kbOn && sp > CHAT_TO;
     if (on) {
+      // the hint lives in the sticky stage, which slides up once scrolled past the section: measure from it
       const r = compose.querySelector('.field').getBoundingClientRect();
-      root.style.setProperty('--hint-y', `${r.top + r.height / 2}px`);
+      root.style.setProperty('--hint-y', `${r.top + r.height / 2 - stage.getBoundingClientRect().top}px`);
     }
     hint.classList.toggle('on', on);
     requestAnimationFrame(chase);
