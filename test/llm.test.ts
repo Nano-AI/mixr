@@ -48,3 +48,24 @@ test('messages: a raw provider turn is passed back verbatim', () => {
   expect(m[1]).toEqual({ role: 'assistant', content: raw });
   expect(m[2].content[0]).toMatchObject({ type: 'tool_result', tool_use_id: 't1' });
 });
+
+// A ClaudeLlm with its HTTP client stubbed: records every request body, never touches the network.
+async function stubbedClaude() {
+  const { fresh } = await import('./helpers.ts');
+  const { ClaudeLlm } = await import('../src/llm/index.ts');
+  await fresh();
+  const l = new ClaudeLlm();
+  const sent: any[] = [];
+  (l as any).client = { messages: { create: async (p: any) => (sent.push(p), { content: [{ type: 'text', text: '{}' }], usage: {}, stop_reason: 'end_turn' }) } };
+  return { l, sent };
+}
+
+test('agent request caches the shared prefix: explicit breakpoint on the system block plus automatic caching; trace has ms', async () => {
+  const { one } = await import('../src/db/index.ts');
+  const { l, sent } = await stubbedClaude();
+  await l.agent({ instructions: 'you are mixr', input: [{ role: 'user', content: 'hi' }], tools: [] });
+  expect(sent[0].system).toEqual([{ type: 'text', text: 'you are mixr', cache_control: { type: 'ephemeral' } }]);
+  expect(sent[0].cache_control).toEqual({ type: 'ephemeral' });
+  const tr = await one<{ data: any }>(`SELECT data FROM traces WHERE kind = 'llm' ORDER BY id DESC LIMIT 1`);
+  expect(tr!.data.ms).toEqual(expect.any(Number));
+});

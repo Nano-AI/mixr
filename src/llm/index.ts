@@ -109,7 +109,7 @@ const safeJson = (s: string): unknown => {
   }
 };
 
-class ClaudeLlm implements Llm {
+export class ClaudeLlm implements Llm {
   private client = new Anthropic({
     apiKey: config.anthropicKey,
     maxRetries: 1,
@@ -123,6 +123,7 @@ class ClaudeLlm implements Llm {
 
   async json<T>(req: JsonRequest): Promise<T> {
     await spendOne();
+    const started = Date.now();
     const r = await this.client.messages.create({
       model: config.anthropicModel,
       max_tokens: JSON_MAX_TOKENS,
@@ -130,7 +131,7 @@ class ClaudeLlm implements Llm {
       messages: [{ role: 'user', content: req.input }],
       output_config: { effort: EFFORT, format: { type: 'json_schema', schema: toClaudeSchema(req.schema) as Record<string, unknown> } },
     } as Anthropic.MessageCreateParamsNonStreaming);
-    await trace('llm', null, { purpose: req.name, usage: r.usage, stop: r.stop_reason });
+    await trace('llm', null, { purpose: req.name, usage: r.usage, ms: Date.now() - started, stop: r.stop_reason });
     if (r.stop_reason === 'refusal' || r.stop_reason === 'max_tokens') throw new Error(`${req.name}: stopped (${r.stop_reason})`);
     const text = r.content.find((b): b is Anthropic.TextBlock => b.type === 'text')?.text ?? '';
     return JSON.parse(text) as T;
@@ -138,12 +139,15 @@ class ClaudeLlm implements Llm {
 
   async agent(req: AgentRequest): Promise<AgentResponse> {
     await spendOne();
+    const started = Date.now();
     const r = await this.client.messages.create({
       model: config.anthropicModel,
       max_tokens: AGENT_MAX_TOKENS,
-      // Stable prefix (tools + instructions + history) is cached; the per-turn context sits at the end.
+      // Two breakpoints. The explicit one on the system block caches tools + instructions (identical for every
+      // user and turn). The automatic one lands on the last block, the per-turn context, so it only helps the
+      // next call within this same turn (tool loop); without the explicit one the shared prefix was never reused.
       cache_control: { type: 'ephemeral' },
-      system: req.instructions,
+      system: [{ type: 'text', text: req.instructions, cache_control: { type: 'ephemeral' } }],
       messages: toClaudeMessages(req.input),
       tools: req.tools.map((t) => ({
         name: t.name,
@@ -153,7 +157,7 @@ class ClaudeLlm implements Llm {
       })),
       output_config: { effort: EFFORT },
     } as Anthropic.MessageCreateParamsNonStreaming);
-    await trace('llm', null, { purpose: 'agent', usage: r.usage, stop: r.stop_reason });
+    await trace('llm', null, { purpose: 'agent', usage: r.usage, ms: Date.now() - started, stop: r.stop_reason });
     const text = r.content
       .filter((b): b is Anthropic.TextBlock => b.type === 'text')
       .map((b) => b.text)
