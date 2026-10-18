@@ -2,8 +2,9 @@ import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { config } from '../config.ts';
-import { one } from '../db/index.ts';
+import { one, q } from '../db/index.ts';
 import { setDeliverer, type RichContent } from '../transport/outbox.ts';
+import type { Service } from '../types.ts';
 import { emailConfigured } from './email.ts';
 import { keyword } from './onboarding.ts';
 import { markInterrupted, processText } from './pipeline.ts';
@@ -16,7 +17,8 @@ import { markInterrupted, processText } from './pipeline.ts';
 // Logs never include message text, phone numbers or credentials.
 
 // threaded: the student replied inline to an earlier message (e.g. an old invite); our answer threads under it.
-export type Inbound = { from: string; text: string; providerId: string; threaded?: true };
+// service: what Apple says the text came in on (absent when Photon reports 'unknown' or nothing).
+export type Inbound = { from: string; text: string; providerId: string; threaded?: true; service?: Service };
 export type Connection = { stop: () => Promise<void>; finished: Promise<void> };
 
 const BACKOFF_MIN_MS = 1_000; // tune: first reconnect delay
@@ -32,17 +34,31 @@ export function parseSpectrumMessage(space: unknown, message: unknown): Inbound 
     platform?: unknown;
     direction?: unknown;
     id?: unknown;
-    sender?: { id?: unknown };
+    sender?: { id?: unknown; service?: unknown };
     content?: { type?: unknown; text?: unknown; content?: { type?: unknown; text?: unknown } };
   };
   if (m.platform !== 'imessage' || m.direction !== 'inbound' || typeof m.id !== 'string' || !m.id) return null;
   if (typeof m.sender?.id !== 'string' || !/^\+[1-9]\d{7,14}$/.test(m.sender.id)) return null;
-  const base = { from: m.sender.id, providerId: `imessage:${m.id}` };
+  const service = SERVICES.get(m.sender.service);
+  const base = { from: m.sender.id, providerId: `imessage:${m.id}`, ...(service ? { service } : {}) };
   if (m.content?.type === 'text' && typeof m.content.text === 'string') return { ...base, text: m.content.text };
   // An inline reply is a text too (before, it was dropped as unsupported content).
   const inner = m.content?.type === 'reply' ? m.content.content : undefined;
   if (inner?.type === 'text' && typeof inner.text === 'string') return { ...base, text: inner.text, threaded: true };
   return null;
+}
+
+// Photon's sender.service (advanced-imessage ChatServiceType, mapped from the proto Message.sender
+// SingleServiceAddressInfo.service enum: 1 iMessage, 2 SMS, 3 RCS) -> ours. 'unknown' maps to nothing.
+const SERVICES = new Map<unknown, Service>([
+  ['iMessage', 'imessage'],
+  ['RCS', 'rcs'],
+  ['SMS', 'sms'],
+]);
+
+// Keep users.service in step with what their latest text came in on (e.g. they switched to Android).
+export async function rememberService(m: Inbound): Promise<void> {
+  if (m.service) await q('UPDATE users SET service = $2 WHERE phone = $1 AND service IS DISTINCT FROM $2', [m.from, m.service]);
 }
 
 // Read receipt + typing while we work. Cosmetic: an unsupported indicator never breaks message handling, and
@@ -96,18 +112,21 @@ export async function connectPhoton(onInbound: (m: Inbound) => Promise<void> = d
     const user = await im.user(phone);
     const space = await im.space.create(user);
     const thread = threads.get(phone);
-    await deliver(space as unknown as SpaceLike, text, content ?? (thread ? { kind: 'reply', targetId: thread } : null), sdk);
+    const u = await one<{ service: Service | null }>('SELECT service FROM users WHERE phone = $1', [phone]);
+    await deliver(space as unknown as SpaceLike, text, content ?? (thread ? { kind: 'reply', targetId: thread } : null), sdk, u?.service ?? null);
   });
 
   const handle = async (m: Inbound, space: any, message: any): Promise<void> => {
     if (m.threaded) threads.set(m.from, m.providerId);
     try {
+      await rememberService(m); // before: this turn's replies already go out per service
       if (await quiet(m)) await onInbound(m);
       else await withMessageIndicators(message, space, () => onInbound(m));
       console.info('Inbound iMessage processed.');
     } catch {
       console.error('Inbound iMessage processing failed; recorded for inspection.');
     } finally {
+      await rememberService(m).catch(() => {}); // again: a first-ever text only creates the user in onInbound
       if (threads.get(m.from) === m.providerId) threads.delete(m.from);
     }
   };
@@ -138,11 +157,27 @@ const MIXR_PHOTO = fileURLToPath(new URL('../../landing/brand/mixr-contact.jpg',
 
 // One outbound job. Plain text unless the job carries rich content; if building or sending that throws, or the
 // kind isn't supported, the plain text goes out instead (logged). Only a failed plain send rejects (-> outbox retry).
-export async function deliver(space: SpaceLike, text: string, content: RichContent | null, sdk: Sdk): Promise<void> {
+//
+// Per service (users.service, from the student's last inbound text; null = unknown). Android texts the same line
+// over RCS or SMS, where most iMessage extras don't exist:
+//   kind           imessage / unknown            rcs                          sms
+//   reaction       tapback (fallback: emoji)     tapback (fallback: nothing)  nothing
+//   effect         text + confetti               text                         text
+//   contact        caption + vCard               text (carries the number)    text
+//   share_contact  Share Name and Photo          skipped                      skipped
+//   reply          threaded text                 plain text                   plain text
+//   richlink       link preview                  text + URL                   text + URL
+// iOS 18 RCS carries emoji reactions to Android; screen effects and Share Name and Photo are iMessage-only.
+// Unknown keeps the try-rich-then-fall-back behavior. docs/messaging-operations.md has the same table.
+export async function deliver(space: SpaceLike, text: string, content: RichContent | null, sdk: Sdk, service: Service | null = null): Promise<void> {
   const plain = async (body: string) => {
     if (!(await space.send(body))) throw new Error('Photon did not accept the message');
   };
   if (!content) return plain(text);
+  if (service === 'sms' || (service === 'rcs' && content.kind !== 'reaction')) {
+    if (content.kind === 'reaction' || content.kind === 'share_contact') return; // never a bare emoji or an empty card
+    return plain(content.kind === 'richlink' && !text.includes(content.url) ? `${text}\n${content.url}` : text);
+  }
   if (content.kind === 'share_contact') {
     // Best effort: never retried, never replaced by text.
     try {
@@ -200,6 +235,7 @@ export async function deliver(space: SpaceLike, text: string, content: RichConte
     }
     if (!(await space.send(rich))) throw new Error('not accepted');
   } catch (e) {
+    if (service === 'rcs') return void console.warn(`RCS ${content.kind} failed (${redact(e)}); dropped.`); // only reactions get here
     console.warn(`iMessage ${content.kind} failed (${redact(e)}); sending plain text instead.`);
     if (captionSent && content.caption === text) return; // the text already went out as the caption
     await plain(text);

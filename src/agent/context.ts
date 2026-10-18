@@ -102,7 +102,7 @@ export async function contextBlock(user: User, now: Date): Promise<string> {
   const name = user.name
     ? `${user.name}${user.name.trim().includes(' ') ? ` (full name on file, don't ask for it again; call them ${firstName(user.name)})` : ''}`
     : '(unknown, ask)';
-  L.push(`user: name=${name} | state=${user.state}${user.state === 'onboarding' ? ' (new, no profile saved yet)' : ''}`);
+  L.push(`user: name=${name} | state=${user.state}${user.state === 'onboarding' ? ' (new, no profile saved yet)' : ''} | service=${user.service ?? 'unknown'}`);
   L.push(
     firstText
       ? `conversation: this is the FIRST text they have ever sent mixr${user.canonicalProfile ? ' (a profile already exists for them, e.g. imported; they have not met you yet)' : ''}`

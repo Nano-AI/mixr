@@ -21,6 +21,9 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS consent_at TIMESTAMPTZ;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS photon_user_id TEXT;      -- Photon shared-line user id
 ALTER TABLE users ADD COLUMN IF NOT EXISTS assigned_number TEXT;     -- the number this user texts mixr at
 ALTER TABLE users ADD COLUMN IF NOT EXISTS joined_via TEXT;          -- 'web' | 'imessage' | 'demo'
+-- The service their texts arrive on (Photon's sender.service on the last inbound); NULL = unknown. Picks what
+-- rich content deliver() sends (src/messaging/photon.ts).
+ALTER TABLE users ADD COLUMN IF NOT EXISTS service TEXT CHECK (service IN ('imessage', 'rcs', 'sms'));
 -- One verified UW email per person (the onboarding code claims it atomically; this is the backstop).
 CREATE UNIQUE INDEX IF NOT EXISTS users_verified_email ON users(lower(email)) WHERE email_verified;
 

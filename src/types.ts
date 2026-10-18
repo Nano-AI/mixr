@@ -15,7 +15,10 @@ export type User = {
   optedOut: boolean;
   assignedNumber: string | null; // the Photon number this user texts mixr at
   joinedVia: string | null;
+  service: Service | null; // what their texts arrive on; null = unknown
 };
+
+export type Service = 'imessage' | 'rcs' | 'sms';
 
 export type OnboardingStep = 'consent' | 'name' | 'email' | 'verify';
 
