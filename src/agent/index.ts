@@ -69,9 +69,15 @@ export function tidy(text: string): string {
   return t;
 }
 
-// Effects stay rare: only the reply confirming a seat they just got (RSVP yes or a discover join).
-export const confetti = (calls: ToolCallLog[]): boolean =>
-  calls.some((c) => (c.name === 'respond_to_invite' || c.name === 'join_event') && isFreshAccept(String((c.result as { detail?: unknown })?.detail ?? '')));
+// Effects stay rare: only the reply confirming a seat they just got (RSVP yes or a discover join) or the one that
+// finishes onboarding. Never a second effect in a turn whose number swap (already_texted) already had one.
+export const confetti = (calls: ToolCallLog[]): boolean => {
+  const r = (c: ToolCallLog) => (c.result ?? {}) as { detail?: unknown; onboarded?: unknown; already_texted?: unknown };
+  if (calls.some((c) => r(c).already_texted)) return false;
+  return calls.some(
+    (c) => ((c.name === 'respond_to_invite' || c.name === 'join_event') && isFreshAccept(String(r(c).detail ?? ''))) || (c.name === 'save_profile' && r(c).onboarded === true),
+  );
+};
 
 // Per-phone promise chain: two texts from one phone run one after the other, different phones run concurrently.
 const chains = new Map<string, Promise<void>>();
@@ -112,6 +118,15 @@ async function turn(phone: string, text: string, via: 'phone' | 'dashboard', rec
   let reply = '';
   let error: string | undefined;
   let nudged = false;
+  let reacted = false;
+  // At most one tapback per turn: a second react call is refused instead of run.
+  const run = async (c: { name: string; arguments: string }) => {
+    if (c.name !== 'react') return runTool(user.id, c.name, c.arguments, text);
+    if (reacted) return { args: c.arguments, result: { error: 'you already reacted to this text; one tapback per turn' } };
+    const r = await runTool(user.id, c.name, c.arguments, text);
+    reacted = !(r.result as { error?: unknown }).error;
+    return r;
+  };
 
   try {
     for (let i = 0; i < MAX_LLM_CALLS; i++) {
@@ -144,7 +159,7 @@ async function turn(phone: string, text: string, via: 'phone' | 'dashboard', rec
       for (let j = 0; j < res.calls.length; ) {
         let k = j + 1;
         if (READ_ONLY.has(res.calls[j].name)) while (k < res.calls.length && READ_ONLY.has(res.calls[k].name)) k++;
-        results.push(...(await Promise.all(res.calls.slice(j, k).map((c) => runTool(user.id, c.name, c.arguments, text)))));
+        results.push(...(await Promise.all(res.calls.slice(j, k).map(run))));
         j = k;
       }
       res.calls.forEach((c, j) => {
@@ -153,12 +168,19 @@ async function turn(phone: string, text: string, via: 'phone' | 'dashboard', rec
         toolCalls.push({ name: c.name, args, result });
         input.push({ type: 'function_call_output', call_id: c.call_id, output: JSON.stringify(result) });
       });
-      // A tapback on its own is the whole answer: end the turn without text.
-      if (res.calls.length === 1 && res.calls[0].name === 'react' && !(toolCalls.at(-1)!.result as { error?: unknown }).error) break;
+      // A tapback alone with no text is the whole answer (the text needed none): end the turn silently. A tapback
+      // with text is a tapback plus that text as the reply.
+      if (res.calls.length === 1 && res.calls[0].name === 'react' && !(toolCalls.at(-1)!.result as { error?: unknown }).error) {
+        if (!res.text.trim()) break;
+        if (!looksInternal(res.text)) {
+          reply = res.text.trim();
+          break;
+        }
+      }
       // Every action in this round came back with mixr's own confirmation and they didn't ask anything: send that
-      // as-is. Saves a model call, and the model can't narrate a reply it doesn't write.
-      const canned = results.map((r) => (r.result as { reply?: unknown; error?: unknown }) ?? {});
-      if (!text.includes('?') && canned.every((r) => typeof r.reply === 'string' && !r.error)) {
+      // as-is. Saves a model call, and the model can't narrate a reply it doesn't write. A tapback rides along.
+      const canned = results.filter((_, j) => res.calls[j].name !== 'react').map((r) => (r.result as { reply?: unknown; error?: unknown }) ?? {});
+      if (!text.includes('?') && canned.length && canned.every((r) => typeof r.reply === 'string' && !r.error)) {
         reply = canned.map((r) => r.reply).join(' ');
         break;
       }

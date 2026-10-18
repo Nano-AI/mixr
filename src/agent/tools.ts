@@ -155,7 +155,7 @@ export const TOOLS: ToolDef[] = [
       const name = typeof a.name === 'string' && a.name.trim() ? fullNameArg(a.name, u.name) : undefined;
       if (!name && !u.name) throw new ToolError('ask for their full name (first and last) before saving the profile');
       const profile = await buildProfile(u.id, braindump, name);
-      return { ok: true, name: name ?? u.name, profile };
+      return { ok: true, name: name ?? u.name, profile, ...(u.state === 'onboarding' ? { onboarded: true } : {}) };
     },
   },
   {
@@ -443,7 +443,7 @@ export const TOOLS: ToolDef[] = [
   {
     name: 'react',
     description:
-      'Tapback the user\'s latest text instead of replying, when it needs no answer ("thanks!", "ok", "sounds good", "lol"). This is your whole answer: the turn ends and no text is sent.',
+      'Tapback the user\'s latest text. Alone, with no text from you, it is the whole answer and the turn ends: use that when the text needs no answer ("thanks!", "ok", "sounds good", "lol"). When their text has an emotional beat (excitement, a joke, good news) and also needs an answer, react and write your short reply in the same response: the tapback goes first, then your text. Most texts get no tapback. At most one per turn, and never as the only answer to a question.',
     parameters: obj({ emoji: { type: 'string', enum: [...TAPBACKS] } }),
     run: async (ctx, a) => {
       if (!TAPBACKS.includes(a.emoji)) throw new ToolError(`emoji must be one of ${TAPBACKS.join(' ')}`);

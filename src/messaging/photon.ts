@@ -152,6 +152,15 @@ export async function deliver(space: SpaceLike, text: string, content: RichConte
     }
     return;
   }
+  // A caption with confetti; the plain caption if Photon won't take the effect.
+  const withEffect = async (body: string) => {
+    try {
+      if (await space.send(sdk.effect(body, sdk.confetti))) return;
+    } catch (e) {
+      console.warn(`iMessage effect failed (${redact(e)}); sending plain text instead.`);
+    }
+    await plain(body);
+  };
   let captionSent = false;
   try {
     const target = async (id: string | null) => {
@@ -186,7 +195,7 @@ export async function deliver(space: SpaceLike, text: string, content: RichConte
         throw new Error(`unsupported content kind '${content.kind}'`);
     }
     if (content.caption) {
-      await plain(content.caption);
+      await (content.captionEffect ? withEffect(content.caption) : plain(content.caption));
       captionSent = true;
     }
     if (!(await space.send(rich))) throw new Error('not accepted');

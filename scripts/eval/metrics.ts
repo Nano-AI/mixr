@@ -66,7 +66,13 @@ export function duplicates(bubbles: string[], earlier: string[] = []): number {
 const NARRATION = /\b(i'?ll|i will|i'?ve|i just|i'?m going to|let me)\b|as soon as|get back to you|keep you posted|you two can|sort out the details|leave .* out/i;
 export const narration = (t: string): number => t.split(/(?<=[.!?])\s+/).filter((x) => NARRATION.test(x)).length;
 
-export type ReplyStats = { chars: number; bubbles: number; questions: number; capital: boolean; restates: boolean; dupes: number; narration: number };
+// Tapbacks: a reaction is logged as a bubble that is just the emoji (mirrors TAPBACKS in src/transport/outbox.ts).
+const TAPBACKS = new Set(['❤️', '👍', '😂', '‼️']);
+export const reactions = (bubbles: string[]): number => bubbles.filter((b) => TAPBACKS.has(b.trim())).length;
+// A turn answered with a tapback and no text.
+export const reactOnly = (bubbles: string[]): boolean => bubbles.length > 0 && reactions(bubbles) === bubbles.length;
+
+export type ReplyStats = { chars: number; bubbles: number; questions: number; capital: boolean; restates: boolean; dupes: number; narration: number; reactions: number; reactOnly: boolean };
 
 export function replyStats(bubbles: string[], userSaid: string[], earlier: string[]): ReplyStats {
   const text = bubbles.join('\n');
@@ -78,6 +84,8 @@ export function replyStats(bubbles: string[], userSaid: string[], earlier: strin
     restates: restates(text, userSaid),
     dupes: duplicates(bubbles, earlier),
     narration: narration(text),
+    reactions: reactions(bubbles),
+    reactOnly: reactOnly(bubbles),
   };
 }
 
@@ -96,6 +104,11 @@ if (import.meta.main) {
   assert.ok(restates('got it: photography, programming, chess, poker, gym', ['I love photography, programming, chess, poker and the gym']));
   assert.ok(!restates('nice! anyone in mind?', ['I love photography, programming, chess, poker and the gym']));
   const s = replyStats(['Hey there? ok?', 'second'], [], []);
-  assert.deepEqual([s.bubbles, s.questions, s.capital, s.dupes], [2, 2, true, 0]);
+  assert.deepEqual([s.bubbles, s.questions, s.capital, s.dupes, s.reactions, s.reactOnly], [2, 2, true, 0, 0, false]);
+  assert.equal(reactions(['❤️', 'see you there!']), 1);
+  assert.ok(reactOnly(['👍']));
+  assert.ok(!reactOnly(['❤️', 'see you there!']));
+  assert.ok(!reactOnly([]));
+  assert.equal(reactions(['nice ❤️']), 0);
   console.log('metrics self-check ok');
 }
