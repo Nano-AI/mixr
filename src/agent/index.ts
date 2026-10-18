@@ -150,11 +150,13 @@ async function turn(phone: string, text: string, via: 'phone' | 'dashboard', rec
         j = k;
       }
       const acted = results.map((r, j) => ({ name: res.calls[j].name, result: (r.result ?? {}) as Result })).filter((c) => !STYLE.has(c.name));
-      // An effect asked for alongside an action that failed has nothing to celebrate: refuse it, and say so.
+      // The agent decides on an effect only once it has seen how the action went (an RSVP yes can come back
+      // waitlisted): one asked for in the same response as an action is refused, and the model gets the results.
       const cj = res.calls.findIndex((c, j) => c.name === 'celebrate' && !(results[j].result as Result).error);
-      if (cj >= 0 && acted.some((c) => c.result.error)) {
+      const deferred = cj >= 0 && acted.length > 0;
+      if (deferred) {
         celebrated = false;
-        results[cj] = { ...results[cj], result: { error: 'not celebrated: an action in the same response failed' } };
+        results[cj] = { ...results[cj], result: { error: 'not yet: see the result above, then call celebrate with your text if it went through' } };
       }
       res.calls.forEach((c, j) => {
         const { args, result } = results[j];
@@ -176,7 +178,7 @@ async function turn(phone: string, text: string, via: 'phone' | 'dashboard', rec
       // Every action came back with mixr's own confirmation (reply) or already texted them (already_texted). Text the
       // model wrote in that same response is its choice to say something more (an answer to their question): send
       // it. No text: send the confirmations as-is (nothing for already_texted). Either way, no second model call.
-      if (acted.every((c) => !c.result.error && (typeof c.result.reply === 'string' || c.result.already_texted))) {
+      if (!deferred && acted.every((c) => !c.result.error && (typeof c.result.reply === 'string' || c.result.already_texted))) {
         reply = said || acted.flatMap((c) => (typeof c.result.reply === 'string' ? [c.result.reply] : [])).join(' ');
         break;
       }

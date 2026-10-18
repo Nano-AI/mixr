@@ -160,12 +160,20 @@ test('confetti only when the agent celebrates: it rides on the canned seat confi
   );
   await q(`INSERT INTO event_invites (event_id, user_id, wave, pitch, invited_at) VALUES ($1, $2, 1, 'p', now())`, [ev.id, guest.id]);
   const rsvp = (id: string) => ({ call_id: id, name: 'respond_to_invite', arguments: JSON.stringify({ event_id: ev.id, response: 'yes' }) });
+  // celebrate next to the action is refused ("not yet"); the agent sees the seat came through, then celebrates.
   let calls = 0;
-  fake.agentHandler = () => (calls++, { text: '', calls: [rsvp('c1'), { call_id: 'c2', name: 'celebrate', arguments: '{}' }] });
+  const outs: string[] = [];
+  fake.agentHandler = (req) => {
+    for (const i of req.input) if ('type' in i && i.type === 'function_call_output') outs.push(i.output);
+    return ++calls === 1
+      ? { text: '', calls: [rsvp('c1'), { call_id: 'c2', name: 'celebrate', arguments: '{}' }] }
+      : { text: "you're in for catan night!", calls: [{ call_id: 'c3', name: 'celebrate', arguments: '{}' }] };
+  };
   await handleInbound(guest.phone, 'yes!', 'phone');
-  expect(calls).toBe(1); // the canned confirmation goes out, no second model call
+  expect(calls).toBe(2);
+  expect(outs.some((o) => /not yet/.test(o))).toBe(true);
   const toGuest = sent.filter((s) => s.phone === guest.phone);
-  expect(toGuest).toEqual([{ phone: guest.phone, text: expect.stringMatching(/^you're in for catan night/), content: { kind: 'effect', effect: 'confetti' } }]);
+  expect(toGuest).toEqual([{ phone: guest.phone, text: "you're in for catan night!", content: { kind: 'effect', effect: 'confetti' } }]);
   expect(sent.find((s) => s.phone === host.phone)?.content).toBeNull(); // the host's update stays plain
 
   // The same yes without celebrate: no effect, whatever the outcome.
@@ -188,7 +196,7 @@ test('celebrate: at most one effect per turn, and refused when the action it cam
       : { text: 'which event did you mean?', calls: [] };
   };
   await handleInbound(u.phone, 'yes', 'phone');
-  expect(outputs.some((o) => /not celebrated/.test(o))).toBe(true);
+  expect(outputs.some((o) => /not yet/.test(o))).toBe(true);
   expect(sent.at(-1)).toEqual({ phone: u.phone, text: 'which event did you mean?', content: null });
 
   n = 0;
@@ -308,18 +316,18 @@ test("intro accepted in the target's turn: the swap carries no effect; the agent
   const jordan = await realUser('Jordan Kim');
   const intro = await runIn(real, () => requestIntro(maya.id, jordan.id, 'tennis'));
   let calls = 0;
-  fake.agentHandler = () => (
-    calls++,
-    {
-      text: 'have fun! courts by the IMA are open til 10',
-      calls: [
-        { call_id: 'c1', name: 'respond_to_intro', arguments: JSON.stringify({ intro_id: intro.id, accept: true, message: null }) },
-        { call_id: 'c2', name: 'celebrate', arguments: '{}' },
-      ],
-    }
-  );
+  fake.agentHandler = () =>
+    ++calls === 1
+      ? {
+          text: '',
+          calls: [
+            { call_id: 'c1', name: 'respond_to_intro', arguments: JSON.stringify({ intro_id: intro.id, accept: true, message: null }) },
+            { call_id: 'c2', name: 'celebrate', arguments: '{}' },
+          ],
+        }
+      : { text: 'have fun! courts by the IMA are open til 10', calls: [{ call_id: 'c3', name: 'celebrate', arguments: '{}' }] };
   await handleInbound(jordan.phone, 'yes! where are the courts?', 'phone');
-  expect(calls).toBe(1);
+  expect(calls).toBe(2); // celebrate waits until the agent has seen the swap went through
   const toJordan = sent.filter((s) => s.phone === jordan.phone);
   expect(toJordan.map((s) => s.content?.kind ?? null)).toEqual([null, 'contact', 'effect']); // intro ask, swap card, agent text
   expect(toJordan.at(-1)).toEqual({ phone: jordan.phone, text: 'have fun! courts by the IMA are open til 10', content: { kind: 'effect', effect: 'confetti' } });
@@ -374,7 +382,7 @@ test('deliver per service: iMessage gets everything, RCS keeps tapbacks only, SM
   const target = { id: 'GUID-9' };
   const reaction: RichContent = { kind: 'reaction', emoji: '❤️', targetId: 'imessage:GUID-9' };
   const effect: RichContent = { kind: 'effect', effect: 'confetti' };
-  const contact: RichContent = { kind: 'contact', first: 'Ana', phone: '+14255550100', caption: "here's Ana", captionEffect: 'confetti' };
+  const contact: RichContent = { kind: 'contact', first: 'Ana', phone: '+14255550100', caption: "here's Ana" };
   const share: RichContent = { kind: 'share_contact' };
   const link: RichContent = { kind: 'richlink', url: 'https://www.joinmixr.club', caption: 'help text' };
   const run = async (service: 'imessage' | 'rcs' | 'sms' | null, text: string, content: RichContent, opts: { reject?: string[] } = {}) => {
@@ -386,7 +394,7 @@ test('deliver per service: iMessage gets everything, RCS keeps tapbacks only, SM
   for (const service of ['imessage', null] as const) {
     expect(await run(service, '❤️', reaction)).toEqual([{ kind: 'reaction', args: ['❤️', target] }]);
     expect(await run(service, 'yay', effect)).toEqual([{ kind: 'effect', args: ['yay', 'confetti-id'] }]);
-    expect((await run(service, "here's Ana: +14255550100", contact)).map((c) => (c as { kind: string }).kind)).toEqual(['effect', 'contact']);
+    expect(await run(service, "here's Ana: +14255550100", contact)).toEqual(["here's Ana", expect.objectContaining({ kind: 'contact' })]);
     expect(await run(service, '[share name and photo]', share)).toEqual([{ kind: 'nativeContactCard', args: [] }]);
   }
 

@@ -462,7 +462,7 @@ export const TOOLS: ToolDef[] = [
   {
     name: 'celebrate',
     description:
-      'Send the text mixr sends them this turn with a confetti screen effect. Only for a real win: they just got a seat at an event, just finished signing up, or an intro they said yes to just went through. Call it in the same response as the action that earns it, or with your own text. Confetti needs a text to ride on: with already_texted, also write a few words ("have fun!"). Most turns get none, at most one per turn, and never when their service is rcs or sms.',
+      'Send the text mixr sends them this turn with a confetti screen effect. Only for a real win: they just got a seat at an event, just finished signing up, or an intro they said yes to just went through. Call it after you have seen how the action went, together with your text (in the same response as an action it is refused). Confetti needs a text to ride on: with already_texted, also write a few words ("have fun!"). Most turns get none, at most one per turn, and never when their service is rcs or sms.',
     parameters: obj({}),
     run: async () => ({ ok: true, effect: 'confetti' }), // the agent loop puts it on this turn's text
   },
