@@ -93,6 +93,7 @@ const render = () => {
   typed.toggleAttribute('data-empty', !digits);
   sendBtn.disabled = digits.length !== 10;
   compose.classList.toggle('ready', kbOn && !digits && !busy && !joined); // pulse the field: type here
+  if (reduced) showHint(true); // no story loop to drive it
 };
 
 const down = (el) => {
@@ -185,6 +186,29 @@ const origin = (el) => (el.classList.contains('me') || el.classList.contains('re
 const root = document.documentElement;
 const hint = $('#hint');
 const stage = $('.stage');
+// "type your number": up while the pad is open and the field empty (gone once a digit lands or the
+// number is sent, back if they clear it). With room left of the phone it points at the field;
+// otherwise it's a pill up top (.top).
+function showHint(settled) {
+  const on = settled && compose.classList.contains('ready');
+  if (on) {
+    const left = phone.getBoundingClientRect().left;
+    const side = innerWidth >= 1000 && left > 400; // ponytail: the 28px tooltip is ~370px wide; measure it if the copy changes
+    if (hint.classList.contains('top') === side) {
+      // switch layouts without animating between them; the fade-in then starts from the new spot
+      hint.style.transition = 'none';
+      hint.classList.toggle('top', !side);
+      void hint.offsetWidth;
+      hint.style.transition = '';
+    }
+    if (side) {
+      const f = compose.querySelector('.field').getBoundingClientRect();
+      root.style.setProperty('--hint-y', `${f.top + f.height / 2}px`);
+      root.style.setProperty('--hint-x', `${left}px`);
+    }
+  }
+  hint.classList.toggle('on', on);
+}
 
 // background: 0 = black with a faint aura, 1 = the full living color field
 const reveal = { v: reduced ? 1 : 0, goal: reduced ? 1 : 0 };
@@ -209,6 +233,7 @@ if (reduced) {
   steps.filter((el) => el.hasAttribute('data-typing')).forEach((el) => el.remove());
   openKeypad();
   root.classList.add('end');
+  addEventListener('resize', render); // keeps the desktop hint on the field
 } else {
   steps.forEach((el, i) => {
     el.style.transformOrigin = origin(el);
@@ -321,13 +346,7 @@ if (reduced) {
     // corners fill last), on the same clock, so nav and background change together
     const x = hasGL ? utils.clamp((reveal.cover - 0.12) / 0.38, 0, 1) : reveal.v;
     paintLit(x * x * (3 - 2 * x));
-    const on = kbOn && slide === LAST && !move && innerWidth >= 1000;
-    if (on) {
-      const f = compose.querySelector('.field').getBoundingClientRect();
-      root.style.setProperty('--hint-y', `${f.top + f.height / 2}px`);
-      root.style.setProperty('--hint-x', `${phone.getBoundingClientRect().left}px`);
-    }
-    hint.classList.toggle('on', on);
+    showHint(slide === LAST && !move && head === target); // once the zoom and "what's your number?" land
     if (auto && !autoTimer && !move && head === target && slide >= 1 && slide < LAST) {
       const s = slide;
       autoTimer = setTimeout(() => {
