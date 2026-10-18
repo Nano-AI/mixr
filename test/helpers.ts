@@ -1,47 +1,29 @@
-import { db, toBlob } from '../src/db.ts';
-import type { Category } from '../src/types.ts';
+import { reset, q, toVec } from '../src/db/index.ts';
+import { setNow } from '../src/clock.ts';
+import { FakeLlm, setLlm } from '../src/llm/index.ts';
+import { fakeEmbed } from '../src/llm/embed.ts';
 
-const DIM = 384;
+export const T0 = new Date('2026-10-20T12:00:00-07:00');
 
-export function axis(i: number): Float32Array {
-  const v = new Float32Array(DIM);
-  v[i] = 1;
-  return v;
+// Fresh DB, clock at T0, fresh fake LLM (no handlers = every pipeline step uses its fallback).
+export async function fresh(): Promise<FakeLlm> {
+  await reset();
+  await setNow(T0);
+  const fake = new FakeLlm();
+  setLlm(fake);
+  return fake;
 }
 
-export function blend(a: Float32Array, b: Float32Array, t: number): Float32Array {
-  const v = a.map((x, i) => (1 - t) * x + t * b[i]);
-  const n = Math.hypot(...v);
-  return v.map((x) => x / n);
+// Active user whose embedding is fakeEmbed(profile) unless a vector is given.
+export async function makeUser(name: string, profile: string, vector?: number[]): Promise<number> {
+  const v = vector ?? (await fakeEmbed([profile]))[0];
+  const phone = `+1555${String(Math.floor(Math.random() * 1e7)).padStart(7, '0')}`;
+  const r = await q<{ id: number }>(
+    `INSERT INTO users (phone, name, state, canonical_profile, embedding) VALUES ($1, $2, 'active', $3, $4) RETURNING id`,
+    [phone, name, profile, toVec(v)],
+  );
+  return r[0].id;
 }
 
-let n = 0;
-
-// Inserts an active, confirmed user directly (skips onboarding).
-export function makeUser(o: {
-  phone?: string;
-  name?: string;
-  interests?: { label: string; vector: Float32Array; category?: Category }[];
-  slots?: string[];
-  mode?: 'pair' | 'group' | 'both';
-  reliability?: number;
-} = {}): number {
-  n++;
-  const interests = o.interests ?? [];
-  const { lastInsertRowid } = db
-    .prepare("INSERT INTO users (phone, name, step, mode, reliability) VALUES (?, ?, 'active', ?, ?)")
-    .run(o.phone ?? `+1555${String(n).padStart(7, '0')}`, o.name ?? `User${n}`, o.mode ?? 'both', o.reliability ?? 1200);
-  const id = Number(lastInsertRowid);
-  const profile = {
-    summary: interests.map((i) => i.label).join(', '),
-    interests: interests.map((i) => ({ label: i.label, kind: 'does', level: 'casual', category: i.category ?? 'other' })),
-    vibe: '',
-    constraints: [],
-  };
-  db.prepare('INSERT INTO profiles (user_id, braindump, data, confirmed) VALUES (?, ?, ?, 1)').run(id, profile.summary, JSON.stringify(profile));
-  const addInterest = db.prepare("INSERT INTO interests (user_id, label, kind, level, category, embedding) VALUES (?, ?, 'does', 'casual', ?, ?)");
-  for (const i of interests) addInterest.run(id, i.label, i.category ?? 'other', toBlob(i.vector));
-  const addSlot = db.prepare('INSERT INTO availability (user_id, slot) VALUES (?, ?)');
-  for (const s of o.slots ?? []) addSlot.run(id, s);
-  return id;
-}
+// Unit vector along axis i.
+export const axis = (i: number, dims = 1536): number[] => Array.from({ length: dims }, (_, j) => (j === i ? 1 : 0));
