@@ -452,13 +452,39 @@ function lineCard(number, link) {
     if (['https:', 'sms:'].includes(new URL(link).protocol)) href = link;
   } catch {}
   const el = (tag, cls, text) => Object.assign(document.createElement(tag), { className: cls, textContent: text });
-  const a = el('a', 'line-cta', 'text mixr');
-  a.href = href;
-  a.setAttribute('aria-label', `text mixr at ${pretty} in Messages`);
-  if (!touch) Object.assign(a, { target: '_blank', rel: 'noopener' }); // keep this page, and the number, open
+  // a shared-contact card: avatar, name and number, then Message and Add to Contacts
+  const head = el('span', 'line-head');
+  const id = el('span', 'line-id');
+  id.append(el('b', 'line-name', 'mixr'), el('span', 'line-num', pretty));
+  head.append(Object.assign(el('img', 'line-av'), { src: 'brand/mixr-icon.svg', alt: '' }), id);
+  const msg = el('a', 'line-cta', 'Message');
+  msg.href = href;
+  msg.setAttribute('aria-label', `message mixr at ${pretty}`);
+  if (!touch) Object.assign(msg, { target: '_blank', rel: 'noopener' }); // keep this page, and the number, open
+  const add = el('a', 'line-add', 'Add to Contacts');
+  add.href = '#';
+  add.addEventListener('click', (e) => {
+    e.preventDefault();
+    saveContact(number);
+  });
+  const acts = el('span', 'line-acts');
+  acts.append(msg, add);
   const card = document.createDocumentFragment();
-  card.append(el('span', 'line-num', pretty), a);
+  card.append(head, acts);
   return card;
+}
+
+// a vCard with mixr's name, photo and this person's line, so the thread shows up as mixr
+async function saveContact(number) {
+  let photo = '';
+  try {
+    const buf = new Uint8Array(await (await fetch('brand/mixr-contact.jpg')).arrayBuffer());
+    photo = `PHOTO;ENCODING=b;TYPE=JPEG:${btoa(String.fromCharCode(...buf))}\r\n`;
+  } catch {} // no photo still saves the name and number
+  const vcf = `BEGIN:VCARD\r\nVERSION:3.0\r\nFN:mixr\r\nN:;mixr;;;\r\nTEL;TYPE=CELL:${number}\r\n${photo}END:VCARD\r\n`;
+  const url = URL.createObjectURL(new Blob([vcf], { type: 'text/vcard' }));
+  Object.assign(document.createElement('a'), { href: url, download: 'mixr.vcf' }).click();
+  setTimeout(() => URL.revokeObjectURL(url), 10000);
 }
 
 compose.addEventListener('submit', async (e) => {
@@ -485,7 +511,7 @@ compose.addEventListener('submit', async (e) => {
     const rc = bubble('receipt', 'Delivered');
     setTimeout(() => (rc.textContent = `Read ${$('[data-clock]').textContent}`), reduced ? 0 : 500);
     closeKeypad();
-    bubble('b them', "you're in! text mixr to get started:");
+    bubble('b them', "you're in! here's your mixr line:");
     const card = await say(lineCard(res.data.number, res.data.link), 'b them line');
     if (!touch) card.querySelector('a').focus({ preventScroll: true }); // Enter opens Messages
     busy = false;

@@ -316,17 +316,22 @@ a { color: inherit; }
 .b a { color: inherit; }
 
 /* joined: mixr hands you your own line, a number to save and a button that opens Messages */
-.b.line { max-width: 82%; display: flex; flex-direction: column; align-items: flex-start; gap: 9px; padding: 11px 14px 12px; }
+.b.line { width: 82%; display: flex; flex-direction: column; padding: 0; overflow: hidden; }
+.line-head { display: flex; align-items: center; gap: 11px; padding: 12px 14px; }
+.line-av { width: 44px; height: 44px; border-radius: 50%; flex: none; }
+.line-id { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.line-name { font: 600 17px/1.15 var(--sf); letter-spacing: -.3px; }
 .line-num {
-  font: 600 28px/1.1 var(--sf); letter-spacing: -.02em; font-variant-numeric: tabular-nums;
+  font: 400 15px/1.2 var(--sf); color: #3c3c43; font-variant-numeric: tabular-nums;
   white-space: nowrap; -webkit-user-select: all; user-select: all; cursor: text;
 }
-.line .line-cta {
-  align-self: stretch; padding: 11px 16px; border-radius: 999px;
-  background: var(--blue); color: #fff; text-align: center; text-decoration: none;
-  font: 600 17px/1 var(--sf); letter-spacing: -.2px;
+.line-acts { display: grid; grid-template-columns: 1fr 1fr; border-top: .5px solid rgba(60, 60, 67, .29); }
+.line .line-cta, .line .line-add {
+  padding: 12px 6px; text-align: center; text-decoration: none; color: var(--blue);
+  font: 400 16px/1 var(--sf); letter-spacing: -.2px;
 }
-.line .line-cta:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+.line .line-cta { font-weight: 600; border-right: .5px solid rgba(60, 60, 67, .29); }
+.line .line-cta:focus-visible, .line .line-add:focus-visible { outline: 2px solid var(--blue); outline-offset: -2px; }
 
 .compose { flex: none; display: flex; align-items: flex-end; gap: 9px; padding: 8px 12px 30px; background: #fff; }
 .chat.kb .compose { padding-bottom: 8px; }
