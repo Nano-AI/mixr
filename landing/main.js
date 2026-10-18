@@ -12,10 +12,10 @@ const API = (window.MIXR_API || (!PROD && query.get('api')) || (PROD ? 'https://
 const MOCK = query.get('mock') ?? (PROD || window.MIXR_API || query.get('api') ? null : 'ok');
 const SMS = document.body.dataset.sms; // set data-sms="+1..." on <body> to offer a text-us fallback
 
-// a real join is remembered ({number, link}), so a reload or a return visit opens straight on the last step.
-// Mock joins aren't, so a local preview always starts from the top; ?last opens straight on the last step
-// with a made-up number instead.
-const SAVED = 'mixr.line';
+// a join is remembered ({number, link}), so on a reload or a return visit the story ends on their number instead
+// of the number pad. Mock joins keep their own key, so a fake number never shows up against a real server;
+// ?mock=full|error|offline start fresh so those states are one load away.
+const SAVED = MOCK ? 'mixr.line.mock' : 'mixr.line';
 const store = {
   get() {
     try {
@@ -25,10 +25,11 @@ const store = {
       return null;
     }
   },
-  set: (v) => { if (!MOCK) try { localStorage.setItem(SAVED, JSON.stringify(v)); } catch {} },
+  set: (v) => { try { localStorage.setItem(SAVED, JSON.stringify(v)); } catch {} },
   clear: () => { try { localStorage.removeItem(SAVED); } catch {} },
 };
-const saved = MOCK ? (query.has('last') ? { number: '+12065550142', link: '' } : null) : store.get();
+const saved = !MOCK || MOCK === 'ok' ? store.get() : null;
+let known = saved; // a return visit, until "start over"
 
 const $ = (s) => document.querySelector(s);
 const phone = $('#phone');
@@ -165,7 +166,7 @@ num.addEventListener('keydown', (e) => {
 });
 // a digit typed anywhere on the page jumps to the phone and starts the number
 addEventListener('keydown', (e) => {
-  if (joined || finished || e.target === num || e.metaKey || e.ctrlKey || e.altKey || !/^\d$/.test(e.key)) return;
+  if (joined || finished || known || e.target === num || e.metaKey || e.ctrlKey || e.altKey || !/^\d$/.test(e.key)) return;
   e.preventDefault();
   go(Infinity);
   openKeypad();
@@ -250,8 +251,10 @@ if (reduced) {
   paintLit(1);
   paintReveal();
   steps.filter((el) => el.hasAttribute('data-typing')).forEach((el) => el.remove());
-  openKeypad();
-  root.classList.add('end');
+  if (!known) {
+    openKeypad();
+    root.classList.add('end');
+  }
   addEventListener('resize', render); // keeps the desktop hint on the field
 } else {
   steps.forEach((el, i) => {
@@ -330,9 +333,10 @@ if (reduced) {
     speed = Math.abs(i - slide) > 1 ? 6 : 1.5; // a jump (nav button, a dot) fast-forwards the texts
     slide = i;
     [...dots.children].forEach((d, j) => d.toggleAttribute('aria-current', j === i));
-    root.classList.toggle('end', i === LAST && !joined);
+    root.classList.toggle('end', i === LAST && !joined && !known);
     root.classList.toggle('focus', i === LAST && joined); // nav steps aside for the card
-    if (i === LAST) openKeypad();
+    if (known) slideLast(i === LAST); // a return visit ends on their number, not the pad
+    else if (i === LAST) openKeypad();
     else if (kbOn && !joined) closeKeypad();
     move?.pause();
     const d = Math.abs(SLIDES[i].t - pos.t);
@@ -425,10 +429,19 @@ if (reduced) {
   let low = 0; // smallest avg since that peak
   addEventListener('wheel', (e) => {
     if (finished) return; // the last-step screen scrolls natively
-    e.preventDefault();
     const now = performance.now();
     const d = Math.abs(e.deltaY);
     const s = Math.sign(e.deltaY);
+    const box = lastScroller(e.target);
+    if (box && (s > 0 ? box.scrollTop + box.clientHeight < box.scrollHeight - 1 : box.scrollTop > 0)) {
+      // the last-step slide scrolling itself; its momentum shouldn't carry on into a slide change
+      quietSince = now;
+      dir = s;
+      armed = false;
+      avg = peak = low = d;
+      return;
+    }
+    e.preventDefault();
     if (!s) return (quietSince = now); // sideways only
     const fresh = now - quietSince > 220 || s !== dir;
     avg = fresh ? d : avg + (d - avg) / 3;
@@ -446,12 +459,20 @@ if (reduced) {
     }
   }, { passive: false });
   let touchY = null;
-  addEventListener('touchstart', (e) => (touchY = e.touches[0].clientY), { passive: true });
-  addEventListener('touchmove', (e) => !finished && e.cancelable && e.preventDefault(), { passive: false });
+  let touchTop = 0; // how far the last-step slide was scrolled when the touch began
+  addEventListener('touchstart', (e) => {
+    touchY = e.touches[0].clientY;
+    touchTop = lastScroller(e.target)?.scrollTop ?? 0;
+  }, { passive: true });
+  addEventListener('touchmove', (e) => !finished && e.cancelable && !lastScroller(e.target) && e.preventDefault(), { passive: false });
   addEventListener('touchend', (e) => {
     if (touchY === null || finished) return;
     const dy = touchY - e.changedTouches[0].clientY;
     touchY = null;
+    if (lastScroller(e.target)) {
+      if (dy < -40 && touchTop <= 0) go(slide - 1); // only a pull down from its top leaves the slide
+      return;
+    }
     if (Math.abs(dy) > 40) go(slide + Math.sign(dy));
     else if (Math.abs(dy) < 8 && !busyTarget(e.target) && slide < LAST) go(slide + 1);
   });
@@ -468,9 +489,6 @@ if (reduced) {
     else return;
     e.preventDefault();
   });
-  // /#join (the CTA on the other pages) opens on the number pad; so does a return visit, under the last step,
-  // so "start over" lands on the pad
-  go(saved || location.hash === '#join' ? Infinity : 0);
 }
 
 // the one load-in moment: the hero settles into place
@@ -595,7 +613,8 @@ function drawQR(text) {
     .catch(() => ((lastQR.closest('details') || lastQR).hidden = true)); // the number is still there to type
 }
 
-function openLast({ number, link }, returning = false) {
+// the number, the button and the QR for this line
+function fillLast({ number, link }, returning) {
   const d = String(number).replace(/\D/g, '').replace(/^1(?=\d{10}$)/, '');
   const e164 = d.length === 10 ? `+1${d}` : String(number);
   const pretty = d.length === 10 ? fmt(d) : String(number);
@@ -613,21 +632,45 @@ function openLast({ number, link }, returning = false) {
   lastTip.textContent = TIP;
   $('#lastOverLead').textContent = returning ? 'not you?' : '';
   drawQR(smsTo(e164));
+}
 
+// right after joining: the screen takes over, and the story underneath ignores scroll, swipe, clicks and keys
+function openLast(line) {
+  fillLast(line, false);
   finished = true;
   root.classList.remove('cursoring');
   for (const n of document.body.children) if (n !== last) n.inert = true; // keyboard and screen readers stay here
   clearTimeout(lastTimer);
+  last.classList.remove('slide');
+  last.setAttribute('role', 'dialog');
+  last.setAttribute('aria-modal', 'true');
   last.hidden = false;
-  if (returning) {
-    // a reload or return visit: already there, no entrance
-    last.classList.add('now', 'on');
-    requestAnimationFrame(() => last.classList.remove('now'));
-  } else {
-    void last.offsetWidth; // start the fade from where `hidden` left it
-    last.classList.add('on');
-  }
+  void last.offsetWidth; // start the fade from where `hidden` left it
+  last.classList.add('on');
   lastHead.focus({ preventScroll: true });
+}
+
+// a return visit: the same screen is the story's last slide, under the nav, and scrolling back up leaves it
+function slideLast(on) {
+  if (on === last.classList.contains('on')) return;
+  clearTimeout(lastTimer);
+  if (on) {
+    last.classList.add('slide');
+    last.setAttribute('role', 'region');
+    last.removeAttribute('aria-modal');
+    last.hidden = false;
+    last.scrollTop = 0;
+    void last.offsetWidth;
+    last.classList.add('on');
+  } else {
+    if (last.contains(document.activeElement)) document.activeElement.blur();
+    last.classList.remove('on');
+    lastTimer = setTimeout(() => (last.hidden = true), reduced ? 0 : 450);
+  }
+}
+// the slide, when it's taller than the screen and so scrolls on its own; story gestures leave it be
+function lastScroller(t) {
+  return last.classList.contains('slide') && !last.hidden && last.contains(t) && last.scrollHeight > last.clientHeight + 1 ? last : null;
 }
 
 function closeLast() {
@@ -686,6 +729,7 @@ lastContact.addEventListener('click', (e) => {
 // wrong number, or someone else's: forget it and go back to "what's your number?" with the pad up
 $('#lastRestart').addEventListener('click', () => {
   store.clear();
+  known = null;
   closeLast();
   rail.querySelectorAll('[data-live]').forEach((n) => n.remove());
   joined = false;
@@ -776,4 +820,7 @@ compose.addEventListener('submit', async (e) => {
 });
 
 render();
-if (saved) openLast(saved, true);
+if (known) fillLast(known, true);
+// /#join (the CTA on the other pages) opens on the number pad, or on a return visit, on their number
+go(location.hash === '#join' ? Infinity : 0);
+if (reduced && known) slideLast(true); // no story to scroll through: their number is the page
