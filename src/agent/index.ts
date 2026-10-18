@@ -13,6 +13,15 @@ const FALLBACK_REPLY = 'sorry, got a little tangled up there. mind saying that a
 
 export type ToolCallLog = { name: string; args: unknown; result: unknown };
 
+// Activity searches always surface hosting explicitly. If the model's reply forgot, add a plain line (a
+// statement, not a second question) so the option is never missing.
+const HOST_LINE = "or i can host an event for this and invite people who'd be into it, just say the word.";
+export function withHostOffer(reply: string, calls: ToolCallLog[]): string {
+  const searched = calls.some((c) => c.name === 'find_people' && (c.args as { request?: unknown })?.request && !(c.result as { error?: unknown })?.error);
+  if (!reply || !searched || /\bhost/i.test(reply)) return reply;
+  return `${reply} ${HOST_LINE}`;
+}
+
 // Per-phone promise chain: two texts from one phone run one after the other, different phones run concurrently.
 const chains = new Map<string, Promise<void>>();
 
@@ -65,6 +74,7 @@ async function turn(phone: string, text: string): Promise<void> {
     throw e;
   }
 
+  reply = withHostOffer(reply, toolCalls);
   if (reply) await send(user.id, reply);
   await trace('agent', user.id, { userId: user.id, phone, text, toolCalls, reply, ...(error ? { error } : {}) });
   await runDue();

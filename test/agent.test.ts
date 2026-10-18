@@ -247,7 +247,8 @@ test('context block lists open invites with ids and recent find_people results',
   // history replayed: in → user, out → assistant
   expect(seen[0].input.slice(0, -1)).toEqual([
     { role: 'user', content: 'anyone to play tennis with?' },
-    { role: 'assistant', content: 'kai plays 4.5, want an intro?' },
+    // an activity search always surfaces hosting; the scripted reply didn't, so the fallback line was added
+    { role: 'assistant', content: "kai plays 4.5, want an intro? or i can host an event for this and invite people who'd be into it, just say the word." },
     { role: 'user', content: 'yes kai' },
   ]);
 });

@@ -11,6 +11,10 @@ import type { RequirementSpec, RsvpResponse, User } from '../types.ts';
 import { firstName } from './context.ts';
 import { laHuman } from './time.ts';
 
+// What the agent should offer next to people-search results for an activity (see prompt: Meeting people).
+export const HOST_OFFER_HINT =
+  'end with two clear options in one question: connect with a match, OR "want me to host a <activity> event for you? i\'ll invite people who\'d be into it and handle all the texting". use the words "host" and "event".';
+
 const MAX_CAPACITY = 100; // tune: largest guest count an SMS-created event may ask for
 const MAX_SNOOZE_DAYS = 60; // tune: longest pause
 
@@ -271,7 +275,11 @@ export const TOOLS: ToolDef[] = [
       const u = await activeMe(ctx);
       const request = typeof a.request === 'string' && a.request.trim() ? a.request.trim() : undefined;
       const matches = await findPeople(u.id, request, 3);
-      return { matches: matches.map((m) => ({ user_id: m.userId, name: firstName(m.name), reason: m.reason })) };
+      return {
+        matches: matches.map((m) => ({ user_id: m.userId, name: firstName(m.name), reason: m.reason })),
+        // Searching for an activity is the moment to introduce hosting, so say it in plain words.
+        ...(request ? { also_offer: HOST_OFFER_HINT } : {}),
+      };
     },
   },
   {
