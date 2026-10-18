@@ -7,6 +7,8 @@ import { normalize, add } from '../src/vec.ts';
 import { requestIntro } from '../src/relay/index.ts';
 import type { RecallHit } from '../src/types.ts';
 import type { JsonRequest } from '../src/llm/index.ts';
+import { fakeEmbed } from '../src/llm/embed.ts';
+import { runTool } from '../src/agent/tools.ts';
 
 const mix = (...vs: number[][]) => normalize(add(...vs));
 const hit = (userId: number, similarity: number, profile = 'Core Interests:\n[1] Thing.'): RecallHit => ({ userId, name: `U${userId}`, profile, similarity });
@@ -187,7 +189,8 @@ describe('rerank', () => {
     });
     const picks = await rerank({ purpose: 'people', target: 'tennis partner', candidates: [hit(1, 0.9)], k: 1 });
     const s: any = req!.schema;
-    expect(s.properties.picks.items.required).toEqual(['user_id', 'reason', 'checks']);
+    // fit + shared replace the pitch: code orders people picks by them (see the chem study-group regression).
+    expect(s.properties.picks.items.required).toEqual(['user_id', 'reason', 'fit', 'shared', 'checks']);
     expect(s.properties.picks.items.properties.pitch).toBeUndefined();
     expect(picks[0]).toMatchObject({ userId: 1, reason: 'both love tennis' });
     expect(picks[0].pitch).toBeTruthy(); // template filler; RerankPick keeps its shape
@@ -253,5 +256,125 @@ describe('findPeople', () => {
     expect(input).toContain('Looking for: sourdough baking bread');
     const [t] = await q<{ data: any }>(`SELECT data FROM traces WHERE kind = 'recall'`);
     expect(t.data.lexical).toBe('Bea (sourdough, baking, bread)'); // the ask feeds BM25
+  });
+});
+
+// Production, Oct 17: a new student (volleyball, climbing, a chem course study group) asked "what about chem study
+// group". The real pool had 5 other active users and none listed the course. The candidate who shared his volleyball
+// AND climbing and had a focused science-study slot (cosine 0.31, top) was ranked below one whose only overlap was
+// volleyball plus an adjacent field, genomics (0.268): the reranker put the adjacent field first, and the reply then
+// dropped her. Separately, "group" (from "group outings with friends") counted as a rare term in a 5-profile pool and
+// lifted the least similar candidate (0.185) to #2. Profiles below are shaped like the real ones.
+describe('regression: chem study-group ask in a small pool', () => {
+  const ASK = 'chem 329 study partners, organic chemistry study group';
+  const WREN = `Core Interests:
+[1] Volleyball, indoor and beach volleyball, pickup games, recreational and league play, serving, spiking, passing (Level: Unspecified).
+[2] Rock climbing, bouldering, top rope, lead climbing, gym sessions, climbing wall training, outdoor crags (Level: Unspecified).
+[3] Chem 329 coursework, organic chemistry study group, problem sets, exam preparation, reaction mechanisms, collaborative studying (Vibe: Focused).`;
+  const TARA = `Core Interests:
+[1] Casual recreational volleyball, beach and indoor rec leagues, pickup games, rallies, non-competitive play (Level: Unspecified).
+[2] Rock climbing, bouldering, top rope, indoor climbing gym sessions, non-competitive recreational climbing (Level: Unspecified).
+[3] Nursing school, nursing coursework, clinical rotations, patient care fundamentals, healthcare education, academic study (Vibe: Focused).`;
+  const JON = `Core Interests:
+[1] Effective altruism, philosophy discussion, moral reasoning, reading groups, debate (Vibe: Social).
+[2] Computer science, software engineering, algorithms, genomics research, computational biology, bioinformatics (Vibe: Focused).
+[3] Moderate hiking, day hikes, trail walking, nature walks (Level: Intermediate).
+[4] Casual pickup soccer, recreational league play, relaxed kickabouts (Level: Beginner).
+[5] Pickup volleyball, casual open play, beach and sand volleyball, informal rec games (Level: Unspecified).
+[6] AI startup scene, founders, hackathons, startup pitch events, building prototypes (Vibe: Social).`;
+  const NIA = `Core Interests:
+[1] Arts and crafts, handmade projects, DIY making, paper crafts, sewing, painting (Vibe: Creative).
+[2] Strategy board games, League of Legends, tabletop campaigns, card games, ranked online matches (Vibe: Competitive).
+[3] Hiking, day hikes, trail running, backpacking, national park trails (Vibe: Chill).
+[4] Trumpet playing, brass practice, jazz and concert band repertoire, ensemble performance (Level: Unspecified).`;
+  const ADI = `Core Interests:
+[1] Photography, film and digital photography, portrait and landscape shooting, photo editing (Vibe: Creative).
+[2] Programming, software development, coding projects, scripting, side projects (Vibe: Focused).
+[3] Chess, casual chess games, over-the-board play, informal matches (Level: Unspecified).
+[4] Poker, card games, competitive card play, strategic wagering games (Level: Unspecified).`;
+  const IVO = `Core Interests:
+[1] Photography, digital cameras, portrait and street shots, photo walks (Vibe: Creative).
+[2] Soccer, pickup matches, recreational league play, five-a-side games (Level: Unspecified).
+[3] Gym training, weightlifting, strength and conditioning, resistance workouts (Level: Unspecified).
+[4] Going out, nightlife, bars, live music venues, group outings with friends (Vibe: Social).`;
+  // Cosines to the ask from the production recall trace.
+  const POOL: [string, string, number][] = [['Tara', TARA, 0.31], ['Jon', JON, 0.268], ['Nia', NIA, 0.211], ['Adi', ADI, 0.202], ['Ivo', IVO, 0.185]];
+
+  // A unit vector whose cosine with the unit vector qv is exactly s: qv plus a direction orthogonal to it.
+  const atSim = (qv: number[], s: number, i: number): number[] => {
+    const e = axis(i, qv.length);
+    const u = normalize(e.map((x, j) => x - qv[i] * qv[j]));
+    return qv.map((x, j) => s * x + Math.sqrt(1 - s * s) * u[j]);
+  };
+  const pool = async (qv: number[]) => {
+    const ids: Record<string, number> = { wren: await makeUser('Wren', WREN, atSim(qv, 0.5, 9)) };
+    for (const [i, [name, profile, s]] of POOL.entries()) ids[name.toLowerCase()] = await makeUser(name, profile, atSim(qv, s, 10 + i));
+    return ids;
+  };
+
+  test('recall: framing words ("study", "group") earn no lexical boost, so the least similar person stays last', async () => {
+    await fresh();
+    expect([...rareTerms(ASK, POOL.map((p) => p[1]))]).toEqual([]);
+    const ids = await pool(axis(0));
+    const hits = await recall(axis(0), { exclude: [ids.wren], text: ASK, refId: 1 });
+    expect(hits.map((h) => h.name)).toEqual(['Tara', 'Jon', 'Nia', 'Adi', 'Ivo']); // was Tara, Ivo, Jon, ... ("group")
+    expect(hits.map((h) => Math.round(h.similarity * 1000) / 1000)).toEqual([0.31, 0.268, 0.211, 0.202, 0.185]);
+    const [t] = await q<{ data: any }>(`SELECT data FROM traces WHERE kind = 'recall' AND ref_id = 1`);
+    expect(t.data.lexical).toBe('none');
+    // Interest words rare in the pool still count.
+    await recall(axis(0), { exclude: [ids.wren], text: 'volleyball, rock climbing, or chem 329 study partners, any level', refId: 2 });
+    const [t2] = await q<{ data: any }>(`SELECT data FROM traces WHERE kind = 'recall' AND ref_id = 2`);
+    expect(t2.data.lexical).toBe('Tara (rock, climbing)');
+  });
+
+  test('rerank (people): strong before partial, then more shared interests; the model order only breaks ties', async () => {
+    const fake = await fresh();
+    const answer = {
+      picks: [
+        { user_id: 2, reason: 'adjacent field, also plays volleyball', fit: 'partial', shared: 1, checks: [] },
+        { user_id: 1, reason: 'not in the course, but shares two of your interests', fit: 'partial', shared: 2, checks: [] },
+        { user_id: 3, reason: 'takes the course', fit: 'strong', shared: 0, checks: [] },
+        { user_id: 4, reason: 'also takes it', fit: 'strong', shared: 0, checks: [] },
+      ],
+      screened_out: [],
+    };
+    fake.onJson('rerank', () => answer);
+    const cands = [hit(1, 0.31), hit(2, 0.268), hit(3, 0.2), hit(4, 0.1)];
+    const picks = await rerank({ purpose: 'people', target: 't', candidates: cands, k: 3, refId: 7 });
+    expect(picks.map((p) => [p.userId, p.fit])).toEqual([[3, 'strong'], [4, 'strong'], [1, 'partial']]);
+    const [t] = await q<{ data: any }>(`SELECT data FROM traces WHERE kind = 'rerank' AND ref_id = 7`);
+    expect(t.data.picks.map((p: any) => [p.userId, p.fit, p.shared])).toEqual([[3, 'strong', 0], [4, 'strong', 0], [1, 'partial', 2]]);
+    // Events don't grade fit: their picks keep the model's order and carry no fit.
+    const ev = await rerank({ purpose: 'event', target: 't', candidates: cands, k: 4 });
+    expect(ev.map((p) => p.userId)).toEqual([2, 1, 3, 4]);
+    expect(ev.every((p) => p.fit === undefined)).toBe(true);
+  });
+
+  test('findPeople: replaying the production rerank (adjacent field first) still puts the bigger overlap first', async () => {
+    const fake = await fresh();
+    const qv = (await fakeEmbed([`Looking for: ${ASK}`]))[0];
+    const ids = await pool(qv);
+    let input = '';
+    fake.onJson('rerank', (r) => {
+      input = r.input;
+      return {
+        picks: [
+          { user_id: ids.jon, reason: 'genomics and computational biology are close to your chem focus, and he plays volleyball', fit: 'partial', shared: 1, checks: [] },
+          { user_id: ids.tara, reason: 'not in chem 329, but she studies nursing and shares your volleyball and climbing', fit: 'partial', shared: 2, checks: [] },
+        ],
+        screened_out: [],
+      };
+    });
+    const res = await findPeople(ids.wren, ASK);
+    expect(res.map((m) => [m.name, m.fit])).toEqual([['Tara', 'partial'], ['Jon', 'partial']]);
+    // The reranker reads the ask and sees the candidates in similarity order (no lexical lift for "group").
+    expect(input).toContain(`Looking for: ${ASK}`);
+    expect([...input.matchAll(/\| name: (\w+) \|/g)].map((m) => m[1])).toEqual(['Tara', 'Jon', 'Nia', 'Adi', 'Ivo']);
+
+    // The agent's tool result carries fit and how to present it.
+    const tool = (await runTool(ids.wren, 'find_people', JSON.stringify({ request: ASK }))).result as any;
+    expect(tool.matches.map((m: any) => [m.name, m.fit])).toEqual([['Tara', 'partial'], ['Jon', 'partial']]);
+    expect(tool.present).toMatch(/best first/);
+    expect(tool.present).toMatch(/nobody does exactly that/);
   });
 });

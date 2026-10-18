@@ -390,6 +390,13 @@ test('replies are tidied: lowercase openers, runaway length clipped at a sentenc
   expect(await outbox('+15550008201')).toEqual(['got it. want me to look for a poker partner?']);
 });
 
+test('tidy lowercases question openers mid-reply (production: "...before i can match you well. Are you casual...")', async () => {
+  const { tidy } = await import('../src/agent/index.ts');
+  expect(tidy('got it, Maya. Are you casual or competitive? Do you want a study group?')).toBe(
+    'got it, Maya. are you casual or competitive? do you want a study group?',
+  );
+});
+
 test('read-only tool calls in one turn run together; results go back in the order they were asked', async () => {
   const meId = await makeUser('Jo', 'soccer');
   const phone = (await one<{ phone: string }>('SELECT phone FROM users WHERE id = $1', [meId]))!.phone;

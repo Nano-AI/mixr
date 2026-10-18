@@ -79,8 +79,18 @@ export type Attendee = { userId: number; name: string; role: 'host' | 'guest'; j
 export type Plan = EventSummary & { role: 'host' | 'guest'; attendees: Attendee[] };
 
 export type RecallHit = { userId: number; name: string; profile: string; similarity: number };
-export type RerankPick = { userId: number; reason: string; pitch: string; checks?: { requirementId: number; verdict: 'pass' | 'fail' | 'unknown' }[] };
-export type PersonMatch = { userId: number; name: string; reason: string };
+// fit (people searches, LLM rerank only): 'strong' = does the thing asked; 'partial' = a close neighbor of it, or shares
+// 2+ of the requester's other interests.
+export type PersonFit = 'strong' | 'partial';
+export type RerankPick = {
+  userId: number;
+  reason: string;
+  pitch: string;
+  checks?: { requirementId: number; verdict: 'pass' | 'fail' | 'unknown' }[];
+  fit?: PersonFit;
+  shared?: number; // how many of the requester's interest slots they share (people searches)
+};
+export type PersonMatch = { userId: number; name: string; reason: string; fit?: PersonFit };
 
 export type IntroStatus = 'proposed' | 'target_asked' | 'connected' | 'declined' | 'expired';
 export type Intro = { id: number; requesterId: number; targetId: number; reason: string; status: IntroStatus; targetMessage: string | null };

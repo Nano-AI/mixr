@@ -48,7 +48,7 @@ const OPENERS = new Set(
   ('got nobody done nice sure yes yep yeah no nope want sounds okay ok cool awesome great hey hi hello you that this there it just here ' +
     'what how who when where totally perfect can let looks glad happy thanks sorry oh also or and but so btw all any some someone anyone ' +
     'nothing noted added saved unfortunately right fair gotcha alright already still if once not none your we they since plus then sweet ' +
-    'heads found looking quick welcome')
+    'heads found looking quick welcome are is do does did have has would could should which tell')
     .split(' '),
 );
 const MAX_REPLY = 480; // tune: ~3 SMS segments; anything longer is the model rambling (or cut off at max_tokens)
