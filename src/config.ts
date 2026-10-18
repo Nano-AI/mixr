@@ -31,6 +31,9 @@ export const config = {
   transport: env.TRANSPORT === 'photon' ? ('photon' as const) : ('sim' as const),
   photonProjectId: env.PROJECT_ID ?? '',
   photonProjectSecret: env.PROJECT_SECRET ?? '',
+  // Apple's "Share Name and Photo" after verification. Off (IMESSAGE_SHARE_CARD=off) if the shared line shows
+  // the wrong identity; see docs/messaging-operations.md.
+  imessageShareCard: !/^(0|off|false|no)$/i.test(env.IMESSAGE_SHARE_CARD ?? ''),
   joinOrigins: (env.JOIN_ORIGINS ?? 'https://joinmixr.club,https://www.joinmixr.club')
     .split(',')
     .map((o) => o.trim())

@@ -1,7 +1,7 @@
 import { q, one, getUser } from '../db/index.ts';
 import { publish } from '../bus.ts';
 import { now } from '../clock.ts';
-import { queueDelivery } from './outbox.ts';
+import { queueDelivery, type RichContent } from './outbox.ts';
 
 // The seam between mixr and a phone. Every message is logged here (the dashboard reads it); outbound texts to
 // real users are additionally queued for iMessage delivery by the outbox when the context allows it.
@@ -9,12 +9,18 @@ import { queueDelivery } from './outbox.ts';
 export type SendOpts = {
   dedupeKey?: string; // one logical notification = one key, so retries and replays never double-text
   evenIfOptedOut?: boolean; // only the STOP acknowledgement
+  content?: RichContent; // native iMessage form of this text (contact card, effect...); `text` is the fallback
 };
 
 export async function send(userId: number, text: string, opts: SendOpts = {}): Promise<void> {
   const messageId = await log(userId, 'out', text);
   await queueDelivery(userId, messageId, text, opts);
 }
+
+// "+14255183059" -> "(425) 518-3059"; other countries stay E.164.
+export const prettyPhone = (e164: string): string => e164.replace(/^\+1(\d{3})(\d{3})(\d{4})$/, '($1) $2-$3');
+// The log line (and plain fallback) for a contact card.
+export const cardLine = (name: string, phone: string): string => `[contact card: ${name}, ${prettyPhone(phone)}]`;
 
 // via: 'dashboard' when someone typed it in the simulator rather than on a phone.
 export async function recordInbound(userId: number, text: string, via: 'phone' | 'dashboard' = 'phone'): Promise<void> {

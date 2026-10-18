@@ -1,8 +1,8 @@
-import type { Intro } from '../types.ts';
+import type { Intro, User } from '../types.ts';
 import { getUser, one, q } from '../db/index.ts';
 import { HOUR, now } from '../clock.ts';
 import { registerJob, schedule } from '../jobs/index.ts';
-import { send } from '../transport/index.ts';
+import { send, type SendOpts } from '../transport/index.ts';
 import { publish } from '../bus.ts';
 import { firstName } from '../matching/index.ts';
 
@@ -73,6 +73,14 @@ export async function requestIntro(requesterId: number, targetId: number, reason
   return intro;
 }
 
+// Once both said yes: the other person's contact card (first + last name, phone) with a short caption. The plain
+// text with the number stays the log line and the fallback if iMessage rejects the card.
+function card(u: User | undefined, caption: string): SendOpts {
+  if (!u?.phone) return {};
+  const [, ...rest] = (u.name ?? '').trim().split(/\s+/);
+  return { content: { kind: 'contact', first: firstName(u.name), ...(rest.length ? { last: rest.join(' ') } : {}), phone: u.phone, caption } };
+}
+
 // Target answered. On accept, relay their message (and that they're happy to share their number) to the requester.
 export async function respondToIntro(targetId: number, introId: number, accept: boolean, message?: string): Promise<Intro> {
   const intro = await getIntro(introId);
@@ -87,8 +95,8 @@ export async function respondToIntro(targetId: number, introId: number, accept: 
   if (accept) {
     const updated = await setStatus(introId, 'connected', msg);
     const said = msg ? ` they said: "${msg}".` : '';
-    await send(intro.requesterId, `${tName} is down!${said} their number: ${target?.phone ?? ''}`);
-    await send(intro.targetId, `done! here's ${rName}'s number: ${requester?.phone ?? ''}. have fun!`);
+    await send(intro.requesterId, `${tName} is down!${said} their number: ${target?.phone ?? ''}`, card(target, `${tName} is down!${said} here's their contact`));
+    await send(intro.targetId, `done! here's ${rName}'s number: ${requester?.phone ?? ''}. have fun!`, card(requester, `done! here's ${rName}'s contact. have fun!`));
     return updated;
   }
   const updated = await setStatus(introId, 'declined', msg);

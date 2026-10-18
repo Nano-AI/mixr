@@ -4,6 +4,9 @@ import { MINUTE, now } from '../clock.ts';
 import type { OnboardingStep, User } from '../types.ts';
 import { firstName } from '../events/copy.ts';
 import { createEmailSender, type CodeSender } from './email.ts';
+import { cardLine, send } from '../transport/index.ts';
+import { queueDelivery } from '../transport/outbox.ts';
+import { config } from '../config.ts';
 
 // Real users before the agent takes over, deterministic (no LLM): consent -> full name -> email -> verify.
 // On success: email_verified = true, step = NULL, state stays 'onboarding', and the agent handles the braindump.
@@ -242,7 +245,23 @@ async function verify(user: User, said: string, word: string, t: Date): Promise<
     return EMAIL_TAKEN;
   }
   await q(`DELETE FROM email_codes WHERE user_id = $1`, [user.id]);
+  await sendMixrCard(user);
   return braindumpPrompt(user.name);
+}
+
+// Right after verification, before the braindump prompt, once per user:
+//   - Apple's Share Name and Photo for the bot account (best effort; a delivery-only signal, not in the chat log)
+//   - mixr's contact card (name, photo, and the number this user texts mixr at). No assigned number = no card.
+const SAVE_ME = "save me so you know it's me";
+async function sendMixrCard(user: User): Promise<void> {
+  if (config.imessageShareCard)
+    await queueDelivery(user.id, null, '[share name and photo]', { dedupeKey: `share-card:${user.id}`, content: { kind: 'share_contact' } });
+  const phone = user.assignedNumber;
+  if (!phone) return;
+  await send(user.id, `${SAVE_ME} ${cardLine('mixr', phone)}`, {
+    dedupeKey: `mixr-card:${user.id}`,
+    content: { kind: 'contact', first: 'mixr', phone, mixrPhoto: true, caption: SAVE_ME },
+  });
 }
 
 const setStep = (userId: number, step: OnboardingStep): Promise<unknown> => q(`UPDATE users SET step = $2 WHERE id = $1`, [userId, step]);
