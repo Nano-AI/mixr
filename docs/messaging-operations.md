@@ -1,3 +1,5 @@
+> **Historical:** predates the integration branch; see the [README](../README.md).
+
 # Messaging operations
 
 Mixr's application entry point is `npm start`. `npm run spectrum` is the original

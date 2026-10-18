@@ -19,7 +19,12 @@ The `integration` branch replaces the original SQLite meetups/matching design wi
 
 Live: `https://mixr-api.johnomeara.com` (dashboard at `/dashboard`). Landing preview: Vercel builds `integration` as a preview; `main` deploys joinmixr.club.
 
-Still to do: point `api.joinmixr.club` at the tunnel (Cloudflare for SaaS) · merge `integration` → `main` when the team is ready (that ships the landing page) · live multi-phone run-through · Photon plan upgrade if we need more than 10 users.
+- [x] Auto-deploy: polarcrest ships each new commit on `main` within ~2 minutes once its tests, typecheck and dashboard build pass on the box, and rolls back if `/health` fails (`deploy/release.sh`, `mixr-autodeploy.timer`)
+- [x] CI on every PR and on pushes to `main`/`integration` (`.github/workflows/ci.yml`); team workflow in [CONTRIBUTING.md](CONTRIBUTING.md)
+- [x] Point `api.joinmixr.club` at the tunnel (Cloudflare for SaaS)
+- [x] Merge `integration` → `main` (ships the landing page; main is production)
+- [ ] Live multi-phone run-through
+- [ ] Photon plan upgrade if we need more than 10 users
 
 ## MVP goal
 

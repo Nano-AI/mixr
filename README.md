@@ -43,14 +43,19 @@ python3 -m http.server -d landing 4321   # landing page; add ?mock=ok to click t
 
 ## Deploy (polarcrest)
 
+Merging to `main` deploys it. Every 2 minutes `mixr-autodeploy.timer` on polarcrest checks main for a new commit, runs the tests, typecheck and dashboard build on the box, and only then switches releases and restarts. If `/health` doesn't answer within 45s it goes back to the previous release. A failing commit never goes live. CI (`.github/workflows/ci.yml`) runs the same checks on every PR. Workflow, rules and ops cheatsheet: [CONTRIBUTING.md](CONTRIBUTING.md).
+
 ```bash
-scripts/deploy.sh             # deploys main (tarball release, npm ci, dashboard build, restart)
-scripts/deploy.sh --rollback  # previous release
+scripts/deploy.sh               # deploy main now (also installs/updates auto-deploy)
+scripts/deploy.sh integration   # another branch; auto-deploy leaves it up until main gets a new commit
+scripts/deploy.sh --rollback    # previous release; auto-deploy waits for the next commit on main
+FORCE=1 scripts/deploy.sh       # rebuild a live commit or retry a failed one
 ```
 
+- Release logic: `deploy/release.sh` (tarball releases in `~/mixr-releases`, 3 kept; `~/mixr` points at the live one). `scripts/deploy.sh` copies it to the server and runs it; the timer runs the same script. History: `~/mixr-data/deploys.log`. Pause auto-deploy: `touch ~/mixr-data/autodeploy.paused`.
 - systemd user service `mixr` (`deploy/mixr.service`): `Restart=always`, starts at boot (lingering), 4 GB cap. `mixr-health.timer` restarts it if `/health` fails twice.
 - Secrets: `~/mixr-data/mixr.env` (mode 600, never in git). Data: `~/mixr-data/pglite`. Nightly snapshots: `~/mixr-data/backups` (7 kept).
-- Logs: `journalctl --user -u mixr -f`.
+- Logs: `journalctl --user -u mixr -f` (auto-deploy: `journalctl --user -u mixr-autodeploy`).
 - Public URL: `https://api.joinmixr.club` (Cloudflare for SaaS custom hostname → the tunnel's `mixr-api.johnomeara.com` → `localhost:8787`; the tunnel also routes `api.joinmixr.club` itself). `mixr-api.johnomeara.com` keeps working as a direct alias.
 - Railway is an option later ([docs/deploy/railway.md](docs/deploy/railway.md)); today it's the monolith.
 
