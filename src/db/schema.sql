@@ -53,13 +53,17 @@ CREATE TABLE IF NOT EXISTS message_jobs (
   message_id INTEGER REFERENCES messages(id),
   dedupe_key TEXT NOT NULL UNIQUE,
   text TEXT NOT NULL,
-  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'sent', 'failed', 'suppressed')),
+  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'sending', 'sent', 'failed', 'suppressed')),
   attempts INTEGER NOT NULL DEFAULT 0,
   error TEXT,
   even_if_opted_out BOOLEAN NOT NULL DEFAULT false,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   sent_at TIMESTAMPTZ
 );
+
+-- Databases created before 'sending' existed.
+ALTER TABLE message_jobs DROP CONSTRAINT IF EXISTS message_jobs_status_check;
+ALTER TABLE message_jobs ADD CONSTRAINT message_jobs_status_check CHECK (status IN ('pending', 'sending', 'sent', 'failed', 'suppressed'));
 
 -- Inbound iMessages, persisted by provider id before processing: duplicates are processed once, and a crash
 -- mid-processing leaves a 'processing' row to inspect rather than blindly replaying side effects.

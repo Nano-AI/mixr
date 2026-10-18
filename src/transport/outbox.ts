@@ -42,8 +42,10 @@ async function attempt(jobId: number): Promise<void> {
     return;
   }
   if (!deliverer) return; // not connected yet; the retry loop picks it up
+  // Claim it atomically: the ticker's retry loop and the first send must never both send the same message.
+  const claimed = await one(`UPDATE message_jobs SET status = 'sending', attempts = attempts + 1 WHERE id = $1 AND status = 'pending' RETURNING id`, [jobId]);
+  if (!claimed) return;
   try {
-    await q('UPDATE message_jobs SET attempts = attempts + 1 WHERE id = $1', [jobId]);
     await deliverer(j.phone, j.text);
     await q(`UPDATE message_jobs SET status = 'sent', sent_at = now(), error = NULL WHERE id = $1`, [jobId]);
   } catch (e) {
@@ -53,6 +55,12 @@ async function attempt(jobId: number): Promise<void> {
     await q(`UPDATE message_jobs SET status = $2, error = $3 WHERE id = $1`, [jobId, failed ? 'failed' : 'pending', error]);
     await trace('job', jobId, { kind: 'delivery', userId: j.user_id, attempts: j.attempts + 1, error, gaveUp: failed });
   }
+}
+
+// At startup: a send interrupted by a crash may or may not have reached Photon. Don't retry it (that risks a
+// duplicate); mark it for inspection instead.
+export async function recoverInterrupted(): Promise<void> {
+  await q(`UPDATE message_jobs SET status = 'failed', error = 'interrupted mid-send; not retried to avoid a duplicate' WHERE status = 'sending'`);
 }
 
 // Ticker: retry pending deliveries (not yet attempted, or failed with attempts left).
