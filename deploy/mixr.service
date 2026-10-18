@@ -1,0 +1,24 @@
+# mixr monolith: API, dashboard, iMessage connection, background jobs.
+# Installed to ~/.config/systemd/user/ by scripts/deploy.sh. User lingering is on, so it starts at boot.
+[Unit]
+Description=mixr monolith (API + dashboard + iMessage)
+After=network-online.target
+Wants=network-online.target
+# Give up only if it crash-loops 10 times in 5 minutes (then the health timer keeps trying every minute).
+StartLimitIntervalSec=300
+StartLimitBurst=10
+
+[Service]
+Type=simple
+WorkingDirectory=%h/mixr
+EnvironmentFile=%h/mixr-data/mixr.env
+ExecStart=%h/.local/opt/node24/bin/node --import tsx src/server.ts
+Restart=always
+RestartSec=3
+TimeoutStopSec=20
+KillSignal=SIGTERM
+# PGlite keeps the database in memory (~1 GB); this cap keeps a runaway from hurting the box.
+MemoryMax=4G
+
+[Install]
+WantedBy=default.target
