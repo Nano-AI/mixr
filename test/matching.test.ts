@@ -1,7 +1,7 @@
 import { test, expect, describe } from 'vitest';
 import { fresh, makeUser, axis, T0 } from './helpers.ts';
 import { recall, rerank, findPeople, topInterest } from '../src/matching/index.ts';
-import { bm25, rrf, tokenize } from '../src/matching/bm25.ts';
+import { bm25, rareTerms, rrf, tokenize, weightedRrf } from '../src/matching/bm25.ts';
 import { getOrCreateUser, q } from '../src/db/index.ts';
 import { normalize, add } from '../src/vec.ts';
 import { requestIntro } from '../src/relay/index.ts';
@@ -80,6 +80,13 @@ describe('hybrid recall (BM25 + RRF)', () => {
     expect(bm25('chess', docs)[1]).toBeGreaterThan(bm25('tennis', docs)[1]);
     expect(bm25('', docs)).toEqual([0, 0, 0, 0]);
     expect(bm25('x', [])).toEqual([]);
+  });
+
+  test('rareTerms: only query words in few candidates get a lexical boost; weightedRrf lets the vector side lead', () => {
+    const docs = Array.from({ length: 10 }, (_, i) => (i < 6 ? 'new to climbing on weekends' : 'climbing at Seattle Bouldering Project'));
+    docs[0] = 'catan and weekends';
+    expect([...rareTerms('someone new to catan on weekends', docs)]).toEqual(['catan']);
+    expect(weightedRrf([[[1, 2], 1], [[9], 0.5]])).toEqual([1, 2, 9]); // a lexical-only hit doesn't jump the vector ranking
   });
 
   test('rrf: sums 1/(60+rank); ids missing from a ranking get no term; ties keep first ranking order', () => {
