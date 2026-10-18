@@ -57,6 +57,7 @@
       <ul>
         <li><a href="#how-people-join">How people join</a></li>
         <li><a href="#how-matching-works">How matching works</a></li>
+        <li><a href="#campus-events">Campus events</a></li>
         <li><a href="#the-dashboard">The dashboard</a></li>
         <li><a href="#scripts">Scripts</a></li>
         <li><a href="#deploy">Deploy</a></li>
@@ -90,6 +91,8 @@ The landing page plays a sample conversation, then asks for your number and hand
 * **Claude Haiku tool-calling agent.** After verification the agent takes a braindump, keeps the profile current, finds people, hosts and joins events, and handles intros. Read-only tool calls in one turn run in parallel.
 * **Hybrid matching.** pgvector recall plus BM25, fused with reciprocal rank fusion, then a Claude rerank. Blocks and special requests are enforced in code before ranking.
 * **Events.** Students host events by text. mixr seeds a target profile with HyDE, drifts it toward the people who say yes (Rocchio), and invites in hidden rounds until the event fills.
+* **UW campus events.** A daily pull of UW's public calendar feed. Ask "anything going on this week?" and mixr adds the UW events that fit, ranked by what you asked or by your interests, one per line.
+* **Add to Google Calendar.** Joining an event, hosting one, or saying you're going to a UW event gets an "add it to your calendar" link with the title, time and place filled in.
 * **Intros with double opt-in.** A number is shared only when both people agree, and each side gets the other's contact card.
 * **Native iMessage touches.** mixr's contact card after verification, Share Name and Photo, confetti on a confirmed seat, tapbacks instead of filler replies, inline replies that thread, and a joinmixr.club link preview on HELP.
 * **Per-person rate limit.** 30 texts an hour. One notice, then quiet until the hour rolls over. STOP, START and HELP always work.
@@ -155,7 +158,7 @@ If mixr needs more than 10 real users, the path is a Photon 2.0 Pro plan on the 
 
 ### Privacy and consent
 
-* Opt-in only: people join through the site and text first. mixr never texts first unless `WELCOME_TEXT=on`, which sends one welcome (with the opt-in ask and STOP) right after someone joins. No directory scraping.
+* Opt-in only: people join through the site and text first. No directory scraping. (`WELCOME_TEXT=on` tries one welcome text right after a join, but Photon didn't deliver it to a number that hadn't texted the line in our test, so keep it off.)
 * Texts to other people use first names. A full name and phone number are shared only when both sides of an intro agree.
 * `STOP` is honored immediately and suppresses anything queued. `START` resumes.
 * A verified @uw.edu email proves inbox access, not enrollment. Codes are hashed, never stored or logged.
@@ -227,10 +230,10 @@ You can run all of mixr on a laptop with no iMessage at all: `TRANSPORT=sim` kee
    | `EMBEDDING_MODEL`, `EMBEDDING_DIMS` | OpenAI embedding model and vector size. |
    | `EMAIL_PROVIDER` | `gmail` or `resend` for verification codes. |
    | `JOIN_ORIGINS` | CORS origins allowed to call `POST /join`. |
-   | `WELCOME_TEXT` | `on` = mixr texts first: one welcome (the opt-in ask) right after a website join. Off by default. |
+   | `WELCOME_TEXT` | `on` = try to text first: one welcome (the opt-in ask) right after a website join. Off by default; didn't deliver on our Photon line. |
    | `DEV_JOIN_NUMBER` | With `TRANSPORT=sim`, the number `/join` hands out. |
    | `ADMIN_TOKEN` | Dashboard login. Optional locally, required in production. |
-   | `UW_CALENDAR` | Daily snapshot of UW's public events calendar into `uw-calendar/` next to `DB_DIR` (on in production). `discover_events` shows real users upcoming ones from the newest snapshot as `campus_events`; `npm run import:uw-events` loads them into the demo pool. |
+   | `UW_CALENDAR` | Daily snapshot of UW's public events calendar into `uw-calendar/` next to `DB_DIR` (on in production). `discover_events` shows real users the ones on now or in the next two weeks from the newest snapshot as `campus_events` (see "Campus events"); `npm run import:uw-events` loads them into the demo pool. |
    | `PORT`, `HOST`, `DB_DIR`, `PUBLIC_URL`, `TZ` | Runtime settings. |
 4. Seed the 50 demo students (embeddings only, cached by text; free with `MIXR_FAKE=1`)
    ```sh
@@ -267,7 +270,7 @@ Once someone is verified, they just text. "pickup soccer mostly, also need peopl
 ### How people join
 
 1. On [joinmixr.club](https://joinmixr.club) they enter their phone number. The server registers it with Photon (iMessage shared line), which assigns them their own mixr number.
-2. The site shows that number with a "text mixr" button and a contact card. They text first. With `WELCOME_TEXT=on`, mixr texts them first instead: one welcome that asks them to reply YES.
+2. The site shows that number with a "text mixr" button and a contact card. They text first.
 3. Over iMessage: opt in with YES, then full name, then @uw.edu email, then the 6-digit code. After that the agent takes the braindump.
 
 ```mermaid
@@ -329,6 +332,16 @@ flowchart TD
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
+### Campus events
+
+Source: UW's public "UW Seattle Campus Events" iCalendar feed (`https://www.trumba.com/calendars/sea_campus.ics`, the same one its Subscribe page offers). With `UW_CALENDAR` on, the server pulls it once a day and saves a dated, PII-scrubbed copy in `uw-calendar/`. Searches read the newest copy and never hit UW live.
+
+* **What counts.** Events on right now or starting in the next 14 days, including all-day and multi-day ones (a weekend hackathon). Closures, deadlines, staff trainings and online-only events are left out. One per title, so a weekly series shows once.
+* **Ranking.** With an ask ("any hackathons?"), the embedding ranking is fused (RRF) with BM25 over title and description, counting only words rare in the feed. With no ask, events are ranked against the student's profile embedding; with no profile, soonest first. Up to 8 go to the agent, which mentions the ones that fit.
+* **No RSVPs.** mixr doesn't host UW's events, so it gives the details link and, if they're going, a Google Calendar link. Demo users get these as imported demo-pool events instead (`npm run import:uw-events`).
+
+<p align="right">(<a href="#readme-top">back to top</a>)</p>
+
 ### The dashboard
 
 At `/dashboard` (login with `ADMIN_TOKEN`). Tabs for events, users, traces and a 2D map of every profile vector. You can open a phone pane and act as any user, inspect each matching step, and fast-forward the demo clock. Acting as a real user keeps mixr's replies to them in the dashboard and sends nothing to their phone; everything else is real. `POST /api/admin/send` sends an operator message to one real user and returns the delivery record.
@@ -340,6 +353,8 @@ At `/dashboard` (login with `ADMIN_TOKEN`). Tabs for events, users, traces and a
 | `npm run dev` | Server with reload plus the dashboard dev server. |
 | `npm start` | Production server. |
 | `npm run seed` | Seed the 50 demo students from `fixtures/seed-users.json`. |
+| `npm run import:uw-events` | Load upcoming UW calendar events into the demo pool as events hosted by a demo "UW Events" user. |
+| `scripts/demo/clip.sh <raw> <name>` | Trim a screen recording into a deck clip (mp4, webm, poster). The deck itself is in `demo/deck/` (see its README). |
 | `npm run eval -- --base origin/main --head HEAD` | Check out both revisions into temporary worktrees, run each against its own throwaway DB, and write a before/after report on retrieval, reply quality, latency and tokens to `scripts/eval/out/report.md`. Keys come from `.env.eval`, never `.env`; `--offline` uses fakes. |
 | `node --import tsx scripts/reset-real.ts --yes` | Delete every real user from the DB and every registration on the Photon project. Demo users stay. Stop the server first. |
 | `node --import tsx scripts/delete-user.ts +15555550123 --yes` | Delete one real user and their data from the DB. Photon is untouched. Stop the server first. |
@@ -384,6 +399,8 @@ FORCE=1 scripts/deploy.sh       # rebuild a live commit or retry a failed one
 - [x] React dashboard with traces and a vector map
 - [x] `npm run eval` before/after harness
 - [x] Auto-deploy from `main` with tests as the gate and automatic rollback
+- [x] UW campus calendar: daily pull, archive, and campus events in search
+- [x] Add-to-Google-Calendar links
 - [ ] Resend sending domain for verification email
 - [ ] Polls
 - [ ] Rolling conversation summaries for long-time users
@@ -391,7 +408,7 @@ FORCE=1 scripts/deploy.sh       # rebuild a live commit or retry a failed one
 - [ ] BM25 at scale: SQL full-text past about 10k users
 - [ ] Test verification email delivery to Outlook inboxes
 - [ ] Live multi-phone run-through
-- [ ] Calendar sync
+- [ ] Apple Calendar (.ics) links for iPhone
 - [ ] Voice braindumps
 - [ ] Native group chats for confirmed events
 
