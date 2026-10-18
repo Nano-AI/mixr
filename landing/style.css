@@ -1,18 +1,15 @@
-/* registered so the page can fade from black to light instead of snapping */
-@property --bg { syntax: "<color>"; inherits: true; initial-value: #000; }
-@property --fg { syntax: "<color>"; inherits: true; initial-value: #f5f6fb; }
-:root.lit { --bg: var(--page); --fg: var(--ink); }
-
 :root {
-  transition: --bg .7s ease, --fg .7s ease;
+  /* 0 = black page, 1 = light. main.js drives it from the color field's own fill, so the nav and
+     page turn at the same moment as the background behind them */
+  --lit: 0;
+  --bg: color-mix(in srgb, var(--page) calc(var(--lit) * 100%), #000);
+  --fg: color-mix(in srgb, var(--ink) calc(var(--lit) * 100%), var(--page));
   --page: #f5f6fb;
   --ink: #22272b;         /* the logo wordmark's ink */
-  --bg: #000;             /* animated: black until the unlock, then the color burst lands on --page */
-  --fg: #f5f6fb;          /* animated: white on black, then ink */
   --muted: #86868b;
-  --blue: #0a7cff;        /* iMessage sent */
-  --gray: #e9e9eb;        /* iMessage received */
-  --ti-1: #f4f3ef;        /* iPhone 16 Pro, White Titanium: the lightest finish, so the page stays pale */
+  --blue: #0a7cff;        /* sent bubble */
+  --gray: #e9e9eb;        /* received bubble */
+  --ti-1: #f4f3ef;        /* pale titanium, so the page stays pale */
   --ti-2: #d6d3cc;
   --ti-3: #a9a59d;
   --thick: 30px;          /* phone depth */
@@ -32,37 +29,28 @@ body {
 a { color: inherit; }
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
 
-/* page chrome */
-/* nav: the mark and name, centered */
-.top {
-  position: fixed; inset: 0 0 auto; z-index: 5;
-  display: flex; justify-content: center;
-  padding: 20px 24px; color: var(--fg); pointer-events: none;
+/* page chrome: one contained row, brand left, actions right */
+.top { position: fixed; inset: 0 0 auto; z-index: 5; color: var(--fg); }
+.top-in {
+  max-width: 1200px; margin: 0 auto; padding: 18px 24px;
+  display: flex; align-items: center; justify-content: space-between;
 }
-.brand { display: inline-flex; align-items: center; gap: 12px; color: inherit; text-decoration: none; pointer-events: auto; }
-/* solid mark: the logo's x cut out of a rounded tile, in one color, so it reads on black or light */
-.mark { width: 36px; height: 36px; }
+.brand { display: inline-flex; align-items: center; gap: 9px; color: inherit; text-decoration: none; }
+.mark { width: 26px; height: 26px; }
 .mark rect { fill: currentColor; }
 .mark path { fill: var(--bg); }
-.brand-name { font: 500 34px/1 var(--serif); font-optical-sizing: auto; letter-spacing: -.04em; translate: 0 -2px; }
-
-/* the B2B door, under the headline and offset right, clear of the phone */
-.hero-cta {
-  position: absolute; z-index: 2; top: calc(24svh + clamp(40px, 6.2vw, 96px) * 1.3);
-  left: 50%; translate: max(17vw, 150px) 0;
-  font: 500 16px/1 var(--sf); letter-spacing: -.01em; color: #fff; text-decoration: none;
-  padding: 13px 20px; border-radius: 999px; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .5);
-  transition: background .2s;
+.brand-name { font: 500 25px/1 var(--serif); font-optical-sizing: auto; letter-spacing: -.035em; translate: 0 -1px; }
+.top-actions { display: flex; align-items: center; gap: 28px; }
+.nav-link { font: 400 15px/1 var(--serif); color: inherit; text-decoration: none; opacity: .7; transition: opacity .2s; }
+.nav-link:hover { opacity: 1; }
+.nav-cta {
+  font: 500 15px/1 var(--serif); text-decoration: none;
+  padding: 12px 20px; border-radius: 999px; background: var(--fg); color: var(--bg);
 }
-.hero-cta:hover { background: rgba(255, 255, 255, .12); }
-/* narrow: it lands on the white phone, so it gets a solid dark pill */
-@media (max-width: 700px) {
-  .hero-cta { translate: -50% 0; top: auto; bottom: 6svh; white-space: nowrap; background: rgba(20, 20, 24, .88); box-shadow: none; }
-}
-.hero-cta.gone { pointer-events: none; }
-.hero-cta:focus-visible, .brand:focus-visible { outline: 2px solid currentColor; outline-offset: 3px; border-radius: 8px; }
+@media (max-width: 640px) { .nav-link { display: none; } .nav-cta { padding: 10px 16px; font-size: 14px; } }
+.nav-link:focus-visible, .nav-cta:focus-visible, .brand:focus-visible { outline: 2px solid currentColor; outline-offset: 3px; border-radius: 8px; }
 
-.scroll { height: 580vh; position: relative; }
+.scroll { height: 680vh; position: relative; }
 .stage {
   position: sticky; top: 0; height: 100vh; height: 100svh;
   overflow: hidden;
@@ -72,19 +60,32 @@ a { color: inherit; }
 /* living background: a WebGL field in the icon's colors (main.js) that spreads out on unlock */
 .glow {
   position: absolute; inset: 0; pointer-events: none;
+  /* feather the bottom into the page so the footer has no seam */
+  -webkit-mask-image: linear-gradient(#000 calc(100% - 140px), transparent); mask-image: linear-gradient(#000 calc(100% - 140px), transparent);
 }
 .glow canvas { display: block; width: 100%; height: 100%; }
 /* no WebGL: a still version of the same palette, faded in on unlock */
 .glow.nogl { background: radial-gradient(circle at 50% 55%, #ffe6cf, #ffd2ee 20%, #c9c4f6 40%, #bccbff 55%, #f5f6fb 80%); opacity: 0; }
 
-.lede {
-  position: absolute; left: 0; right: 0; z-index: 2; top: 24svh; padding: 0 24px; text-align: center;
-  font-family: var(--serif); font-optical-sizing: auto;
-  font-size: clamp(40px, 6.2vw, 96px); font-weight: 350; line-height: .98; letter-spacing: -.03em;
-  /* white over the black page, inverted where it crosses the white phone */
-  color: #fff; mix-blend-mode: difference;
-  pointer-events: none;
+/* hero: centered and compact, above the phone. The clip is a fixed band below the nav: as the
+   phone pushes the hero up, the text slides out under that edge instead of fading.
+   White on black, inverted where it crosses the phone. */
+.hero-clip {
+  position: absolute; inset: 0; z-index: 2; pointer-events: none;
+  mix-blend-mode: difference;
+  -webkit-mask-image: linear-gradient(transparent 72px, #000 112px); mask-image: linear-gradient(transparent 72px, #000 112px);
 }
+.hero { position: absolute; top: 15svh; left: 0; right: 0; padding: 0 24px; text-align: center; color: #fff; }
+.lede {
+  font: 350 clamp(42px, 5.6vw, 84px)/1 var(--serif); font-optical-sizing: auto; letter-spacing: -.035em;
+  text-wrap: balance;
+}
+.sub {
+  margin: 20px auto 0; max-width: 30em;
+  font: 400 clamp(18px, 1.5vw, 21px)/1.45 var(--serif); font-optical-sizing: auto;
+  color: rgba(255, 255, 255, .62); text-wrap: pretty;
+}
+@media (max-width: 640px) { .hero { top: 13svh; } }
 
 /* tooltip pointing at the message field once the keypad is up; --hint-y is set from the field's position */
 .hint {
@@ -110,6 +111,10 @@ a { color: inherit; }
 
 .foot { font-family: var(--serif); font-size: 15px; max-width: 34rem; margin: 0 auto; padding: 0 24px 56px; line-height: 1.5; color: #6b6f78; text-align: center; }
 .foot p + p { margin-top: 10px; }
+.uw { display: flex; align-items: center; justify-content: center; gap: 10px; margin-bottom: 18px; font-size: 16px; color: var(--ink); }
+/* read receipt: "Delivered" and "Read" share one cell and cross-fade */
+.receipt > span { grid-area: 1 / 1; }
+.receipt .rd { opacity: 0; }
 
 /* ── phone: designed at native iPhone points, scaled by --s ── */
 .phone {
@@ -129,7 +134,7 @@ a { color: inherit; }
 .layer.back {
   background: radial-gradient(120% 80% at 30% 20%, #f6f5f1, #e2dfd8 60%, #cfcbc3);
 }
-/* camera plateau, on the back so it shows before the phone flips */
+/* camera plateau and the mixr mark, on the back so they show before the phone flips */
 .cam {
   position: absolute; right: 24px; top: 24px; width: 196px; height: 196px; border-radius: 56px;
   background: linear-gradient(145deg, #f3f1ec, #d9d6cf);
@@ -140,8 +145,14 @@ a { color: inherit; }
 .cam b:nth-child(1) { left: 14px; top: 14px; }
 .cam b:nth-child(2) { left: 14px; bottom: 14px; }
 .cam b:nth-child(3) { right: 14px; top: 61px; }
+.back-mark {
+  position: absolute; left: 50%; top: 50%; width: 112px; height: 112px; margin: -56px 0 0 -56px;
+  transform: translateZ(calc(var(--thick) * -1 - 1px)) rotateY(180deg);
+}
+.bm { width: 100%; height: 100%; display: block; }
+.bm rect { fill: rgba(60, 55, 45, .06); }
+.bm path { fill: rgba(255, 255, 255, .55); }
 .btn { position: absolute; width: 5px; border-radius: 3px; background: linear-gradient(90deg, var(--ti-3), var(--ti-1)); transform: translateZ(calc(var(--thick) / -2)); }
-.btn.action   { left: -4px; top: 168px; height: 52px; }
 .btn.vol-up   { left: -4px; top: 250px; height: 86px; }
 .btn.vol-down { left: -4px; top: 352px; height: 86px; }
 .btn.power    { right: -4px; top: 290px; height: 128px; background: linear-gradient(270deg, var(--ti-3), var(--ti-1)); }
@@ -164,7 +175,7 @@ a { color: inherit; }
   translate: var(--sheen, -40%) 0;
 }
 
-.island { position: absolute; z-index: 15; top: 11px; left: 50%; width: 126px; height: 37px; translate: -50% 0; background: #000; border-radius: 20px; }
+.punch { position: absolute; z-index: 15; top: 16px; left: 50%; width: 24px; height: 24px; translate: -50% 0; border-radius: 50%; background: radial-gradient(circle at 40% 40%, #2a2f3a 0 18%, #050608 42%); }
 .statusbar {
   position: absolute; z-index: 14; inset: 0 0 auto; height: 54px; padding: 0 30px 0 50px;
   display: flex; align-items: center; justify-content: space-between;
@@ -268,7 +279,7 @@ a { color: inherit; }
 .them:not(:has(+ .them))::before { left: -7px; width: 20px; background: var(--gray); border-bottom-right-radius: 16px 14px; }
 .them:not(:has(+ .them))::after  { left: -26px; width: 26px; background: #fff; border-bottom-right-radius: 10px; }
 
-.receipt { align-self: flex-end; color: var(--muted); font-size: 11px; font-weight: 500; margin: 3px 4px 0 0; }
+.receipt { align-self: flex-end; display: grid; justify-items: end; color: var(--muted); font-size: 11px; font-weight: 500; margin: 3px 4px 0 0; }
 
 .typing { align-self: flex-start; display: flex; gap: 4px; padding: 13px 14px; border-radius: 19px; background: var(--gray); position: relative; margin-top: 9px; }
 .typing::before, .typing::after { content: ""; position: absolute; border-radius: 50%; background: var(--gray); }
@@ -307,12 +318,10 @@ a { color: inherit; }
 .plus { flex: none; width: 36px; height: 36px; border-radius: 50%; background: #e9e9eb; color: #7d7d82; display: grid; place-items: center; }
 .field {
   flex: 1; display: flex; align-items: center; min-height: 36px;
-  border: 1px solid #c8c8cc; border-radius: 18px; padding: 0 4px 0 14px;
-  transition: border-color .2s;
+  border: .5px solid #c7c7cc; border-radius: 18px; padding: 0 4px 0 14px;
 }
-.chat.kb .field { border-color: var(--blue); }
 .typed { flex: 1; min-width: 0; display: flex; align-items: center; height: 34px; font: 17px/22px var(--sf); letter-spacing: -.43px; color: #000; padding: 6px 0; white-space: nowrap; }
-.typed[data-empty]::before { content: "iMessage"; color: #b9b9be; }
+.typed[data-empty]::before { content: "Text Message"; color: #b9b9be; }
 /* fake caret: the field is driven by the on-screen keypad, not a native input */
 .chat.kb .typed::after { content: ""; display: inline-block; width: 2px; height: 21px; margin-left: 1px; flex: none; background: var(--blue); border-radius: 1px; animation: blink 1s steps(1) infinite; }
 .chat.kb .typed[data-empty]::after { order: -1; margin: 0 1px 0 0; }
@@ -324,7 +333,9 @@ a { color: inherit; }
 
 /* the "type here" moment */
 .compose.ready .field { animation: invite 2.4s ease-in-out 2; }
-@keyframes invite { 50% { border-color: var(--blue); box-shadow: 0 0 0 4px rgba(10,124,255,.15); } }
+/* joined: the thread is done, nothing more to type */
+.compose.done { pointer-events: none; opacity: .5; }
+@keyframes invite { 50% { box-shadow: 0 0 0 4px rgba(10,124,255,.12); } }
 
 @media (prefers-reduced-motion: reduce) {
   .scroll { height: auto; }
