@@ -4,7 +4,7 @@ import { getUserByPhone, one, q, toVec } from '../src/db/index.ts';
 import { config } from '../src/config.ts';
 import { setDeliverer } from '../src/transport/outbox.ts';
 import type { FakeLlm, AgentRequest } from '../src/llm/index.ts';
-import { markInterrupted, processText, HELP_TEXT, STOP_ACK, MAX_TEXT } from '../src/messaging/pipeline.ts';
+import { markInterrupted, processText, HELP_TEXT, STOP_ACK, MAX_TEXT, RATE_LIMIT, RATE_LIMITED } from '../src/messaging/pipeline.ts';
 import { CONSENT, CODE_PLACEHOLDER, braindumpPrompt, cleanName, setCodeSender } from '../src/messaging/onboarding.ts';
 import { dashboardApi } from '../src/http/dashboard.ts';
 import { axis } from './helpers.ts';
@@ -316,6 +316,22 @@ test('HELP answers without the agent and without moving onboarding', async () =>
   await realUser('+12065551111', { name: 'Kai', step: null, verified: true });
   await say('HELP', undefined, '+12065551111');
   expect(await lastOut('+12065551111')).toBe(HELP_TEXT);
+});
+
+test('rate limit: past RATE_LIMIT texts an hour, one notice then silence; HELP and STOP still work', async () => {
+  noAgent();
+  await say('hi'); // consent step from here on, so every text gets a reply until the limit
+  for (let i = 1; i < RATE_LIMIT; i++) await say(`text ${i}`);
+  expect(await lastOut()).not.toBe(RATE_LIMITED);
+  await say('one too many');
+  expect(await lastOut()).toBe(RATE_LIMITED);
+  const before = (await outbox()).length;
+  await say('still going');
+  expect((await outbox()).length).toBe(before); // quiet after the one notice
+  await say('help');
+  expect(await lastOut()).toBe(HELP_TEXT);
+  await say('stop');
+  expect(await lastOut()).toBe(STOP_ACK);
 });
 
 test('STOP: opted out, acknowledged (delivered), seats released, pending invites declined, queued texts suppressed', async () => {
