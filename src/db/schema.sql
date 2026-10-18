@@ -158,6 +158,12 @@ CREATE TABLE IF NOT EXISTS clock (
   now TIMESTAMPTZ NOT NULL
 );
 
+-- Attempted Claude requests per UTC day (the CLAUDE_DAILY_REQUEST_LIMIT cap).
+CREATE TABLE IF NOT EXISTS llm_budget (
+  day TEXT PRIMARY KEY,
+  requests INTEGER NOT NULL DEFAULT 0
+);
+
 -- Real embeddings are cached by text so re-seeding and re-embedding unchanged text costs nothing.
 CREATE TABLE IF NOT EXISTS embedding_cache (
   key TEXT PRIMARY KEY,
