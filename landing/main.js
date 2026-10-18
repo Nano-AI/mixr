@@ -66,6 +66,10 @@ let kbOn = false;
 let nudged = false;
 let joined = false; // number sent: the conversation is over, the field stays shut
 const num = $('#num'); // real (visually hidden) input: keyboard, paste and autofill all land here
+// touch screens type on the drawn pad; focusing the hidden input there makes iOS Safari scroll it
+// into view (preventScroll or not), which shifts the whole fixed page
+const touch = matchMedia('(pointer: coarse)').matches;
+const focusNum = () => !touch && num.focus({ preventScroll: true });
 // (425) 340-5583, built as you type
 const fmt = (d) => (d.length < 4 ? (d ? `(${d}` : '') : d.length < 7 ? `(${d.slice(0, 3)}) ${d.slice(3)}` : `(${d.slice(0, 3)}) ${d.slice(3, 6)}-${d.slice(6)}`);
 const render = () => {
@@ -109,11 +113,11 @@ keypad.addEventListener('click', (e) => {
   const k = e.target.closest('.key')?.dataset.k;
   if (!k) return;
   setDigits(k === 'del' ? digits.slice(0, -1) : digits + k);
-  num.focus({ preventScroll: true });
+  focusNum();
 });
 compose.addEventListener('click', () => {
   openKeypad();
-  num.focus({ preventScroll: true });
+  focusNum();
 });
 num.addEventListener('input', () => setDigits(num.value));
 num.addEventListener('keydown', (e) => {
@@ -128,7 +132,7 @@ addEventListener('keydown', (e) => {
   e.preventDefault();
   go(Infinity);
   openKeypad();
-  num.focus({ preventScroll: true });
+  focusNum();
   setDigits(digits + e.key);
 });
 
@@ -136,7 +140,7 @@ function openKeypad() {
   if (kbOn || joined) return;
   kbOn = true;
   chatView.classList.add('kb');
-  num.focus({ preventScroll: true }); // ready to type, no click needed
+  focusNum(); // ready to type, no click needed
   // if nothing gets typed for a while, mixr starts typing again, like someone waiting on the other end
   if (!nudged) {
     nudged = true;
@@ -175,12 +179,19 @@ const glowEl = $('#glow');
 const hasGL = startGlow($('#bg'), reveal, reduced);
 if (!hasGL) glowEl.classList.add('nogl');
 const paintReveal = () => !hasGL && (glowEl.style.opacity = reveal.v);
+// 0 = black page with light ink, 1 = light page with dark ink. Mixed here rather than with CSS
+// color-mix(), which older Safari can't parse with a calc() amount
+const mix = (a, b, t) => `rgb(${a.map((v, i) => Math.round(v + (b[i] - v) * t))})`;
+const paintLit = (t) => {
+  root.style.setProperty('--bg', mix([0, 0, 0], [245, 246, 251], t));
+  root.style.setProperty('--fg', mix([245, 246, 251], [34, 39, 43], t));
+};
 
 if (reduced) {
   utils.set(['.off', '.lock', '.hero'], { opacity: 0 });
   utils.set('.statusbar', { color: '#000' });
   utils.set('.homebar', { opacity: 1 });
-  root.style.setProperty('--lit', 1);
+  paintLit(1);
   paintReveal();
   steps.filter((el) => el.hasAttribute('data-typing')).forEach((el) => el.remove());
   openKeypad();
@@ -275,7 +286,7 @@ if (reduced) {
     // the page turns light as the color reaches the top edge behind the nav (cover ~0.12..0.5; the
     // corners fill last), on the same clock, so nav and background change together
     const x = hasGL ? utils.clamp((reveal.cover - 0.12) / 0.38, 0, 1) : reveal.v;
-    root.style.setProperty('--lit', x * x * (3 - 2 * x));
+    paintLit(x * x * (3 - 2 * x));
     const on = kbOn && slide === LAST && !move && innerWidth >= 1000;
     if (on) {
       const f = compose.querySelector('.field').getBoundingClientRect();
@@ -345,9 +356,11 @@ if (reduced) {
     if (Math.abs(dy) > 40) go(slide + Math.sign(dy));
     else if (Math.abs(dy) < 8 && !busyTarget(e.target) && slide < LAST) go(slide + 1);
   });
+  let pointer = '';
+  addEventListener('pointerdown', (e) => (pointer = e.pointerType));
   addEventListener('click', (e) => {
     // mouse clicks advance too; touch taps are handled above
-    if (e.pointerType === 'mouse' && !busyTarget(e.target) && slide < LAST) go(slide + 1);
+    if (pointer === 'mouse' && !busyTarget(e.target) && slide < LAST) go(slide + 1);
   });
   addEventListener('keydown', (e) => {
     if (e.target === num) return;

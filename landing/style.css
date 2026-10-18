@@ -1,9 +1,8 @@
 :root {
-  /* 0 = black page, 1 = light. main.js drives it from the color field's own fill, so the nav and
-     page turn at the same moment as the background behind them */
-  --lit: 0;
-  --bg: color-mix(in srgb, var(--page) calc(var(--lit) * 100%), #000);
-  --fg: color-mix(in srgb, var(--ink) calc(var(--lit) * 100%), var(--page));
+  /* page and ink: black/light until the unlock; main.js mixes them from the color field's own fill,
+     so the nav and page turn at the same moment as the background behind them */
+  --bg: #000;
+  --fg: #f5f6fb;
   --page: #f5f6fb;
   --ink: #22272b;         /* the logo wordmark's ink */
   --muted: #86868b;
@@ -161,6 +160,7 @@ a { color: inherit; }
   background: linear-gradient(145deg, #f3f1ec, #d9d6cf);
   box-shadow: inset 0 0 0 1.5px rgba(255,255,255,.7), 0 2px 6px rgba(0,0,0,.15);
   transform: translateZ(calc(var(--thick) * -1 - 2px)) rotateY(180deg);
+  -webkit-backface-visibility: hidden; backface-visibility: hidden;
 }
 .cam b { position: absolute; width: 74px; height: 74px; border-radius: 50%; background: radial-gradient(circle, #1d2433 0 28%, #0b0d12 30% 58%, #3a3d44 60% 66%, #c9c6bf 68%); box-shadow: 0 2px 4px rgba(0,0,0,.35); }
 .cam b:nth-child(1) { left: 14px; top: 14px; }
@@ -170,6 +170,7 @@ a { color: inherit; }
   position: absolute; left: 50%; top: 36%; width: 112px; height: 112px; margin: -56px 0 0 -56px;
   border-radius: 30px; box-shadow: 0 1px 3px rgba(0, 0, 0, .12);
   transform: translateZ(calc(var(--thick) * -1 - 1px)) rotateY(180deg);
+  -webkit-backface-visibility: hidden; backface-visibility: hidden;
 }
 .btn { position: absolute; width: 5px; border-radius: 3px; background: linear-gradient(90deg, var(--ti-3), var(--ti-1)); transform: translateZ(calc(var(--thick) / -2)); }
 .btn.vol-up   { left: -4px; top: 250px; height: 86px; }
@@ -180,6 +181,9 @@ a { color: inherit; }
   padding: 4px;
   background: linear-gradient(135deg, #fbfaf7, var(--ti-2) 40%, #efede8 60%, var(--ti-3));
   box-shadow: 0 60px 120px -40px rgba(40, 40, 80, .4);
+  /* the screen side hides when turned away: WebKit can mis-sort 3D layers once a descendant uses
+     backdrop-filter (the lock screen and nav bar do), so don't rely on depth alone */
+  -webkit-backface-visibility: hidden; backface-visibility: hidden;
 }
 .screen {
   position: relative; height: 100%;
