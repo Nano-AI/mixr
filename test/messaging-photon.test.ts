@@ -153,6 +153,7 @@ test('verification email: code in subject (first), text and html; user strings e
   expect(m.subject).toBe('123456 is your mixr code');
   expect(m.text).toContain('123456');
   expect(m.text).toContain('expires in 10 minutes');
+  expect(m.text).toContain('check spam');
   expect(m.html).toContain('>123456</div>'); // the code alone in its own element, easy to select
   expect(m.html).toContain('your code is 123456'); // hidden preheader
   expect(m.html).toContain('&lt;b&gt;&quot;o&#39;neil&quot;&amp;co@uw.edu');

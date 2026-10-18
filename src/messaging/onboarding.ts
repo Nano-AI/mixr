@@ -29,7 +29,7 @@ const askLast = (first: string): string => `got it, ${first}! and your last name
 const LAST_AGAIN = ' (just your last name, letters only)';
 const ASKED_LAST = /^got it, ([^\s,!?]+)! and your last name\?/;
 const ASK_EMAIL = "what's your @uw.edu email? i use it to keep mixr UW-only.";
-const ASK_CODE = 'reply with the 6-digit code from your UW inbox, or text EMAIL to use a different address.';
+const ASK_CODE = "reply with the 6-digit code from your UW inbox. can't find it? check spam or junk. or text EMAIL to use a different address.";
 const EMAIL_TAKEN = "that email is already connected to another mixr account. if that's not right, reach out to the mixr team.";
 export const CODE_PLACEHOLDER = '[verification code]';
 
@@ -199,7 +199,7 @@ async function requestCode(user: User, said: string, t: Date): Promise<string> {
     [user.id, email, hash, salt, new Date(t.getTime() + CODE_TTL_MS).toISOString(), t.toISOString()],
   );
   await q(`UPDATE users SET email = $2, email_verified = false, step = 'verify' WHERE id = $1`, [user.id, email]);
-  return `sent a 6-digit code to ${email}. reply with it here, it expires in 10 minutes. (text EMAIL to use a different address)`;
+  return `sent a 6-digit code to ${email}. reply with it here, it expires in 10 minutes. not seeing it? check spam or junk. (text EMAIL to use a different address)`;
 }
 
 async function verify(user: User, said: string, word: string, t: Date): Promise<string> {
