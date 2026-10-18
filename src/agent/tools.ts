@@ -8,6 +8,7 @@ import { pendingIntrosFor, requestIntro, respondToIntro } from '../relay/index.t
 import { addRequirement, blockedEitherWay, blockPerson, removeRequirement, RequirementError, unblockPerson, validate } from '../requirements/index.ts';
 import type { AgentTool } from '../llm/index.ts';
 import type { RequirementSpec, RsvpResponse, User } from '../types.ts';
+import { cleanName } from '../messaging/onboarding.ts';
 import { firstName } from './context.ts';
 import { laHuman } from './time.ts';
 
@@ -106,6 +107,16 @@ async function assertShareable(hostId: number, text: string): Promise<void> {
   if (named) throw new ToolError("the title/description must not name other students (guests can read it). leave people's names out; to keep someone out use requirements (kind person) or block_person");
 }
 
+// save_profile's name: a full name (2-4 words, letters), capitalized if typed all lowercase. A bare first name that
+// matches the full name already on file keeps that one (undefined = leave it); any other bare first name is refused.
+function fullNameArg(raw: string, current: string | null): string | undefined {
+  const name = cleanName(raw);
+  if (!name) throw new ToolError("that doesn't look like a name (letters only, first and last, up to 4 words). ask for their full name");
+  if (name.includes(' ')) return name;
+  if (current?.trim().includes(' ') && firstName(current).toLowerCase() === name.toLowerCase()) return undefined;
+  throw new ToolError(`"${name}" is only a first name. ask for their last name too, then save with the full name (first and last)`);
+}
+
 const eventView = (e: { id: number; title: string; startsAt: string | Date; location: string }) => ({
   event_id: e.id,
   title: e.title,
@@ -119,14 +130,16 @@ export const TOOLS: ToolDef[] = [
     description:
       'Create (or fully redo) the user profile from everything they have told you about themselves. Call once onboarding info is gathered. Consolidate ALL their interests, skill levels, vibe preferences and context from the whole conversation into braindump, in their own words.',
     parameters: obj({
-      name: nstr("The user's first name if they gave it, else null."),
+      name: nstr(
+        'The user\'s full name, first and last (e.g. "maya lopez"), if they gave it, else null (null keeps the full name already in the context block). Never just a first name: if you only have their first name, ask for their last name before calling.',
+      ),
       braindump: str('Everything the user said about their interests, hobbies, skill levels, what they want to do and who they want to meet, consolidated.'),
     }),
     run: async (ctx, a) => {
       const u = await me(ctx);
       const braindump = nonEmpty(a.braindump, 'braindump');
-      const name = typeof a.name === 'string' && a.name.trim() ? a.name.trim() : undefined;
-      if (!name && !u.name) throw new ToolError('ask for their first name before saving the profile');
+      const name = typeof a.name === 'string' && a.name.trim() ? fullNameArg(a.name, u.name) : undefined;
+      if (!name && !u.name) throw new ToolError('ask for their full name (first and last) before saving the profile');
       const profile = await buildProfile(u.id, braindump, name);
       return { ok: true, name: name ?? u.name, profile };
     },
@@ -155,7 +168,7 @@ export const TOOLS: ToolDef[] = [
     }),
     run: async (ctx, a) => {
       const u = await me(ctx);
-      if (!u.name) throw new ToolError("ask for the host's first name first");
+      if (!u.name) throw new ToolError('ask for their full name (first and last) first');
       const startsAt = parseIso(a.starts_at, 'starts_at');
       if (startsAt <= (await now())) throw new ToolError('starts_at is in the past. check the current time in the context block.');
       const title = nonEmpty(a.title, 'title');

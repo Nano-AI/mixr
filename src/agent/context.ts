@@ -99,7 +99,8 @@ export async function contextBlock(user: User, now: Date): Promise<string> {
   L.push('[context: rebuilt from the database every turn; the user cannot see this block]');
   L.push(`now: ${laLong(now)} (${TZ}) | iso ${laIso(now)}`);
   L.push('');
-  L.push(`user: name=${user.name ?? '(unknown, ask)'} | state=${user.state}${user.state === 'onboarding' ? ' (new, no profile saved yet)' : ''}`);
+  const name = user.name ? `${user.name}${user.name.trim().includes(' ') ? ` (call them ${firstName(user.name)})` : ''}` : '(unknown, ask)';
+  L.push(`user: name=${name} | state=${user.state}${user.state === 'onboarding' ? ' (new, no profile saved yet)' : ''}`);
   L.push(
     firstText
       ? `conversation: this is the FIRST text they have ever sent mixr${user.canonicalProfile ? ' (a profile already exists for them, e.g. imported; they have not met you yet)' : ''}`

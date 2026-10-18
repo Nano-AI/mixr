@@ -74,18 +74,18 @@ const outputs = (req: AgentRequest) =>
 
 test('onboarding: save_profile call, output fed back, reply sent, user created and traced', async () => {
   const seen = script(
-    () => call('save_profile', { name: 'Maya', braindump: 'tennis 4.5 and catan' }),
+    () => call('save_profile', { name: 'maya lopez', braindump: 'tennis 4.5 and catan' }),
     (req) => {
       const fc = req.input.find((i) => 'type' in i && i.type === 'function_call');
       expect(fc).toMatchObject({ call_id: 'c1', name: 'save_profile' });
       const out = outputs(req);
       expect(out).toHaveLength(1);
       expect(out[0].call_id).toBe('c1');
-      expect(JSON.parse(out[0].output)).toMatchObject({ ok: true, name: 'Maya' });
+      expect(JSON.parse(out[0].output)).toMatchObject({ ok: true, name: 'Maya Lopez' });
       return { text: "got it maya! i'll text you when something fits", calls: [] };
     },
   );
-  await handleInbound('+15550001111', "hey i'm maya, i play tennis (4.5) and love catan");
+  await handleInbound('+15550001111', "hey i'm maya lopez, i play tennis (4.5) and love catan");
 
   expect(seen).toHaveLength(2);
   // the inbound message, then the context block last
@@ -93,7 +93,7 @@ test('onboarding: save_profile call, output fed back, reply sent, user created a
   expect((seen[0].input.at(-1) as any).content).toContain('2026-10-20T12:00:00-07:00');
   expect((seen[0].input.at(-1) as any).content).toContain('Tuesday');
   expect((seen[0].input.at(-1) as any).content).toContain('FIRST text');
-  expect(seen[0].input.at(-2)).toEqual({ role: 'user', content: "hey i'm maya, i play tennis (4.5) and love catan" });
+  expect(seen[0].input.at(-2)).toEqual({ role: 'user', content: "hey i'm maya lopez, i play tennis (4.5) and love catan" });
   expect(seen[0].instructions).toContain('mixr');
   // strict schemas
   for (const t of seen[0].tools) {
@@ -102,15 +102,40 @@ test('onboarding: save_profile call, output fed back, reply sent, user created a
     expect([...p.required].sort()).toEqual(Object.keys(p.properties).sort());
   }
 
-  expect(profiles.buildProfile).toHaveBeenCalledWith(expect.any(Number), 'tennis 4.5 and catan', 'Maya');
+  expect(profiles.buildProfile).toHaveBeenCalledWith(expect.any(Number), 'tennis 4.5 and catan', 'Maya Lopez');
   const u = await getUserByPhone('+15550001111');
-  expect(u).toMatchObject({ name: 'Maya', state: 'active' });
+  expect(u).toMatchObject({ name: 'Maya Lopez', state: 'active' });
   expect(await outbox('+15550001111')).toEqual(["got it maya! i'll text you when something fits"]);
 
   const tr = await one<{ data: any }>(`SELECT data FROM traces WHERE kind = 'agent' AND ref_id = $1`, [u!.id]);
   expect(tr!.data.phone).toBe('+15550001111');
-  expect(tr!.data.toolCalls[0]).toMatchObject({ name: 'save_profile', args: { name: 'Maya' }, result: { ok: true } });
+  expect(tr!.data.toolCalls[0]).toMatchObject({ name: 'save_profile', args: { name: 'maya lopez' }, result: { ok: true } });
   expect(tr!.data.reply).toContain('got it');
+});
+
+test('save_profile needs a full name: a bare first name is sent back to ask for the last name', async () => {
+  const seen = script(
+    () => call('save_profile', { name: 'Maya', braindump: 'tennis' }, 'a'),
+    () => call('save_profile', { name: null, braindump: 'tennis' }, 'b'),
+    () => call('save_profile', { name: 'maya 🙂', braindump: 'tennis' }, 'c'),
+    say('and your last name?'),
+  );
+  await handleInbound('+15550005555', "i'm maya, i play tennis");
+  const out = seen.slice(1).map((r) => JSON.parse(outputs(r).at(-1)!.output));
+  expect(out[0].error).toMatch(/only a first name.*last name/);
+  expect(out[1].error).toMatch(/full name \(first and last\)/);
+  expect(out[2].error).toMatch(/full name/);
+  expect(profiles.buildProfile).not.toHaveBeenCalled();
+  expect(seen[0].instructions).toMatch(/full name \(first and last\)/);
+  expect(seen[0].tools.find((t) => t.name === 'save_profile')!.parameters).toMatchObject({ properties: { name: { description: expect.stringMatching(/full name, first and last/) } } });
+
+  // A first name that matches the full name on file keeps it; the context tells the agent what to call them.
+  await q(`UPDATE users SET name = 'Maya Lopez' WHERE phone = '+15550005555'`);
+  const again = script(() => call('save_profile', { name: 'maya', braindump: 'tennis' }), say('saved!'));
+  await handleInbound('+15550005555', 'tennis 4.0');
+  expect(JSON.parse(outputs(again[1])[0].output)).toMatchObject({ ok: true, name: 'Maya Lopez' });
+  expect(profiles.buildProfile).toHaveBeenCalledWith(expect.any(Number), 'tennis', undefined);
+  expect((again[0].input.at(-1) as any).content).toContain('name=Maya Lopez (call them Maya)');
 });
 
 test('tool exceptions, bad JSON and unknown tools come back as {error}', async () => {
@@ -119,7 +144,7 @@ test('tool exceptions, bad JSON and unknown tools come back as {error}', async (
     () => ({
       text: '',
       calls: [
-        { call_id: 'a', name: 'save_profile', arguments: JSON.stringify({ name: 'Al', braindump: 'chess' }) },
+        { call_id: 'a', name: 'save_profile', arguments: JSON.stringify({ name: 'Al Diaz', braindump: 'chess' }) },
         { call_id: 'b', name: 'nope', arguments: '{}' },
         { call_id: 'c', name: 'edit_profile', arguments: '{not json' },
       ],
