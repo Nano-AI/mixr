@@ -175,6 +175,8 @@ if (claude || fake) {
     questions: s((t) => t.stats!.questions),
     capitalRate: r3(mean(agent.map((t) => +t.stats!.capital))),
     restateRate: r3(mean(agent.map((t) => +t.stats!.restates))),
+    narration: s((t) => t.stats!.narration),
+    narrationRate: r3(mean(agent.map((t) => +(t.stats!.narration > 0)))),
     dupes: agent.reduce((a, t) => a + t.stats!.dupes, 0),
     multiBubbleTurns: agent.filter((t) => t.stats!.bubbles > 1).length,
     silentTurns: agent.filter((t) => !t.stats!.bubbles).length,

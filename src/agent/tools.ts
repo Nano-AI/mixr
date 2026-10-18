@@ -4,10 +4,10 @@ import { buildProfile, editProfile } from '../profiles/index.ts';
 import { runDue } from '../jobs/index.ts';
 import { createEvent, discoverEvents, joinEvent, manageEvent, respondToInvite, type ManageAction } from '../events/index.ts';
 import { findPeople } from '../matching/index.ts';
-import { pendingIntrosFor, requestIntro, respondToIntro } from '../relay/index.ts';
+import { groundedNote, IntroLimitError, pendingIntrosFor, requestIntro, respondToIntro } from '../relay/index.ts';
 import { addRequirement, blockedEitherWay, blockPerson, removeRequirement, RequirementError, unblockPerson, validate } from '../requirements/index.ts';
 import type { AgentTool } from '../llm/index.ts';
-import type { RequirementSpec, RsvpResponse, User } from '../types.ts';
+import type { RequirementSpec, RsvpResponse, RsvpResult, User } from '../types.ts';
 import { cleanName } from '../messaging/onboarding.ts';
 import { firstName } from './context.ts';
 import { laHuman } from './time.ts';
@@ -26,10 +26,17 @@ export const HOST_OFFER_HINT =
 const MAX_CAPACITY = 100; // tune: largest guest count an SMS-created event may ask for
 const MAX_SNOOZE_DAYS = 60; // tune: longest pause
 
+// Canned confirmations: when an action's outcome is fully known, the tool returns `reply` in mixr's voice and the
+// agent loop sends it as-is (no extra model call, nothing narrated). A few variants so it doesn't sound robotic.
+const pick = (xs: string[]): string => xs[Math.floor(Math.random() * xs.length)];
+export const introAsked = (name: string): string[] => [`bet, asked ${name}. i'll lyk`, `asked ${name}, i'll let you know`, `sent ${name} a text, i'll lyk what they say`];
+// An RSVP's detail is already scripted copy for this user (events/copy.ts).
+const withReply = (r: RsvpResult) => (r.outcome === 'not_invited' ? r : { ...r, reply: r.detail });
+
 // Thrown for bad input / permission problems. The message goes back to the model verbatim as {error}.
 export class ToolError extends Error {}
 
-type Ctx = { userId: number };
+type Ctx = { userId: number; inbound?: string }; // inbound: the text this turn answers (grounds quoted notes)
 type Handler = (ctx: Ctx, args: any) => Promise<unknown>;
 type ToolDef = AgentTool & { run: Handler };
 
@@ -61,12 +68,12 @@ function toSpec(a: any): RequirementSpec {
   return { kind: 'text', criterion: String(a?.criterion ?? ''), strength: a?.strength, said: String(a?.said ?? '') };
 }
 
-// RequirementError carries an agent-facing message; surface it as a ToolError.
+// RequirementError and IntroLimitError carry an agent-facing message; surface it as a ToolError.
 async function asTool<T>(fn: () => Promise<T> | T): Promise<T> {
   try {
     return await fn();
   } catch (e) {
-    if (e instanceof RequirementError) throw new ToolError(e.message);
+    if (e instanceof RequirementError || e instanceof IntroLimitError) throw new ToolError(e.message);
     throw e;
   }
 }
@@ -221,7 +228,7 @@ export const TOOLS: ToolDef[] = [
       if (!['yes', 'no_busy', 'no_vibe', 'cancel'].includes(a.response)) throw new ToolError('response must be yes, no_busy, no_vibe or cancel');
       const inv = await one('SELECT status FROM event_invites WHERE event_id = $1 AND user_id = $2', [a.event_id, u.id]);
       if (!inv) throw new ToolError(`they have no invite to event ${a.event_id}`);
-      return await respondToInvite(u.id, a.event_id, a.response as RsvpResponse);
+      return withReply(await respondToInvite(u.id, a.event_id, a.response as RsvpResponse));
     },
   },
   {
@@ -284,7 +291,7 @@ export const TOOLS: ToolDef[] = [
       const ev = await one<{ host_id: number }>('SELECT host_id FROM events WHERE id = $1', [a.event_id]);
       if (!ev) throw new ToolError(`no event ${a.event_id}`);
       if (ev.host_id === u.id) throw new ToolError('they are the host of that event');
-      return await joinEvent(u.id, a.event_id);
+      return withReply(await joinEvent(u.id, a.event_id));
     },
   },
   {
@@ -326,8 +333,8 @@ export const TOOLS: ToolDef[] = [
       );
       if (dup) throw new ToolError(`there is already an intro between them and ${firstName(t.name)}`);
       if (await blockedEitherWay(u.id, t.id)) throw new ToolError("can't set up that intro. tell the user simply that it didn't work out and offer to look for someone else");
-      const intro = await requestIntro(u.id, t.id, nonEmpty(a.reason, 'reason'));
-      return { ok: true, intro_id: intro.id, status: intro.status, target: firstName(t.name) };
+      const intro = await asTool(() => requestIntro(u.id, t.id, nonEmpty(a.reason, 'reason')));
+      return { ok: true, intro_id: intro.id, status: intro.status, target: firstName(t.name), reply: pick(introAsked(firstName(t.name))) };
     },
   },
   {
@@ -336,14 +343,14 @@ export const TOOLS: ToolDef[] = [
     parameters: obj({
       intro_id: int('intro_id from the context block.'),
       accept: { type: 'boolean' },
-      message: nstr('Short note to pass to the other person, or null.'),
+      message: nstr('Only a note they literally added for the other person, in their own words from their text ("sure, tell them i play saturdays" -> "i play saturdays"). Never a summary you wrote. Else null.'),
     }),
     run: async (ctx, a) => {
       const u = await me(ctx);
       const pending = await pendingIntrosFor(u.id);
       if (!pending.some((i) => i.id === a.intro_id)) throw new ToolError(`intro ${a.intro_id} is not waiting on this user`);
       if (typeof a.accept !== 'boolean') throw new ToolError('accept must be true or false');
-      const message = typeof a.message === 'string' && a.message.trim() ? a.message.trim() : undefined;
+      const message = groundedNote(typeof a.message === 'string' ? a.message : null, ctx.inbound); // dropped unless it is their own words
       const intro = await respondToIntro(u.id, a.intro_id, a.accept, message);
       // On accept the relay has already texted them the other person's number; the agent must not confirm it again.
       return {
@@ -351,7 +358,9 @@ export const TOOLS: ToolDef[] = [
         status: intro.status,
         ...(intro.status === 'connected'
           ? { already_texted: "they already got mixr's text with the other person's number. don't confirm it again; reply only if their message asked something else" }
-          : {}),
+          : intro.status === 'declined'
+            ? { reply: pick(["no worries, i'll let them know", 'all good, no worries']) }
+            : {}),
       };
     },
   },
@@ -420,14 +429,15 @@ export const TOOLS: ToolDef[] = [
       const u = await me(ctx);
       if (a.until === null || a.until === undefined) {
         await q('UPDATE users SET snoozed_until = NULL WHERE id = $1', [u.id]);
-        return { ok: true, snoozed: false };
+        return { ok: true, snoozed: false, reply: pick(['welcome back, texts are back on', "you're back on. hmu anytime"]) };
       }
       const until = parseIso(a.until, 'until');
       const t = await now();
       if (until <= t) throw new ToolError('until is in the past');
       if (until.getTime() - t.getTime() > MAX_SNOOZE_DAYS * 86_400_000) throw new ToolError(`max pause is ${MAX_SNOOZE_DAYS} days`);
       await q('UPDATE users SET snoozed_until = $1 WHERE id = $2', [until.toISOString(), u.id]);
-      return { ok: true, snoozed_until: laHuman(until) };
+      const when = laHuman(until);
+      return { ok: true, snoozed_until: when, reply: pick([`no worries, pausing texts until ${when}. hmu anytime`, `got it, no texts from me until ${when}`]) };
     },
   },
   {
@@ -456,7 +466,7 @@ const byName = new Map(TOOLS.map((t) => [t.name, t]));
 export const agentTools = (): AgentTool[] => TOOLS.map(({ name, description, parameters }) => ({ name, description, parameters }));
 
 // Never throws: problems come back as {error} so the model can recover (ask the user, pick another id...).
-export async function runTool(userId: number, name: string, rawArgs: string): Promise<{ args: unknown; result: unknown }> {
+export async function runTool(userId: number, name: string, rawArgs: string, inbound?: string): Promise<{ args: unknown; result: unknown }> {
   let args: unknown;
   try {
     args = JSON.parse(rawArgs || '{}');
@@ -466,7 +476,7 @@ export async function runTool(userId: number, name: string, rawArgs: string): Pr
   const t = byName.get(name);
   if (!t) return { args, result: { error: `unknown tool '${name}'` } };
   try {
-    return { args, result: (await t.run({ userId }, args)) ?? { ok: true } };
+    return { args, result: (await t.run({ userId, inbound }, args)) ?? { ok: true } };
   } catch (e) {
     const msg = e instanceof ToolError ? e.message : `tool failed: ${e instanceof Error ? e.message : String(e)}`;
     return { args, result: { error: msg } };

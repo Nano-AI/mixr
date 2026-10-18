@@ -27,9 +27,9 @@ const JOIN_MAX_IPS = 10_000; // tune: memory cap on the rate table
 const DEV_JOIN_NUMBER = '+15555550100';
 const JOIN_MSG = 'hi mixr';
 
-const FULL = "mixr is full right now — we're letting more people in soon.";
-const BAD_PHONE = 'Enter a US phone number.';
-const FAILED = 'Something went wrong. Try again in a minute.';
+const FULL = "mixr's full rn. more spots soon";
+const BAD_PHONE = "that's not a US number. try again?";
+const FAILED = 'something broke on my end. try again in a minute';
 
 const joinOrigin = (origin: string | undefined): string | null => {
   if (!origin) return null;
@@ -67,7 +67,7 @@ const joinRateLimit: MiddlewareHandler = async (c, next) => {
   const recent = (hits.get(ip) ?? []).filter((x) => t - x < JOIN_WINDOW_MS);
   if (hits.size > JOIN_MAX_IPS) hits.clear();
   hits.set(ip, [...recent, t]);
-  if (recent.length >= JOIN_LIMIT) return c.json({ ok: false, error: 'Too many tries. Try again in a few minutes.' }, 429);
+  if (recent.length >= JOIN_LIMIT) return c.json({ ok: false, error: "that's a lot of tries. give it a few minutes" }, 429);
   await next();
 };
 

@@ -133,14 +133,14 @@ test('Gmail sender addresses the UW student and includes the code', async () => 
   let envelope: unknown;
   let mime = '';
   const stream = nodemailer.createTransport({ streamTransport: true, buffer: true, newline: 'unix' });
-  const env = { EMAIL_PROVIDER: 'gmail', GMAIL_USER: 'mixr.test@gmail.com', GMAIL_APP_PASSWORD: 'abcd efgh ijkl mnop' };
+  const env = { EMAIL_PROVIDER: 'gmail', GMAIL_USER: 'mixr.test@example.com', GMAIL_APP_PASSWORD: 'abcd efgh ijkl mnop' };
   expect(emailConfigured(env)).toBe(true);
   await createEmailSender(env, async (mail) => {
     const result = await stream.sendMail(mail);
     envelope = result.envelope;
     mime = result.message.toString();
   })('student@uw.edu', '123456');
-  expect(envelope).toEqual({ from: 'mixr.test@gmail.com', to: ['student@uw.edu'] });
+  expect(envelope).toEqual({ from: 'mixr.test@example.com', to: ['student@uw.edu'] });
   expect(mime).toMatch(/Subject: 123456 is your mixr code/);
   expect(mime).toMatch(/multipart\/alternative/);
   expect(mime).toMatch(/Content-Type: text\/plain/);
@@ -168,7 +168,7 @@ test('email fails closed: missing config, unknown provider, transport errors', a
   expect(emailConfigured({})).toBe(false); // resend by default, unconfigured
   await expect(createEmailSender({})('student@uw.edu', '123456')).rejects.toThrow(/not configured/);
   await expect(createEmailSender({ EMAIL_PROVIDER: 'carrier-pigeon' })('student@uw.edu', '123456')).rejects.toThrow(/provider/i);
-  const failing = createEmailSender({ EMAIL_PROVIDER: 'gmail', GMAIL_USER: 'a@gmail.com', GMAIL_APP_PASSWORD: 'x' }, async () => {
+  const failing = createEmailSender({ EMAIL_PROVIDER: 'gmail', GMAIL_USER: 'a@example.com', GMAIL_APP_PASSWORD: 'x' }, async () => {
     throw new Error('SMTP rejected');
   });
   await expect(failing('student@uw.edu', '123456')).rejects.toThrow('SMTP rejected');

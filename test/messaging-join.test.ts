@@ -69,7 +69,7 @@ test('US numbers normalize to +1; anything else must be +E.164', async () => {
   for (const body of [{ phone: '555-0100' }, { phone: 42 }, {}, 'not json', { phone: '2' + '0'.repeat(10) }]) {
     const res = await join(body);
     expect(res.status).toBe(400);
-    expect(await res.json()).toEqual({ ok: false, error: 'Enter a US phone number.' });
+    expect(await res.json()).toEqual({ ok: false, error: "that's not a US number. try again?" });
   }
   expect((await q(`SELECT phone FROM users ORDER BY id`)).map((r) => r.phone)).toEqual(['+14255550101', '+14255550102', '+14255550103', '+14255550104', '+447700900123']);
 });
@@ -143,7 +143,7 @@ test('photon: plan cap reached -> 409 full, nobody created', async () => {
   photon(() => json(403, { succeed: false, data: null, code: 'FORBIDDEN', message: 'Project has reached maxSharedUsers (10)' }));
   const res = await join({ phone: '4255550100' });
   expect(res.status).toBe(409);
-  expect(await res.json()).toEqual({ ok: false, full: true, error: "mixr is full right now — we're letting more people in soon." });
+  expect(await res.json()).toEqual({ ok: false, full: true, error: "mixr's full rn. more spots soon" });
   expect((await q(`SELECT 1 FROM users`)).length).toBe(0);
 });
 
@@ -161,7 +161,7 @@ test('photon: other failures -> 502 with a generic message', async () => {
     photon(respond);
     const res = await join({ phone: `42555501${10 + i}` });
     expect(res.status).toBe(502);
-    expect(await res.json()).toEqual({ ok: false, error: 'Something went wrong. Try again in a minute.' });
+    expect(await res.json()).toEqual({ ok: false, error: 'something broke on my end. try again in a minute' });
   }
   expect((await q(`SELECT 1 FROM users`)).length).toBe(0);
 });

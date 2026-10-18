@@ -15,7 +15,6 @@ One file per Devpost step. Paste each section as is.
 - [ ] Fill in Discord usernames for every teammate.
 - [ ] Record the video, upload it (YouTube or Vimeo, public or unlisted), and paste the link.
 - [ ] Upload the thumbnail (design canvas export) and gallery images from `devpost/template/`.
-- [ ] README.md line 67 names teammates ("ported from Wayne's implementation; landing page by Aditya; ... John's simulator build"). Judges will read it; move credits to PLAN.md or Devpost if you want the README app-only.
 - [ ] Keep the backend running through judging. Photon requires the project to be live on a Photon channel.
 - [ ] Don't claim users or traction unless testers actually sign up; add the real count then.
 - [ ] The glass contact icons in `assets/` were made with an AI image tool (the prompts file says "Built-in image_gen"). If any show up in the submission, add that tool to the AI tools answer.

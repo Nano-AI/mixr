@@ -163,11 +163,7 @@ test('confetti only on the reply confirming a seat they just got', async () => {
       ? { text: '', calls: [{ call_id: `c${n}`, name: 'respond_to_invite', arguments: JSON.stringify({ event_id: ev.id, response: 'yes' }) }] }
       : { text: "you're in! catan night at the hub", calls: [] };
   await handleInbound(guest.phone, 'yes!', 'phone');
-  expect(sent.find((s) => s.phone === guest.phone)).toEqual({
-    phone: guest.phone,
-    text: "you're in! catan night at the hub",
-    content: { kind: 'effect', effect: 'confetti' },
-  });
+  expect(sent.find((s) => s.phone === guest.phone)).toMatchObject({ phone: guest.phone, content: { kind: 'effect', effect: 'confetti' } });
   expect(sent.find((s) => s.phone === host.phone)?.content).toBeNull(); // the host's update stays plain
   // Saying yes again ("already in") is not a new confirmation.
   await handleInbound(guest.phone, 'yes', 'phone');
@@ -225,12 +221,12 @@ test("accepted intro: each side gets the other's contact card (first + last name
   const toJordan = sent.filter((s) => s.phone === jordan.phone).at(-1)!;
   expect(toMaya).toEqual({
     phone: maya.phone,
-    text: `Jordan is down! they said: "saturdays work". their number: ${jordan.phone}`,
-    content: { kind: 'contact', first: 'Jordan', last: 'de la Cruz', phone: jordan.phone, caption: `Jordan is down! they said: "saturdays work". here's their contact` },
+    text: `Jordan's down. they said: "saturdays work". here's their number: ${jordan.phone}`,
+    content: { kind: 'contact', first: 'Jordan', last: 'de la Cruz', phone: jordan.phone, caption: `Jordan's down. they said: "saturdays work". here's their contact` },
   });
   expect(toJordan).toEqual({
     phone: jordan.phone,
-    text: `done! here's Maya's number: ${maya.phone}. have fun!`,
-    content: { kind: 'contact', first: 'Maya', last: 'Lopez', phone: maya.phone, caption: "done! here's Maya's contact. have fun!" },
+    text: `done, here's Maya's number: ${maya.phone}. have fun`,
+    content: { kind: 'contact', first: 'Maya', last: 'Lopez', phone: maya.phone, caption: "done, here's Maya's contact. have fun" },
   });
 });

@@ -4,7 +4,7 @@ The team plan for the hackathon MVP. Every task, test, and exact interface is in
 
 ## Integration status (branch `integration`, 2026-10-17)
 
-The `integration` branch replaces the original SQLite meetups/matching design with John's simulator build and ports Wayne's messaging layer onto it. What changed versus the plan below:
+The `integration` branch replaces the original SQLite meetups/matching design with the matching dev's simulator build and ports the messaging dev's messaging layer onto it. What changed versus the plan below:
 
 | Area | Original plan | Now |
 |---|---|---|
@@ -12,12 +12,12 @@ The `integration` branch replaces the original SQLite meetups/matching design wi
 | Matching | One vector per interest, cosine + Elo | One vector per person (canonical profile text), pgvector recall top 40 → Claude rerank; blocks and special requests enforced before ranking |
 | DB | `node:sqlite` | PGlite (embedded Postgres + pgvector) |
 | LLM | Haiku for extraction | Claude Haiku 5.5 for the agent and pipeline (1000 req/day cap); OpenAI embeddings |
-| Messaging | Photon webhook | Wayne's Spectrum gRPC adapter, consent, UW email codes, STOP/START, outbox (ported) |
+| Messaging | Photon webhook | the messaging dev's Spectrum gRPC adapter, consent, UW email codes, STOP/START, outbox (ported) |
 | Join | Text a shared number | Website registers the phone with Photon (shared line) and shows the person's own number; they text first |
 | Hosting | Railway | Monolith on polarcrest (systemd, auto-restart, health watchdog, nightly snapshots); Railway later, maybe |
 | Demo | Seeded data | 50 hand-written demo students in a separate pool; dashboard can act as any user |
 
-Live: `https://mixr-api.johnomeara.com` (dashboard at `/dashboard`). Landing preview: Vercel builds `integration` as a preview; `main` deploys joinmixr.club.
+Live: the API host in Vercel/server config (dashboard at `/dashboard`). Landing preview: Vercel builds `integration` as a preview; `main` deploys joinmixr.club.
 
 - [x] Auto-deploy: polarcrest ships each new commit on `main` within ~2 minutes once its tests, typecheck and dashboard build pass on the box, and rolls back if `/health` fails (`deploy/release.sh`, `mixr-autodeploy.timer`)
 - [x] CI on every PR and on pushes to `main`/`integration` (`.github/workflows/ci.yml`); team workflow in [CONTRIBUTING.md](CONTRIBUTING.md)
@@ -58,26 +58,26 @@ The work is split by system responsibility, so the "people" and "events" paths s
 
 | Module | Owner | Folder | Tasks | Boundary |
 |---|---|---|---|---|
-| Contract (schema, types) | John leads, all review | `src/types.ts`, `src/db.ts`, `src/schema.sql` | T0 | Changes need all 3 to agree |
-| Messaging | **Wayne** | [`src/messaging/`](src/messaging/README.md), `src/server.ts`, `scripts/chat.ts` | W1–W6 | Owns conversation and transport. Not matching or scheduling |
-| Matching | **John** | [`src/matching/`](src/matching/README.md), `scripts/seed.ts` | J1–J4 | Ranks candidates. Not availability, consent, or confirmation |
-| Meetups | **Aditya** | [`src/meetups/`](src/meetups/README.md), `test/e2e.test.ts` | A1–A7 | Owns event state and scheduling. Not delivery or embeddings |
+| Contract (schema, types) | Matching dev leads, all review | `src/types.ts`, `src/db.ts`, `src/schema.sql` | T0 | Changes need all 3 to agree |
+| Messaging | **Messaging dev** | [`src/messaging/`](src/messaging/README.md), `src/server.ts`, `scripts/chat.ts` | W1–W6 | Owns conversation and transport. Not matching or scheduling |
+| Matching | **Matching dev** | [`src/matching/`](src/matching/README.md), `scripts/seed.ts` | J1–J4 | Ranks candidates. Not availability, consent, or confirmation |
+| Meetups | **Meetups dev** | [`src/meetups/`](src/meetups/README.md), `test/e2e.test.ts` | A1–A7 | Owns event state and scheduling. Not delivery or embeddings |
 
 ## Interfaces (agree before coding)
 
 | Function | Owner | Does |
 |---|---|---|
-| `buildProfile(userId, text)` | John | Structured profile for the user to confirm |
-| `findCandidates(criteria)` | John | Eligible users with scores and grounded reasons |
-| `createProposal(details)` | Aditya | Meetup with time, place, capacity, and deadline. Sends invites |
-| `recordResponse(userId, proposalId, reply)` | Aditya | Updates participation and confirmation. Never overfills |
-| `sendMessage(userId, text, dedupeKey)` | Wayne | Sends once and records the delivery outcome |
+| `buildProfile(userId, text)` | Matching dev | Structured profile for the user to confirm |
+| `findCandidates(criteria)` | Matching dev | Eligible users with scores and grounded reasons |
+| `createProposal(details)` | Meetups dev | Meetup with time, place, capacity, and deadline. Sends invites |
+| `recordResponse(userId, proposalId, reply)` | Meetups dev | Updates participation and confirmation. Never overfills |
+| `sendMessage(userId, text, dedupeKey)` | Messaging dev | Sends once and records the delivery outcome |
 
 The exact types are defined in plan Task T0.
 
 ## Timeline
 
-| Stage | Wayne | John | Aditya | Milestone |
+| Stage | Messaging dev | Matching dev | Meetups dev | Milestone |
 |---|---|---|---|---|
 | Hour 1 | Photon access spike | **T0** schema, types, stubs | Meetup states, invite copy | Interfaces agreed |
 | First slice | W1, W2 | J1 + mock candidates | A1, A2 | Two phones complete an invite |

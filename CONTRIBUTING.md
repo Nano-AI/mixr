@@ -79,10 +79,10 @@ Elsewhere: `web/` dashboard (React), `landing/` joinmixr.club (static), `scripts
 
 ## Ops cheatsheet (polarcrest)
 
-Ask John for ssh access (`jsomeara@polarcrest.johnomeara.com`).
+Ask the server owner for ssh access and set `DEPLOY_HOST=user@host`.
 
 ```bash
-ssh jsomeara@polarcrest.johnomeara.com
+ssh "$DEPLOY_HOST"
 journalctl --user -u mixr -f                   # live app logs
 journalctl --user -u mixr-autodeploy -n 50     # what auto-deploy did
 systemctl --user status mixr                   # is it up

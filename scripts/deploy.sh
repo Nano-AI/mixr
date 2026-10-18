@@ -7,9 +7,9 @@
 #   scripts/deploy.sh integration     # another branch; auto-deploy leaves it up until main gets a new commit
 #   FORCE=1 scripts/deploy.sh         # rebuild and redeploy even if that commit is already live
 #   scripts/deploy.sh --rollback      # back to the previous release; auto-deploy waits for a new commit on main
-# Env: DEPLOY_HOST (default jsomeara@polarcrest.johnomeara.com), DEPLOY_BRANCH (default main), DEPLOY_REPO.
+# Env: DEPLOY_HOST (required, user@host of the server), DEPLOY_BRANCH (default main), DEPLOY_REPO.
 set -euo pipefail
-HOST="${DEPLOY_HOST:-jsomeara@polarcrest.johnomeara.com}"
+HOST="${DEPLOY_HOST:?set DEPLOY_HOST=user@host of the server}"
 REPO_SLUG="${DEPLOY_REPO:-Nano-AI/mixr}"
 FORCE=$([ "${FORCE:-0}" = 1 ] && echo 1 || echo 0)
 cd "$(dirname "$0")/.."

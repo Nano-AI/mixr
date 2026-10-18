@@ -48,15 +48,19 @@ const OPENERS = new Set(
   ('got nobody done nice sure yes yep yeah no nope want sounds okay ok cool awesome great hey hi hello you that this there it just here ' +
     'what how who when where totally perfect can let looks glad happy thanks sorry oh also or and but so btw all any some someone anyone ' +
     'nothing noted added saved unfortunately right fair gotcha alright already still if once not none your we they since plus then sweet ' +
-    'heads found looking quick welcome are is do does did have has would could should which tell')
+    'heads found looking quick welcome are is do does did have has would could should which tell bet ngl lowkey fr asked say lol idk')
     .split(' '),
 );
+const NARRATION = /\b(leave|leaving|left|keep|keeping|kept) (the |that |all )?.{0,30}\bout\b|get back to you|keep you posted|you two can (take it|sort)|sort out the details|as soon as (they|he|she) (answer|reply|respond)/i;
 const MAX_REPLY = 480; // tune: ~3 SMS segments; anything longer is the model rambling (or cut off at max_tokens)
 export function tidy(text: string): string {
   let t = text
     .trim()
     .replace(/(^|[.!?]\s+)([A-Z][a-z]*)(?=['’\s,.!?:]|$)/g, (m, pre: string, w: string) => (OPENERS.has(w.toLowerCase()) ? pre + w.toLowerCase() : m))
     .replace(/\bI\b/g, 'i');
+  // Narration about what mixr did behind the scenes adds nothing; drop those sentences (never the whole text).
+  const kept = t.split(/(?<=[.!?])\s+/).filter((s) => !NARRATION.test(s));
+  if (kept.length) t = kept.join(' ');
   if (t.length > MAX_REPLY) {
     const cut = t.slice(0, MAX_REPLY);
     const end = Math.max(cut.lastIndexOf('.'), cut.lastIndexOf('!'), cut.lastIndexOf('?'));
@@ -140,7 +144,7 @@ async function turn(phone: string, text: string, via: 'phone' | 'dashboard', rec
       for (let j = 0; j < res.calls.length; ) {
         let k = j + 1;
         if (READ_ONLY.has(res.calls[j].name)) while (k < res.calls.length && READ_ONLY.has(res.calls[k].name)) k++;
-        results.push(...(await Promise.all(res.calls.slice(j, k).map((c) => runTool(user.id, c.name, c.arguments)))));
+        results.push(...(await Promise.all(res.calls.slice(j, k).map((c) => runTool(user.id, c.name, c.arguments, text)))));
         j = k;
       }
       res.calls.forEach((c, j) => {
@@ -151,6 +155,13 @@ async function turn(phone: string, text: string, via: 'phone' | 'dashboard', rec
       });
       // A tapback on its own is the whole answer: end the turn without text.
       if (res.calls.length === 1 && res.calls[0].name === 'react' && !(toolCalls.at(-1)!.result as { error?: unknown }).error) break;
+      // Every action in this round came back with mixr's own confirmation and they didn't ask anything: send that
+      // as-is. Saves a model call, and the model can't narrate a reply it doesn't write.
+      const canned = results.map((r) => (r.result as { reply?: unknown; error?: unknown }) ?? {});
+      if (!text.includes('?') && canned.every((r) => typeof r.reply === 'string' && !r.error)) {
+        reply = canned.map((r) => r.reply).join(' ');
+        break;
+      }
     }
   } catch (e) {
     error = e instanceof Error ? e.message : String(e);

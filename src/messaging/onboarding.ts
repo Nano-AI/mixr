@@ -35,7 +35,7 @@ export const CODE_PLACEHOLDER = '[verification code]';
 
 // The first thing the agent's onboarding builds on: the user has a name, now they braindump. Greets by first name.
 export const braindumpPrompt = (name: string | null): string =>
-  `you're verified${name ? `, ${firstName(name)}` : ''}! now the fun part: braindump me what you're into. sports, games, music, hobbies, things you want to try, and how serious you are about each. the more you tell me, the better i can match you.`;
+  `you're verified${name ? `, ${firstName(name)}` : ''}! now the fun part: braindump me what you're into. sports, games, music, hobbies, stuff you wanna try, and how serious you are about each. the more you tell me, the better your matches.`;
 
 // What to say when someone comes back mid-onboarding (START after STOP).
 export function stepPrompt(step: OnboardingStep): string {
@@ -104,7 +104,7 @@ function validName(name: string): boolean {
   );
 }
 
-// "john o'meara" -> "John O'Meara". Only all-lowercase input is touched, so "McDonald" or "de la Cruz" typed with
+// "riley o'connor" -> "Riley O'Connor". Only all-lowercase input is touched, so "McDonald" or "de la Cruz" typed with
 // capitals stays as typed. `before` = name words already in front of this piece (a last name added to a first name).
 function capitalize(name: string, before = 0): string {
   if (name !== name.toLowerCase()) return name;
@@ -115,7 +115,7 @@ function capitalize(name: string, before = 0): string {
         ? w
         : w
             .replace(/(^|[-.])(\p{L})/gu, (_, p: string, c: string) => p + c.toUpperCase()) // smith-jones, j.r.
-            .replace(/(^|-)(\p{L}['’])(\p{L})/gu, (_, p: string, o: string, c: string) => p + o + c.toUpperCase()) // o'meara
+            .replace(/(^|-)(\p{L}['’])(\p{L})/gu, (_, p: string, o: string, c: string) => p + o + c.toUpperCase()) // o'connor
             .replace(/^Mc(\p{L})/u, (_, c: string) => `Mc${c.toUpperCase()}`),
     )
     .join(' ');

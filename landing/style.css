@@ -256,6 +256,7 @@ a { color: inherit; }
 }
 .lock-date { font: 600 23px/1 var(--sf); letter-spacing: -.01em; opacity: .9; }
 .lock-time { font: 700 112px/1 var(--sf); letter-spacing: -.04em; margin-top: 4px; }
+.lock-time small { font-size: .3em; letter-spacing: 0; margin-left: .12em; }
 .notif {
   position: absolute; left: 12px; right: 12px; top: 330px;
   display: flex; gap: 12px; padding: 15px 16px; align-items: center; text-align: left;

@@ -51,6 +51,7 @@ export async function recall(vector: number[], opts: RecallOpts = {}): Promise<R
     [toVec(vector), t.toISOString(), exclude, text ? null : limit, f?.avoidIds ?? [], AVOID_PENALTY, currentPool() === 'demo'],
   );
   let lexical: string | undefined;
+  const keywords = new Map<number, string[]>(); // per person: which rare query terms their profile matched
   if (text) {
     // rows are already in vector order (avoid penalty included). 'Rather not' people get no lexical boost.
     const avoid = new Set(f?.avoidIds ?? []);
@@ -60,9 +61,10 @@ export async function recall(vector: number[], opts: RecallOpts = {}): Promise<R
     const lex = rows.map((r, i) => ({ r, s: scores[i] })).filter((x) => x.s > 0 && !avoid.has(x.r.id)).sort((a, b) => b.s - a.s);
     const byId = new Map(rows.map((r) => [r.id, r]));
     rows = weightedRrf([[rows.map((r) => r.id), 1], [lex.map((x) => x.r.id), LEX_WEIGHT]]).slice(0, limit).map((id) => byId.get(id)!);
+    for (const x of lex) keywords.set(x.r.id, [...new Set(tokenize(x.r.canonical_profile ?? ''))].filter((w) => terms.has(w)));
     lexical = lex
       .slice(0, TRACE_HITS)
-      .map((x) => `${x.r.name ?? x.r.id} (${[...new Set(tokenize(x.r.canonical_profile ?? ''))].filter((w) => terms.has(w)).join(', ')})`)
+      .map((x) => `${x.r.name ?? x.r.id} (${keywords.get(x.r.id)!.join(', ')})`)
       .join(', ');
   }
   const hits: RecallHit[] = rows.map((r) => ({
@@ -77,7 +79,7 @@ export async function recall(vector: number[], opts: RecallOpts = {}): Promise<R
     excluded: exclude.length,
     hardFiltered: f ? { excluded: f.excludeIds.length, avoided: f.avoidIds.length } : null, // dropped / demoted before ranking
     count: hits.length,
-    hits: hits.slice(0, TRACE_HITS).map((h) => ({ userId: h.userId, name: h.name, similarity: r3(h.similarity) })),
+    hits: hits.slice(0, TRACE_HITS).map((h) => ({ userId: h.userId, name: h.name, similarity: r3(h.similarity), ...(keywords.has(h.userId) ? { keywords: keywords.get(h.userId) } : {}) })),
     ...(text ? { lexical: lexical || 'none' } : {}), // who BM25 matched on which exact terms (top lexical hits)
   });
   return hits;
