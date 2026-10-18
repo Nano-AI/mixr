@@ -1,13 +1,17 @@
+import { existsSync } from 'node:fs';
+import { readFile } from 'node:fs/promises';
+import { fileURLToPath } from 'node:url';
 import { config } from '../config.ts';
 import { one } from '../db/index.ts';
-import { setDeliverer } from '../transport/outbox.ts';
+import { setDeliverer, type RichContent } from '../transport/outbox.ts';
 import { emailConfigured } from './email.ts';
 import { keyword } from './onboarding.ts';
 import { markInterrupted, processText } from './pipeline.ts';
 
 // iMessage over Photon Spectrum (spectrum-ts 12.11): an authenticated gRPC event stream, no public webhook.
 //   inbound:  app.messages -> parseSpectrumMessage -> processText(phone, text, 'phone', 'imessage:<id>')
-//   outbound: the outbox's deliverer -> imessage(app).space.create(await im.user(phone)).send(text)
+//   outbound: the outbox's deliverer -> imessage(app).space.create(await im.user(phone)) -> deliver(): text, or the
+//             job's rich content (contact card, effect...) with the text as fallback
 // https://photon.codes/docs/spectrum-ts/spaces-and-users
 // Logs never include message text, phone numbers or credentials.
 
@@ -80,11 +84,13 @@ export async function connectPhoton(onInbound: (m: Inbound) => Promise<void> = d
   const { imessage } = await import('spectrum-ts/providers/imessage');
   const app = await Spectrum({ projectId, projectSecret, providers: [imessage.config()], options: { logLevel: 'warn' } });
   const im = imessage(app);
-  setDeliverer(async (phone, text) => {
+  const core = await import('spectrum-ts');
+  const ims = await import('spectrum-ts/providers/imessage');
+  const sdk: Sdk = { ...core, effect: ims.effect, nativeContactCard: ims.nativeContactCard, confetti: ims.imessage.effect.message.confetti };
+  setDeliverer(async (phone, text, content) => {
     const user = await im.user(phone);
     const space = await im.space.create(user);
-    const sent = await space.send(text);
-    if (!sent) throw new Error('Photon did not accept the message');
+    await deliver(space as unknown as SpaceLike, text, content, sdk);
   });
 
   const handle = async (m: Inbound, space: any, message: any): Promise<void> => {
@@ -111,6 +117,75 @@ export async function connectPhoton(onInbound: (m: Inbound) => Promise<void> = d
     }
   })();
   return { stop: () => app.stop(), finished };
+}
+
+// The SDK's content builders, injected so tests never load the SDK.
+type Builder = (...args: any[]) => unknown;
+export type Sdk = Record<'contact' | 'effect' | 'reaction' | 'reply' | 'richlink' | 'nativeContactCard', Builder> & { confetti: string };
+export type SpaceLike = { send(...content: unknown[]): Promise<unknown>; getMessage(id: string): Promise<unknown> };
+
+// mixr's contact photo (256px JPEG). Missing (e.g. an old checkout) = the card goes out without a photo.
+const MIXR_PHOTO = fileURLToPath(new URL('../../landing/brand/mixr-contact.jpg', import.meta.url));
+
+// One outbound job. Plain text unless the job carries rich content; if building or sending that throws, or the
+// kind isn't supported, the plain text goes out instead (logged). Only a failed plain send rejects (-> outbox retry).
+export async function deliver(space: SpaceLike, text: string, content: RichContent | null, sdk: Sdk): Promise<void> {
+  const plain = async (body: string) => {
+    if (!(await space.send(body))) throw new Error('Photon did not accept the message');
+  };
+  if (!content) return plain(text);
+  if (content.kind === 'share_contact') {
+    // Best effort: never retried, never replaced by text.
+    try {
+      await space.send(sdk.nativeContactCard());
+    } catch (e) {
+      console.warn(`Share Name and Photo failed (${redact(e)}); ignored.`);
+    }
+    return;
+  }
+  let captionSent = false;
+  try {
+    const target = async (id: string | null) => {
+      const m = id ? await space.getMessage(id.replace(/^imessage:/, '')) : undefined;
+      if (!m) throw new Error('target message not found');
+      return m;
+    };
+    let rich: unknown;
+    switch (content.kind) {
+      case 'contact': {
+        const { first, last, phone, mixrPhoto } = content;
+        rich = sdk.contact({
+          name: { first, ...(last ? { last } : {}), formatted: [first, last].filter(Boolean).join(' ') },
+          phones: [{ value: phone, type: 'mobile' }],
+          ...(mixrPhoto && existsSync(MIXR_PHOTO) ? { photo: { mimeType: 'image/jpeg', read: () => readFile(MIXR_PHOTO) } } : {}),
+        });
+        break;
+      }
+      case 'effect':
+        rich = sdk.effect(text, sdk.confetti);
+        break;
+      case 'reaction':
+        rich = sdk.reaction(content.emoji, await target(content.targetId));
+        break;
+      case 'reply':
+        rich = sdk.reply(text, await target(content.targetId));
+        break;
+      case 'richlink':
+        rich = sdk.richlink(content.url);
+        break;
+      default:
+        throw new Error(`unsupported content kind '${content.kind}'`);
+    }
+    if (content.caption) {
+      await plain(content.caption);
+      captionSent = true;
+    }
+    if (!(await space.send(rich))) throw new Error('not accepted');
+  } catch (e) {
+    console.warn(`iMessage ${content.kind} failed (${redact(e)}); sending plain text instead.`);
+    if (captionSent && content.caption === text) return; // the text already went out as the caption
+    await plain(text);
+  }
 }
 
 const redact = (e: unknown): string =>
