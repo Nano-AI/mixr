@@ -103,12 +103,12 @@ export function groundedNote(note: string | null | undefined, inbound: string | 
   return note!.trim();
 }
 
-// Once both said yes: the other person's contact card (first + last name, phone) with a short caption that goes out
-// with confetti. The plain text with the number stays the log line and the fallback if iMessage rejects the card.
+// Once both said yes: the other person's contact card (first + last name, phone) with a short caption. The plain text
+// with the number stays the log line and the fallback if iMessage rejects the card.
 function card(u: User | undefined, caption: string): SendOpts {
   if (!u?.phone) return {};
   const [, ...rest] = (u.name ?? '').trim().split(/\s+/);
-  return { content: { kind: 'contact', first: firstName(u.name), ...(rest.length ? { last: rest.join(' ') } : {}), phone: u.phone, caption, captionEffect: 'confetti' } };
+  return { content: { kind: 'contact', first: firstName(u.name), ...(rest.length ? { last: rest.join(' ') } : {}), phone: u.phone, caption } };
 }
 
 // Target answered. On accept, relay their message (and that they're happy to share their number) to the requester.
