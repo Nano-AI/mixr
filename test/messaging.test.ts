@@ -131,6 +131,25 @@ test('onboarding happy path: consent -> name -> UW email -> code -> the agent ta
   expect((await q(`SELECT status FROM inbound_messages`)).every((r) => r.status === 'done')).toBe(true);
 });
 
+test("verification sends mixr's contact card (assigned number, photo) once, before the braindump prompt", async () => {
+  noAgent();
+  await toVerify();
+  await q(`UPDATE users SET assigned_number = '+16287896827' WHERE phone = $1`, [PHONE]);
+  const sent = capture();
+  await say(lastCode());
+  expect(sent.map((s) => s.text)).toEqual(["save me so you know it's me [contact card: mixr, (628) 789-6827]", braindumpPrompt('Ana Lee')]);
+  const [job] = await q<{ content: unknown }>(`SELECT content FROM message_jobs WHERE dedupe_key = $1`, [`mixr-card:${(await user()).id}`]);
+  expect(job.content).toEqual({ kind: 'contact', first: 'mixr', phone: '+16287896827', mixrPhoto: true, caption: "save me so you know it's me" });
+});
+
+test('verification without an assigned number (dev) skips the card', async () => {
+  noAgent();
+  await toVerify();
+  const sent = capture();
+  await say(lastCode());
+  expect(sent.map((s) => s.text)).toEqual([braindumpPrompt('Ana Lee')]);
+});
+
 test('a first text of YES gets the disclosure instead of counting as consent', async () => {
   await say('yes');
   expect((await user()).step).toBe('consent');
