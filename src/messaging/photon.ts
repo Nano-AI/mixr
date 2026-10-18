@@ -100,7 +100,10 @@ export async function connectPhoton(onInbound: (m: Inbound) => Promise<void> = d
   const finished = (async () => {
     for await (const [space, message] of app.messages) {
       const m = parseSpectrumMessage(space, message);
-      if (!m) continue;
+      if (!m) {
+        console.info(`iMessage event ignored: ${describeIgnored(space, message)}`);
+        continue;
+      }
       console.info('Inbound iMessage received.');
       const p = handle(m, space, message);
       inflight.add(p);
@@ -178,4 +181,14 @@ export function startMessaging(opts: StartOptions = {}): Connection {
     },
     finished,
   };
+}
+
+// Why an event wasn't treated as a student's text, without logging content or full handles: e.g. the sender's
+// iMessage is set to send from their Apple ID email instead of their phone number (Photon's most common gotcha).
+export function describeIgnored(space: unknown, message: unknown): string {
+  const s = space as { type?: unknown } | null;
+  const m = message as { platform?: unknown; direction?: unknown; sender?: { id?: unknown }; content?: { type?: unknown } } | null;
+  const id = typeof m?.sender?.id === 'string' ? m.sender.id : '';
+  const sender = /^\+[1-9]\d{7,14}$/.test(id) ? `phone ..${id.slice(-4)}` : id.includes('@') ? 'an email handle (not a phone number)' : id ? 'an unrecognized handle' : 'no sender';
+  return `space=${String(s?.type)} direction=${String(m?.direction)} platform=${String(m?.platform)} content=${String(m?.content?.type)} sender=${sender}`;
 }
