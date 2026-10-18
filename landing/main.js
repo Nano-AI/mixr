@@ -159,6 +159,7 @@ function closeKeypad() {
 
 // ── the story ──
 let go = () => {}; // move to a slide; set up below unless motion is reduced
+let zoomOut = () => {}; // after joining: back to the whole phone
 const steps = [...rail.querySelectorAll('[data-step]')];
 // hidden steps collapse via negative margin so the thread grows from the bottom like iOS
 const shown = steps.map((el) => parseFloat(getComputedStyle(el).marginTop));
@@ -234,13 +235,19 @@ if (reduced) {
     dots.append(b);
   });
 
+  zoomOut = () => {
+    SLIDES[LAST].t = 900; // the pad is done: the last slide is now the whole phone
+    root.classList.remove('end');
+    go(LAST);
+  };
+
   go = (i) => {
     i = utils.clamp(i, 0, LAST);
-    if (i === slide && !move) return;
+    if (i === slide && !move && pos.t === SLIDES[i].t) return;
     speed = Math.abs(i - slide) > 1 ? 6 : 1.5; // a jump (nav button, a dot) fast-forwards the texts
     slide = i;
     [...dots.children].forEach((d, j) => d.toggleAttribute('aria-current', j === i));
-    root.classList.toggle('end', i === LAST);
+    root.classList.toggle('end', i === LAST && !joined);
     if (i === LAST) openKeypad();
     else if (kbOn && !joined) closeKeypad();
     move?.pause();
@@ -412,6 +419,7 @@ compose.addEventListener('submit', async (e) => {
     joined = true;
     num.disabled = true;
     compose.classList.add('done');
+    zoomOut();
     const r = bubble('receipt', 'Delivered');
     setTimeout(() => (r.textContent = `Read ${$('[data-clock]').textContent}`), reduced ? 0 : 500);
     closeKeypad();
