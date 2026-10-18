@@ -4,7 +4,7 @@ import { startGlow } from './glow.js';
 // sign-up server: api.joinmixr.club on joinmixr.club, a local one anywhere else.
 // Overrides for testing: window.MIXR_API (set before this script), or ?api=https://… on any host but
 // joinmixr.club (there, a shared link could send people's numbers elsewhere).
-// ?mock=ok|full|error|offline skips the network and answers with a canned response.
+// ?mock=ok|welcome|full|error|offline skips the network and answers with a canned response.
 const query = new URLSearchParams(location.search);
 const PROD = /(^|\.)joinmixr\.club$/.test(location.hostname);
 const API = (window.MIXR_API || (!PROD && query.get('api')) || (PROD ? 'https://api.joinmixr.club' : 'http://localhost:8787')).replace(/\/+$/, '');
@@ -177,7 +177,7 @@ function closeKeypad() {
 
 // ── the story ──
 let go = () => {}; // move to a slide; set up below unless motion is reduced
-let zoomOut = () => {}; // after joining: back to the whole phone
+let focusLine = () => {}; // after joining: the camera settles on your new line (set up below)
 const steps = [...rail.querySelectorAll('[data-step]')];
 // hidden steps collapse via negative margin so the thread grows from the bottom like iOS
 const shown = steps.map((el) => parseFloat(getComputedStyle(el).marginTop));
@@ -224,6 +224,45 @@ const paintLit = (t) => {
   root.style.setProperty('--fg', mix([245, 246, 251], [34, 39, 43], t));
 };
 
+// ── after joining: the last slide holds the camera on mixr's reply and your new line, centered and as
+// big as the screen allows. It sits on top of the story's own transform (CSS translate and --k), so
+// leaving the slide just lets go of it.
+let line = null; // the contact card, once it's in the thread
+const cam = { x: 0, y: 0, k: 1 };
+const paintCam = () => {
+  phone.style.translate = `${cam.x}px ${cam.y}px`;
+  phone.style.setProperty('--k', cam.k);
+};
+// where cam has to be, given the story's transform at rest on the last slide (m)
+const camFor = (m) => {
+  const box = (n) => {
+    let x = 0, y = 0; // phone units from the phone's top left, unaffected by any transform
+    for (let e = n; e !== phone; e = e.offsetParent) (x += e.offsetLeft + e.offsetParent.clientLeft), (y += e.offsetTop + e.offsetParent.clientTop);
+    return { x, y, r: x + n.offsetWidth, b: y + n.offsetHeight };
+  };
+  const a = box(line.nextElementSibling || line.previousElementSibling); // "sent you a text!" below, or "you're in!" above
+  const c = box(line);
+  const rh = Math.max(a.b, c.b) - Math.min(a.y, c.y);
+  const W = stage.clientWidth;
+  const H = stage.clientHeight;
+  const top = matchMedia('(max-width: 699px)').matches ? 16 : $('.top-in').offsetHeight; // the nav steps aside on phones
+  const bot = H - 24;
+  const S = Math.min(((bot - top) * 0.74) / rh, (W * 0.96) / 426, 2); // on screen px per phone unit
+  const k = S / (parseFloat(phone.style.getPropertyValue('--s')) * Math.hypot(m.a, m.b));
+  const at = (px, py) => m.transformPoint(new DOMPoint(px - 213, py - 449)); // story space, from the phone's center
+  const mid = at((Math.min(a.x, c.x) + Math.max(a.r, c.r)) / 2, (Math.min(a.y, c.y) + Math.max(a.b, c.b)) / 2);
+  const ctr = at(213, 449);
+  const sk = S / Math.hypot(m.a, m.b);
+  // the card in the middle, but no gap at either side of the phone if it fits
+  let x = -sk * mid.x;
+  if (426 * S <= W) x = utils.clamp(x + sk * ctr.x, 213 * S - W / 2, W / 2 - 213 * S) - sk * ctr.x;
+  let y = (top + bot) / 2 - H / 2 - sk * mid.y;
+  // and the phone's bottom edge never floats above the bottom of the screen
+  const edge = H / 2 + y + sk * at(213, 898).y;
+  if (edge < bot) y += bot - edge;
+  return { x, y, k };
+};
+
 if (reduced) {
   utils.set(['.off', '.lock', '.hero', '.origin'], { opacity: 0 });
   utils.set('.statusbar', { color: '#000' });
@@ -234,6 +273,12 @@ if (reduced) {
   openKeypad();
   root.classList.add('end');
   addEventListener('resize', render); // keeps the desktop hint on the field
+  // no camera move: the phone is just there, on the card, still highlighted
+  focusLine = () => {
+    Object.assign(cam, camFor(new DOMMatrix()));
+    paintCam();
+  };
+  addEventListener('resize', () => line && focusLine());
 } else {
   steps.forEach((el, i) => {
     el.style.transformOrigin = origin(el);
@@ -284,11 +329,25 @@ if (reduced) {
     dots.append(b);
   });
 
-  zoomOut = () => {
-    SLIDES[LAST].t = 700; // the pad is done: the last slide is now the whole phone
-    root.classList.remove('end');
-    go(LAST);
+  // the story's transform at rest on the last slide, which the card camera sits on
+  const rest = () => {
+    story.seek(1000);
+    const m = new DOMMatrix(getComputedStyle(phone).transform);
+    story.seek(pos.t);
+    return m;
   };
+  let camMove;
+  const aim = (on, duration, ease = 'inOutSine') => {
+    camMove?.pause();
+    camMove = animate(cam, { ...(on ? camFor(rest()) : { x: 0, y: 0, k: 1 }), duration, ease, onUpdate: paintCam });
+  };
+  focusLine = () => aim(slide === LAST, 1100, 'inOutCubic');
+  addEventListener('resize', () => {
+    if (!line || slide !== LAST) return;
+    camMove?.pause();
+    Object.assign(cam, camFor(rest()));
+    paintCam();
+  });
 
   $('#more').addEventListener('click', () => go(slide + 1));
   if (touch) $('#more span').textContent = 'swipe up';
@@ -318,13 +377,15 @@ if (reduced) {
     slide = i;
     [...dots.children].forEach((d, j) => d.toggleAttribute('aria-current', j === i));
     root.classList.toggle('end', i === LAST && !joined);
+    root.classList.toggle('focus', i === LAST && joined); // nav steps aside for the card
     if (i === LAST) openKeypad();
     else if (kbOn && !joined) closeKeypad();
     move?.pause();
     const d = Math.abs(SLIDES[i].t - pos.t);
+    const duration = utils.clamp(d * 2.6, d ? 600 : 0, 1500);
     move = animate(pos, {
       t: SLIDES[i].t,
-      duration: utils.clamp(d * 2.6, d ? 600 : 0, 1500),
+      duration,
       ease: 'inOutSine',
       onUpdate: () => story.seek(pos.t),
       onComplete: () => (move = null),
@@ -332,6 +393,7 @@ if (reduced) {
     // a zero-length move (same zoom, only the chat advances) completes before `move` is assigned: clear it here,
     // or autoplay waits on it forever
     if (!d) move = null;
+    if (line) aim(i === LAST, Math.max(duration, 600)); // the card camera comes and goes with the slide
   };
 
   const chase = (now) => {
@@ -446,7 +508,7 @@ if (reduced) {
     if (pointer === 'mouse' && !busyTarget(e.target) && slide < LAST) go(slide + 1);
   });
   addEventListener('keydown', (e) => {
-    if (e.target === num) return;
+    if (e.target === num || (e.key === ' ' && busyTarget(e.target))) return; // space presses a focused button
     if (['ArrowDown', 'PageDown', ' '].includes(e.key)) go(slide + 1);
     else if (['ArrowUp', 'PageUp'].includes(e.key)) go(slide - 1);
     else return;
@@ -492,6 +554,7 @@ const say = async (content, cls = 'b them') => {
 // mixr number, and `link` opens Messages to it with "hi mixr" typed; welcome = mixr just texted you first
 const MOCKS = {
   ok: [200, { ok: true, number: '+16285551234', link: 'sms:+16285551234&body=hi%20mixr' }],
+  welcome: [200, { ok: true, number: '+16285551234', link: 'sms:+16285551234&body=hi%20mixr', welcome: true }],
   full: [409, { ok: false, full: true, error: 'mixr is full.' }],
   error: [502, { ok: false, error: "couldn't set up your line. try again in a minute" }],
 };
@@ -631,13 +694,18 @@ compose.addEventListener('submit', async (e) => {
     joined = true;
     num.disabled = true;
     compose.classList.add('done');
-    zoomOut();
+    root.classList.remove('end'); // the consent note has done its job
+    root.classList.add('focus');
     const rc = bubble('receipt', 'Delivered');
     setTimeout(() => (rc.textContent = `Read ${$('[data-clock="ampm"]').textContent}`), reduced ? 0 : 500);
-    closeKeypad();
-    bubble('b them', res.data.welcome ? "you're in! i just texted you. here's my number:" : "you're in! here's your mixr line:");
-    const card = await say(lineCard(res.data.number, res.data.link), 'b them line');
-    if (!touch) card.querySelector('a, button').focus({ preventScroll: true }); // Enter opens Messages, or copies
+    closeKeypad(); // the pad slides away and makes room for the card
+    // welcome: mixr has already texted them, so the card comes first and the bubble says so
+    if (!res.data.welcome) bubble('b them', "you're in! here's your mixr line:");
+    line = await say(lineCard(res.data.number, res.data.link), 'b them line');
+    const sent = res.data.welcome && say('sent you a text!'); // its typing dots hold the spot below the card
+    focusLine(); // stay close: glide onto the card, not back out to the whole phone
+    if (!touch) line.querySelector('a, button').focus({ preventScroll: true }); // Enter opens Messages, or copies
+    await sent;
     busy = false;
     return;
   }

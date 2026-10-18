@@ -166,9 +166,9 @@ a { color: inherit; }
 .end .foot { opacity: 1; pointer-events: auto; }
 /* narrow: the zoomed phone fills the width and runs under the nav, so the chrome steps aside */
 .top, .dots { transition: opacity .4s; }
-@media (max-width: 699px) { .end .top, .end .dots { opacity: 0; pointer-events: none; } }
+@media (max-width: 699px) { .end .top, .end .dots, .focus .top, .focus .dots { opacity: 0; pointer-events: none; } }
 /* wider: the zoomed phone reaches the text links, so only the brand and the pill stay */
-.end .nav-link { opacity: 0; pointer-events: none; }
+.end .nav-link, .focus .nav-link { opacity: 0; pointer-events: none; }
 /* read receipt: "Delivered" and "Read" share one cell and cross-fade */
 .receipt > span { grid-area: 1 / 1; }
 .receipt .rd { opacity: 0; }
@@ -180,7 +180,7 @@ a { color: inherit; }
   width: var(--w); height: var(--h);
   margin: calc(var(--h) / -2) 0 0 calc(var(--w) / -2);
   transform-style: preserve-3d;
-  scale: var(--s, .7);
+  scale: calc(var(--s, .7) * var(--k, 1)); /* --k and translate: the card camera after joining (main.js) */
 }
 .body, .layer, .face { position: absolute; inset: 0; border-radius: var(--r); }
 .body { transform-style: preserve-3d; }
@@ -380,6 +380,20 @@ a { color: inherit; }
   color: var(--blue); font: 600 16px/1 var(--sf); letter-spacing: -.2px;
 }
 .line .line-copy:focus-visible { outline: 2px solid var(--blue); outline-offset: -2px; }
+/* the payoff: the camera settles on your line, the thread behind it steps back, and the card lifts
+   with one blue ring rippling out (the same ring that said "type here") and settling around it */
+.rail > * { transition: filter .8s ease; }
+.focus .rail:has(> .line) > :not(:nth-last-child(-n + 2)) { filter: opacity(.38); }
+.b.line { transition: box-shadow .5s, translate .5s; }
+.focus .b.line {
+  translate: 0 -3px;
+  box-shadow: 0 0 0 3px rgba(10, 124, 255, .22), 0 0 0 18px rgba(10, 124, 255, 0), 0 26px 46px -22px rgba(28, 34, 90, .45);
+  animation: land 1.5s .7s cubic-bezier(.2, .7, .2, 1) backwards;
+}
+@keyframes land {
+  from { translate: 0 0; box-shadow: 0 0 0 0 rgba(10, 124, 255, 0), 0 0 0 0 rgba(10, 124, 255, .45), 0 0 0 -22px rgba(28, 34, 90, 0); }
+  35% { box-shadow: 0 0 0 3px rgba(10, 124, 255, .22), 0 0 0 7px rgba(10, 124, 255, .28), 0 26px 46px -22px rgba(28, 34, 90, .45); }
+}
 
 .compose { flex: none; display: flex; align-items: flex-end; gap: 9px; padding: 8px 12px 30px; background: #fff; }
 .chat.kb .compose { padding-bottom: 8px; }
@@ -437,7 +451,8 @@ a { color: inherit; }
 
 @media (prefers-reduced-motion: reduce) {
   .dots, .more { display: none; }
-  .typing i, .compose.ready .field { animation: none; }
+  .typing i, .compose.ready .field, .focus .b.line { animation: none; }
+  .rail > *, .b.line { transition: none; }
   .hint, .hint.on { transition: opacity .3s; translate: 0 -50%; }
   .hint.top, .hint.top.on { translate: -50% 0; }
 }
