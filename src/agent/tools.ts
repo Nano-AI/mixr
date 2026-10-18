@@ -11,7 +11,7 @@ import type { AgentTool } from '../llm/index.ts';
 import type { RequirementSpec, RsvpResponse, RsvpResult, User } from '../types.ts';
 import { cleanName } from '../messaging/onboarding.ts';
 import { firstName } from './context.ts';
-import { laHuman } from './time.ts';
+import { laDay, laHuman } from './time.ts';
 import { send } from '../transport/index.ts';
 import { campusEvents, scrubPii } from '../calendar/uw.ts';
 import { TAPBACKS, type Tapback } from '../transport/outbox.ts';
@@ -268,7 +268,8 @@ export const TOOLS: ToolDef[] = [
       if (!query && u.state !== 'active') throw new ToolError('no profile yet: ask what they are looking for, or onboard them first');
       const events = await discoverEvents(u.id, query);
       // UW's own public calendar (read-only, no RSVP). Demo users already get these as imported demo-pool events.
-      const campus = u.seeded ? [] : await campusEvents(query);
+      const campus = u.seeded ? [] : await campusEvents(query, undefined, u.embedding);
+      const t = (await now()).getTime();
       return {
         events: events.map((e) => ({
           ...eventView(e),
@@ -282,7 +283,11 @@ export const TOOLS: ToolDef[] = [
         })),
         campus_events: campus.map((e) => ({
           title: e.title,
-          starts_at: laHuman(e.startsAt),
+          // All-day: the dates ("Sat, Oct 17 to Sun, Oct 18, all day"); the end date in the feed is exclusive.
+          starts_at: e.allDay
+            ? `${laDay(e.startsAt)}${e.endsAt && Date.parse(e.endsAt) - Date.parse(e.startsAt) > 86400_000 ? ` to ${laDay(new Date(Date.parse(e.endsAt) - 1))}` : ''}, all day`
+            : laHuman(e.startsAt),
+          happening_now: Date.parse(e.startsAt) <= t,
           location: e.location,
           about: scrubPii(e.description, 160),
           url: e.url,
