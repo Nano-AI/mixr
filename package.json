@@ -10,6 +10,7 @@
     "web": "npm --prefix web run dev",
     "dev": "concurrently -k -n server,web -c blue,magenta \"npm run server\" \"npm run web\"",
     "seed": "tsx scripts/seed.ts",
+    "eval": "tsx scripts/eval/index.ts",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "start": "node --import tsx src/server.ts"
