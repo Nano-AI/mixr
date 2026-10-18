@@ -5,7 +5,8 @@ import { poolContext, runIn } from '../src/context.ts';
 import { config } from '../src/config.ts';
 import { send } from '../src/transport/index.ts';
 import { retryPending, setDeliverer, type RichContent } from '../src/transport/outbox.ts';
-import { deliver, type Sdk, type SpaceLike } from '../src/messaging/photon.ts';
+import { deliver, parseSpectrumMessage, type Sdk, type SpaceLike } from '../src/messaging/photon.ts';
+import { processText } from '../src/messaging/pipeline.ts';
 import { fakeEmbed } from '../src/llm/embed.ts';
 import { requestIntro, respondToIntro } from '../src/relay/index.ts';
 import { confetti, handleInbound } from '../src/agent/index.ts';
@@ -172,6 +173,46 @@ test('confetti only on the reply confirming a seat they just got', async () => {
   await handleInbound(guest.phone, 'yes', 'phone');
   expect(sent.filter((s) => s.phone === guest.phone).map((s) => s.content)).toEqual([{ kind: 'effect', effect: 'confetti' }, null]);
   expect(confetti([{ name: 'respond_to_invite', args: {}, result: { outcome: 'waitlisted', detail: 'catan night just filled up' } }])).toBe(false);
+});
+
+test('react: the agent tapbacks the text it is answering and sends no reply', async () => {
+  const fake = await fresh();
+  const sent = capture();
+  const u = await realUser();
+  let calls = 0;
+  fake.agentHandler = () => (calls++, { text: '', calls: [{ call_id: 'c1', name: 'react', arguments: JSON.stringify({ emoji: '❤️' }) }] });
+  expect(await processText(u.phone, 'thanks!!', 'phone', 'imessage:GUID-1')).toBe('done');
+  expect(calls).toBe(1); // no follow-up model call for a text reply
+  expect(sent).toEqual([{ phone: u.phone, text: '❤️', content: { kind: 'reaction', emoji: '❤️', targetId: 'imessage:GUID-1' } }]);
+
+  // Outside the allowed set: an error back to the model, which then replies normally.
+  calls = 0;
+  fake.agentHandler = () =>
+    ++calls === 1 ? { text: '', calls: [{ call_id: 'c2', name: 'react', arguments: JSON.stringify({ emoji: '🔥' }) }] } : { text: 'haha ok', calls: [] };
+  await processText(u.phone, 'lol', 'phone', 'imessage:GUID-2');
+  expect(sent.at(-1)).toEqual({ phone: u.phone, text: 'haha ok', content: null });
+});
+
+test('deliver: tapbacks and inline replies resolve their target message by provider id', async () => {
+  const target = { id: 'GUID-1' };
+  const s = fakeSpace({ messages: { 'GUID-1': target } });
+  await deliver(s.space, '👍', { kind: 'reaction', emoji: '👍', targetId: 'imessage:GUID-1' }, fakeSdk());
+  await deliver(s.space, "you're in!", { kind: 'reply', targetId: 'imessage:GUID-1' }, fakeSdk());
+  expect(s.sent).toEqual([
+    { kind: 'reaction', args: ['👍', target] },
+    { kind: 'reply', args: ["you're in!", target] },
+  ]);
+});
+
+test('parseSpectrumMessage: an inline reply to an older message is a threaded text', () => {
+  const event = { platform: 'imessage', direction: 'inbound', id: 'r-1', sender: { id: '+14253694262' } };
+  expect(parseSpectrumMessage({ type: 'dm' }, { ...event, content: { type: 'reply', content: { type: 'text', text: 'yes!' }, target: {} } })).toEqual({
+    from: '+14253694262',
+    text: 'yes!',
+    providerId: 'imessage:r-1',
+    threaded: true,
+  });
+  expect(parseSpectrumMessage({ type: 'dm' }, { ...event, content: { type: 'reply', content: { type: 'attachment' } } })).toBeNull();
 });
 
 test("accepted intro: each side gets the other's contact card (first + last name, phone), the numbered text as fallback", async () => {

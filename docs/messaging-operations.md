@@ -176,6 +176,22 @@ conversation handler runs. Typing is cleared even when processing fails.
 Indicator failures are best-effort and do not block the reply. Duplicate input
 and messages from opted-out users do not trigger indicators (START can resume).
 
+Outbound jobs can carry native iMessage content (`message_jobs.content`, `RichContent`
+in `src/transport/outbox.ts`); `text` is always stored as the log line and the plain
+fallback. If building or sending the rich form throws, Photon rejects it, or the kind is
+unsupported, the deliverer logs a warning and sends `text` instead, so everything
+degrades to plain texts. Used today:
+
+- mixr's contact card (name, `landing/brand/mixr-contact.jpg`, the user's assigned
+  number) right after verification, once per user; skipped without an assigned number;
+- the other person's contact card (first + last name, phone) on both sides of an accepted intro;
+- confetti on the agent's reply confirming a newly claimed event seat;
+- a joinmixr.club link preview after the HELP text;
+- tapbacks: the agent's `react` tool (❤️ 👍 😂 ‼️) tapbacks the text it is answering
+  instead of a filler reply; the fallback is the bare emoji;
+- inline replies: a student's inline reply to an older message (e.g. an invite) is now
+  accepted as text, and mixr's plain answers during that turn thread under it.
+
 The Photon project profile is named Mixr with its previously generated avatar uploaded.
 The current Free shared line reports `imessageSynced=false`, so the SDK's automatic
 name/photo sharing is not active.
