@@ -17,6 +17,11 @@ export async function send(userId: number, text: string, opts: SendOpts = {}): P
   await queueDelivery(userId, messageId, text, opts);
 }
 
+// "+14255183059" -> "(425) 518-3059"; other countries stay E.164.
+export const prettyPhone = (e164: string): string => e164.replace(/^\+1(\d{3})(\d{3})(\d{4})$/, '($1) $2-$3');
+// The log line (and plain fallback) for a contact card.
+export const cardLine = (name: string, phone: string): string => `[contact card: ${name}, ${prettyPhone(phone)}]`;
+
 // via: 'dashboard' when someone typed it in the simulator rather than on a phone.
 export async function recordInbound(userId: number, text: string, via: 'phone' | 'dashboard' = 'phone'): Promise<void> {
   await log(userId, 'in', text, via);
