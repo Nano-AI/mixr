@@ -408,7 +408,8 @@ a { color: inherit; }
 @keyframes invite { 50% { box-shadow: 0 0 0 8px rgba(10,124,255,.14); } }
 
 /* ── the last step (main.js openLast): after joining, a screen of its own over the blurred phone. mixr can't
-   text first, so it says the one thing left to do: text your mixr number. Light or dark with the system. ── */
+   text first, so it says the one thing left to do: text your mixr number. Light or dark with the system.
+   On a return visit (slideLast) it's the story's last slide instead, under the nav, always light like the page. ── */
 .last {
   --l-bg: rgba(245, 246, 251, .84);
   --l-ink: #22272b;
@@ -428,7 +429,7 @@ a { color: inherit; }
   opacity: 0; transition: opacity .45s ease;
 }
 @media (prefers-color-scheme: dark) {
-  .last {
+  .last:not(.slide) {
     --l-bg: rgba(14, 15, 18, .9);
     --l-ink: #f5f6fb;
     --l-soft: #b9bdc6;
@@ -443,13 +444,13 @@ a { color: inherit; }
 }
 .last[hidden], .last [hidden] { display: none !important; }
 .last.on { opacity: 1; }
+.last.slide { z-index: 4; padding-top: calc(84px + env(safe-area-inset-top)); }
 .last-in {
   margin: auto; width: 100%; max-width: 34rem;
   display: grid; align-items: center;
   translate: 0 20px; transition: translate .7s cubic-bezier(.2, .8, .2, 1);
 }
 .last.on .last-in { translate: none; }
-.last.now, .last.now .last-in { transition: none; } /* a reload lands on it: no entrance */
 
 .last-head {
   font: 350 clamp(36px, 9.6vw, 60px)/1.02 var(--serif); font-optical-sizing: auto; letter-spacing: -.035em;
