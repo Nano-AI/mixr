@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { api, useBus, useDebounced, type AppState, type InviteStatus, type ProjectionPoint } from '../api.ts';
+import { api, poolOf, useBus, useDebounced, type AppState, type InviteStatus, type Pool, type ProjectionPoint } from '../api.ts';
 import { cx } from '../util.ts';
 import { INVITE_STATUSES, inviteLabel } from './Chip.tsx';
+import { eventPool } from './Pool.tsx';
 
 type Props = {
   state: AppState;
@@ -19,6 +20,7 @@ export function MapTab({ state, selectedEventId, onSelectEvent, onShowUser }: Pr
   const [error, setError] = useState<string | null>(null);
   const [hoverUser, setHoverUser] = useState<number | null>(null);
   const [hoverEvent, setHoverEvent] = useState<number | null>(null);
+  const [byPool, setByPool] = useState(false);
   // Render the SVG at the container's real pixel size so labels stay legible at any inspector width.
   const wrapRef = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ w: 600, h: 420 });
@@ -85,6 +87,12 @@ export function MapTab({ state, selectedEventId, onSelectEvent, onShowUser }: Pr
     return m;
   }, [selected]);
   const titleOf = useMemo(() => new Map(state.events.map((e) => [e.id, e.title])), [state.events]);
+  const { userPool, eventPoolOf } = useMemo(() => {
+    const users = new Map(state.users.map((u) => [u.id, u]));
+    const userPool = new Map<number, Pool>(state.users.map((u) => [u.id, poolOf(u)]));
+    const eventPoolOf = new Map<number, Pool>(state.events.map((e) => [e.id, eventPool(e, users)]));
+    return { userPool, eventPoolOf };
+  }, [state.users, state.events]);
 
   const presentStatuses = INVITE_STATUSES.filter((s) => [...statusByUser.values()].includes(s));
 
@@ -108,6 +116,10 @@ export function MapTab({ state, selectedEventId, onSelectEvent, onShowUser }: Pr
           ))}
         </select>
         <span className="grow" />
+        <label className="small muted map-check" title="Color students and events by pool (real vs demo)">
+          <input type="checkbox" checked={byPool} onChange={(e) => setByPool(e.target.checked)} />
+          color by pool
+        </label>
         <button className="mini-btn" onClick={() => void load()}>
           ↻ refresh
         </button>
@@ -117,7 +129,7 @@ export function MapTab({ state, selectedEventId, onSelectEvent, onShowUser }: Pr
         {error && <div className="error-box">Couldn’t load projection: {error}</div>}
         {points && points.length === 0 && <div className="empty">No vectors to project yet. Seed users to populate the map.</div>}
         {points && points.length > 0 && (
-          <svg className="map" viewBox={`0 0 ${W} ${H}`} width={W} height={H} role="img" aria-label="2D projection of user and event vectors">
+          <svg className={cx('map', byPool && 'by-pool')} viewBox={`0 0 ${W} ${H}`} width={W} height={H} role="img" aria-label="2D projection of user and event vectors">
             <defs>
               <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
                 <path d="M0,0 L10,5 L0,10 z" className="arrow-head" />
@@ -144,7 +156,13 @@ export function MapTab({ state, selectedEventId, onSelectEvent, onShowUser }: Pr
               return (
                 <g
                   key={`u${p.id}`}
-                  className={cx('map-user', st && `st-${st}`, isHost && 'host', selected && !st && !isHost && 'dim')}
+                  className={cx(
+                    'map-user',
+                    `pool-${userPool.get(uid) ?? 'demo'}`,
+                    st && `st-${st}`,
+                    isHost && 'host',
+                    selected && !st && !isHost && 'dim',
+                  )}
                   transform={`translate(${sx(p.x)},${sy(p.y)})`}
                   onMouseEnter={() => setHoverUser(uid)}
                   onMouseLeave={() => setHoverUser((h) => (h === uid ? null : h))}
@@ -176,7 +194,12 @@ export function MapTab({ state, selectedEventId, onSelectEvent, onShowUser }: Pr
               return (
                 <g
                   key={`e${m.eventId}`}
-                  className={cx('map-event', sel && 'sel', !sel && selectedEventId != null && 'faded')}
+                  className={cx(
+                    'map-event',
+                    `pool-${eventPoolOf.get(m.eventId) ?? 'demo'}`,
+                    sel && 'sel',
+                    !sel && selectedEventId != null && 'faded',
+                  )}
                   onMouseEnter={() => setHoverEvent(m.eventId)}
                   onMouseLeave={() => setHoverEvent((h) => (h === m.eventId ? null : h))}
                   onClick={() => onSelectEvent(m.eventId)}
@@ -241,6 +264,13 @@ export function MapTab({ state, selectedEventId, onSelectEvent, onShowUser }: Pr
           </svg>
           host
         </span>
+        {byPool &&
+          (['real', 'demo'] as const).map((p) => (
+            <span key={p} className={`lg pool-${p}`}>
+              <i className="lg-dot lg-pool" />
+              {p}
+            </span>
+          ))}
         {presentStatuses.map((s) => (
           <span key={s} className={`lg st-${s}`}>
             <i className="lg-dot" />

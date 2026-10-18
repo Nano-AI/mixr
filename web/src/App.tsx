@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from 'react';
-import { api, useBus, useDebounced, type AppState } from './api.ts';
+import { api, AuthError, useBus, useDebounced, type AppState, type AuthStatus } from './api.ts';
 import { TopBar } from './components/TopBar.tsx';
 import { PhonesPanel } from './components/PhonesPanel.tsx';
 import { Inspector, type TabId } from './components/Inspector.tsx';
@@ -11,7 +11,7 @@ export const MAX_PANES = 4;
 export type Toast = { id: number; text: string; tone: 'info' | 'error' | 'ok' };
 export type Notify = (text: string, tone?: Toast['tone']) => void;
 
-export function App() {
+export function App({ auth }: { auth: AuthStatus }) {
   const [state, setState] = useState<AppState | null>(null);
   const [offline, setOffline] = useState(false);
   const [epoch, setEpoch] = useState(0); // bumped on reset so panes/traces reload
@@ -20,8 +20,9 @@ export function App() {
     try {
       setState(await api.state());
       setOffline(false);
-    } catch {
-      setOffline(true);
+    } catch (e) {
+      // Signed out: the login screen replaces the app. Anything else: the server is unreachable, keep retrying.
+      if (!(e instanceof AuthError)) setOffline(true);
     }
   }, []);
   const refreshSoon = useDebounced(() => void refresh(), 250);
@@ -132,7 +133,7 @@ export function App() {
 
   return (
     <div className="app">
-      <TopBar state={state} offline={offline} notify={notify} onReset={afterReset} onChanged={refreshSoon} />
+      <TopBar state={state} offline={offline} auth={auth} notify={notify} onReset={afterReset} onChanged={refreshSoon} />
       <div
         className={cx('main', collapsed && 'collapsed')}
         ref={mainRef}

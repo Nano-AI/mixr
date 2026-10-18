@@ -32,8 +32,9 @@ export function fmtRel(iso: string | null | undefined, nowIso: string | undefine
     const rm = m % 60;
     s = rm ? `${h}h ${rm}m` : `${h}h`;
   } else {
-    const d = Math.floor(m / 1440);
-    const h = Math.round((m % 1440) / 60);
+    const hours = Math.round(m / 60); // round once, so it never reads "2d 24h"
+    const d = Math.floor(hours / 24);
+    const h = hours % 24;
     s = h ? `${d}d ${h}h` : `${d}d`;
   }
   return diff >= 0 ? `in ${s}` : `${s} ago`;

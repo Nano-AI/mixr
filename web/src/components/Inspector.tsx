@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import type { AppState } from '../api.ts';
 import type { TraceFeed } from '../useTraces.ts';
 import { cx } from '../util.ts';
@@ -5,6 +6,7 @@ import { EventsTab } from './EventsTab.tsx';
 import { UsersTab } from './UsersTab.tsx';
 import { TraceTab } from './TraceTab.tsx';
 import { MapTab } from './MapTab.tsx';
+import type { PoolFilter } from './Pool.tsx';
 
 export type TabId = 'events' | 'users' | 'trace' | 'map';
 
@@ -26,6 +28,8 @@ type Props = {
 
 export function Inspector(p: Props) {
   const { state, tab, setTab, collapsed, setCollapsed } = p;
+  // Shared by the Events and Users tabs. Not persisted: every visit starts on All.
+  const [poolFilter, setPoolFilter] = useState<PoolFilter>('all');
 
   if (collapsed) {
     return (
@@ -78,6 +82,8 @@ export function Inspector(p: Props) {
             onSelect={p.setSelectedEventId}
             onOpenPhone={p.onOpenPhone}
             onShowUser={p.onShowUser}
+            poolFilter={poolFilter}
+            setPoolFilter={setPoolFilter}
           />
         ) : tab === 'users' ? (
           <UsersTab
@@ -86,6 +92,8 @@ export function Inspector(p: Props) {
             onSelect={p.setSelectedUserId}
             onOpenPhone={p.onOpenPhone}
             onShowEvent={p.onShowEvent}
+            poolFilter={poolFilter}
+            setPoolFilter={setPoolFilter}
           />
         ) : tab === 'trace' ? (
           <TraceTab state={state} feed={p.traces} onShowEvent={p.onShowEvent} onShowUser={p.onShowUser} />
