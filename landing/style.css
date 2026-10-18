@@ -87,7 +87,7 @@ a { color: inherit; }
 }
 @media (max-width: 640px) { .hero { top: 13dvh; } }
 .origin {
-  position: absolute; z-index: 2; left: 0; right: 0; bottom: calc(24px + env(safe-area-inset-bottom));
+  position: absolute; z-index: 2; left: 0; right: 0; bottom: calc(64px + env(safe-area-inset-bottom)); /* clears the swipe cue */
   text-align: center; font: 400 15px/1 var(--serif); color: #fff; opacity: .55;
   mix-blend-mode: difference; pointer-events: none;
 }
@@ -105,17 +105,20 @@ a { color: inherit; }
 .dots button[aria-current]::before { opacity: 1; scale: 1.25; }
 .dots button:focus-visible { outline: 2px solid currentColor; outline-offset: -2px; border-radius: 50%; }
 
-/* swipe cue on the hero: bobs until the first move, tap to advance */
+/* swipe cue: a small frosted pill on every slide but the last, so it's clear the story keeps going */
 .more {
-  position: fixed; z-index: 5; left: 50%; bottom: calc(52px + env(safe-area-inset-bottom)); translate: -50% 0;
-  width: 44px; height: 44px; border: 0; padding: 0; background: none; color: var(--fg); cursor: pointer;
-  display: grid; place-items: center; opacity: .7; transition: opacity .4s;
-  mix-blend-mode: difference; /* like .origin: stays readable over the pale phone back */
-  animation: bob 2.2s ease-in-out infinite;
+  position: fixed; z-index: 5; left: 50%; bottom: calc(16px + env(safe-area-inset-bottom)); translate: -50% 0;
+  height: 34px; padding: 0 14px 0 12px; border: 0; border-radius: 999px; cursor: pointer;
+  display: flex; align-items: center; gap: 7px;
+  background: rgba(255, 255, 255, .62); color: #22272b; -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
+  box-shadow: 0 6px 20px -8px rgba(40, 30, 90, .35);
+  font: 500 13px/1 var(--sf); letter-spacing: -.1px;
+  transition: opacity .4s; animation: bob 2.2s ease-in-out infinite;
 }
-.more:focus-visible { outline: 2px solid currentColor; border-radius: 50%; }
+.more svg { width: 14px; }
+.more:focus-visible { outline: 2px solid #22272b; outline-offset: 2px; }
 .moved .more { opacity: 0; pointer-events: none; }
-@keyframes bob { 50% { transform: translateY(6px); } }
+@keyframes bob { 50% { transform: translateY(4px); } }
 
 /* tooltip pointing at the message field once the keypad is up; --hint-y is set from the field's position */
 .hint {
