@@ -429,7 +429,7 @@ if (reduced) {
     else return;
     e.preventDefault();
   });
-  go(0);
+  go(location.hash === '#join' ? Infinity : 0); // /#join (the CTA on the other pages) opens on the number pad
 }
 
 // the one load-in moment: the hero settles into place
