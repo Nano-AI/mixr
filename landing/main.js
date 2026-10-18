@@ -1,14 +1,13 @@
 import { animate, createTimeline, stagger, utils } from 'https://cdn.jsdelivr.net/npm/animejs@4.5.0/dist/bundles/anime.esm.min.js';
 import { startGlow } from './glow.js';
 
-// sign-up server: the live one on joinmixr.club, a local one anywhere else.
-// TODO: switch to https://api.joinmixr.club once that hostname points at the server.
+// sign-up server: api.joinmixr.club on joinmixr.club, a local one anywhere else.
 // Overrides for testing: window.MIXR_API (set before this script), or ?api=https://… on any host but
 // joinmixr.club (there, a shared link could send people's numbers elsewhere).
 // ?mock=ok|full|error|offline skips the network and answers with a canned response.
 const query = new URLSearchParams(location.search);
 const PROD = /(^|\.)joinmixr\.club$/.test(location.hostname);
-const API = (window.MIXR_API || (!PROD && query.get('api')) || (PROD ? 'https://mixr-api.johnomeara.com' : 'http://localhost:8787')).replace(/\/+$/, '');
+const API = (window.MIXR_API || (!PROD && query.get('api')) || (PROD ? 'https://api.joinmixr.club' : 'http://localhost:8787')).replace(/\/+$/, '');
 const MOCK = query.get('mock');
 const SMS = document.body.dataset.sms; // set data-sms="+1..." on <body> to offer a text-us fallback
 
