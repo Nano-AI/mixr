@@ -61,7 +61,12 @@ export function duplicates(bubbles: string[], earlier: string[] = []): number {
   return n;
 }
 
-export type ReplyStats = { chars: number; bubbles: number; questions: number; capital: boolean; restates: boolean; dupes: number };
+// Narration: sentences about what mixr did or will do ("i'll get back to you", "i'll leave X out"). Some are fine
+// ("i'll text you when something fits"), so compare the rate across revisions rather than aiming for zero.
+const NARRATION = /\b(i'?ll|i will|i'?ve|i just|i'?m going to|let me)\b|as soon as|get back to you|keep you posted|you two can|sort out the details|leave .* out/i;
+export const narration = (t: string): number => t.split(/(?<=[.!?])\s+/).filter((x) => NARRATION.test(x)).length;
+
+export type ReplyStats = { chars: number; bubbles: number; questions: number; capital: boolean; restates: boolean; dupes: number; narration: number };
 
 export function replyStats(bubbles: string[], userSaid: string[], earlier: string[]): ReplyStats {
   const text = bubbles.join('\n');
@@ -72,10 +77,13 @@ export function replyStats(bubbles: string[], userSaid: string[], earlier: strin
     capital: /^[A-Z]/.test(bubbles[0]?.trim() ?? ''),
     restates: restates(text, userSaid),
     dupes: duplicates(bubbles, earlier),
+    narration: narration(text),
   };
 }
 
 if (import.meta.main) {
+  assert.equal(narration("asked Casey. i'll leave the trash talk out. i'll get back to you when she answers."), 2);
+  assert.equal(narration('bet, casey plays league ranked. want me to ask?'), 0);
   assert.equal(recallAt(['a', 'b', 'c'], ['c', 'z'], 2), 0);
   assert.equal(recallAt(['a', 'b', 'c'], ['c', 'z'], 3), 0.5);
   assert.equal(mrr(['a', 'b', 'c'], ['c']), 1 / 3);

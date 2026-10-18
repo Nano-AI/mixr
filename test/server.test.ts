@@ -16,7 +16,7 @@ vi.mock('../src/events/index.ts', () => ({
   joinEvent: vi.fn(),
 }));
 vi.mock('../src/matching/index.ts', () => ({ recall: vi.fn(), rerank: vi.fn(), findPeople: vi.fn() }));
-vi.mock('../src/relay/index.ts', () => ({ requestIntro: vi.fn(), respondToIntro: vi.fn(), pendingIntrosFor: vi.fn(async () => []) }));
+vi.mock('../src/relay/index.ts', () => ({ requestIntro: vi.fn(), respondToIntro: vi.fn(), pendingIntrosFor: vi.fn(async () => []), IntroLimitError: class extends Error {}, groundedNote: vi.fn(() => undefined) }));
 
 const { app } = await import('../src/server.ts');
 

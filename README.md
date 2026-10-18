@@ -435,7 +435,7 @@ No license yet; all rights reserved by the authors.
 <!-- CONTACT -->
 ## Contact
 
-mixr team: [mixr.team.uw@gmail.com](mailto:mixr.team.uw@gmail.com)
+mixr team: [hello@joinmixr.club](mailto:hello@joinmixr.club)
 
 Website: [https://joinmixr.club](https://joinmixr.club)
 

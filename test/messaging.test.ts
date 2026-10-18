@@ -90,7 +90,7 @@ test('onboarding happy path: consent -> name -> UW email -> code -> the agent ta
   expect(u).toMatchObject({ name: 'Ana Lee', step: 'email' });
   expect(await lastOut()).toBe("nice to meet you, Ana! what's your @uw.edu email? i use it to keep mixr UW-only.");
 
-  await say('ana@gmail.com');
+  await say('ana@example.com');
   expect((await user()).step).toBe('email');
   expect(codes).toHaveLength(0);
 
@@ -125,7 +125,7 @@ test('onboarding happy path: consent -> name -> UW email -> code -> the agent ta
 
   // Every inbound recorded exactly once; the code never in the log.
   const ins = (await log()).filter((m) => m.direction === 'in').map((m) => m.text);
-  expect(ins).toEqual(['hi mixr', 'maybe', 'Yes!', "i'm Ana", 'lee', 'ana@gmail.com', "it's Ana@UW.edu.", CODE_PLACEHOLDER, 'i play tennis and love catan']);
+  expect(ins).toEqual(['hi mixr', 'maybe', 'Yes!', "i'm Ana", 'lee', 'ana@example.com', "it's Ana@UW.edu.", CODE_PLACEHOLDER, 'i play tennis and love catan']);
   const all = await q<{ text: string }>(`SELECT text FROM messages`);
   expect(all.some((m) => m.text.includes(codes[0].code))).toBe(false);
   expect((await q(`SELECT status FROM inbound_messages`)).every((r) => r.status === 'done')).toBe(true);
@@ -186,13 +186,13 @@ test('names: greetings and filler are stripped; emails and repeated YES are not 
 });
 
 test('names: all-lowercase input is capitalized; input with capitals is kept as typed', () => {
-  expect(cleanName("john o'meara")).toBe("John O'Meara");
+  expect(cleanName("riley o'connor")).toBe("Riley O'Connor");
   expect(cleanName('mary-kate smith')).toBe('Mary-Kate Smith');
   expect(cleanName('maria de la cruz')).toBe('Maria de la Cruz');
   expect(cleanName('ronald mcdonald')).toBe('Ronald McDonald');
   expect(cleanName('Maria de la Cruz')).toBe('Maria de la Cruz');
   expect(cleanName('Ronald McDonald')).toBe('Ronald McDonald');
-  expect(cleanName('john DeVito')).toBe('john DeVito');
+  expect(cleanName('riley DeVito')).toBe('riley DeVito');
   expect(cleanName('de la cruz', 1)).toBe('de la Cruz'); // a last name after a first name
 });
 
@@ -205,9 +205,9 @@ const ASK_AGAIN = "what's your full name? (first and last, just letters, up to 8
 test('full name: two words are saved, and the reply greets by first name', async () => {
   noAgent();
   await toName();
-  await say("hey! it's john o'meara");
-  expect(await user()).toMatchObject({ name: "John O'Meara", step: 'email' });
-  expect(await lastOut()).toMatch(/^nice to meet you, John! /);
+  await say("hey! it's riley o'connor");
+  expect(await user()).toMatchObject({ name: "Riley O'Connor", step: 'email' });
+  expect(await lastOut()).toMatch(/^nice to meet you, Riley! /);
 });
 
 test('full name: one word saves nothing and asks for the last name, then combines', async () => {

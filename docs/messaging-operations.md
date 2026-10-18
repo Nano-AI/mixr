@@ -9,7 +9,7 @@ webhook. No inbound Photon HTTP endpoint or tunnel is required.
 
 ## Configuration
 
-Use Node 24+, `npm ci`, and an ignored `.env`. On Wayne's development machine:
+Use Node 24+, `npm ci`, and an ignored `.env`. On the messaging dev's development machine:
 
 ```sh
 PATH="$HOME/.local/node_modules/.bin:$PATH" npm start
@@ -60,7 +60,7 @@ notes survive restarts and are provided as context for later messages. Known
 email/phone/code patterns are redacted from model input; early verification
 messages never go through Claude. This is not general-purpose PII detection.
 
-`PROFILE` explicitly reviews the conversation through John's extraction
+`PROFILE` explicitly reviews the conversation through the matching dev's extraction
 interface. `OK` confirms it and returns to chat. Newer student statements are
 retained even if the model did not call its notes tool. Availability collection
 is deferred: there is no automatic time menu after confirmation. The existing
@@ -164,7 +164,7 @@ validation, and admin access. `npm run typecheck` checks application code;
 `test/messaging/workflows.test.ts` exercises the actual meetup services through
 the router and durable outbox, with only network delivery replaced. It covers
 feedback, public events, joins, location suggestions, consent gating, and
-duplicate input. Real profile extraction still depends on John's implementation.
+duplicate input. Real profile extraction still depends on the matching dev's implementation.
 Live multi-phone confirmation/reminders and sustained Photon capacity remain
 unverified; unit-test throughput is not a measurement of line capacity.
 Cloud deployment is deferred by the user; the demo runs on the Mac.

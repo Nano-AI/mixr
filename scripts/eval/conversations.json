@@ -1,12 +1,12 @@
 [
   {
-    "id": "aditya-real",
+    "id": "last-initial",
     "note": "Reproduces a real transcript: opt-in, name, braindump, levels, a people search, then accepting the intro. Goes through the deterministic onboarding (consent, name); '@verified' marks the UW email verified in the DB instead of emailing a code.",
     "onboarding": true,
     "turns": [
       "hey",
       "yes",
-      "Aditya B",
+      "Sam K",
       "@verified",
       "I love photography, and I love programming. I also enjoy going to the gym. I love playing chess and board games, also like Poker.",
       "Casual about chess, competitive about poker",

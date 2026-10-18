@@ -1,6 +1,6 @@
 > **Historical:** predates the integration branch; see the [README](../README.md).
 
-# Wayne: messaging status
+# Messaging status
 
 Audited against W1–W6 in the MVP implementation plan on 2026-10-17.
 
@@ -9,7 +9,7 @@ Audited against W1–W6 in the MVP implementation plan on 2026-10-17.
 | W1: delivery, retries, dedupe | Implemented and tested | Live sustained line-capacity measurement; provider acceptance is not device delivery. |
 | W2: Photon, inbound identity, local chat | Spectrum iMessage connection tested on the user's iPhone | Multi-phone live demo; Android/voice are outside the current iMessage-text scope. |
 | W3: keyword routing | Implemented, including EVENTS/JOIN and WENT/MISSED | Live end-to-end meetup exercise with opted-in testers. |
-| W4: onboarding | Consent, UW verification, Haiku chat, user-scoped interest tools, explicit profile review | John's buildProfile/confirmProfile are still stubs; real extraction and stored interest vectors are blocked on that dependency. Availability design is deferred by the user. |
+| W4: onboarding | Consent, UW verification, Haiku chat, user-scoped interest tools, explicit profile review | the matching dev's buildProfile/confirmProfile are still stubs; real extraction and stored interest vectors are blocked on that dependency. Availability design is deferred by the user. |
 | W5: deployment and inspection | Mac demo; authenticated admin inspection and container packaging exist | Cloud hosting deferred by user. Mac must remain awake with the process running. |
 | W6: email verification | Gmail SMTP authentication verified; live database contains a verified identity | Full new-student live flow should be repeated after profile extraction lands. |
 
@@ -82,4 +82,4 @@ Audited against W1–W6 in the MVP implementation plan on 2026-10-17.
    acceptance separately from handset delivery.
 
 Shared-line recipients must each be registered in Photon and text the assigned
-number on their own user record. Do not assume every tester uses Wayne's number.
+number on their own user record. Do not assume every tester uses the messaging dev's number.

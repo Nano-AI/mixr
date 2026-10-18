@@ -8,6 +8,11 @@ import { firstName } from '../matching/index.ts';
 
 // tune: how long a target has to answer an intro before it lapses.
 const INTRO_TTL = 24 * HOUR;
+// tune: intro requests one student can start in a rolling 24h (events are the way to reach more people).
+export const INTRO_LIMIT = 3;
+
+// Over the daily limit. The message goes back to the agent as-is.
+export class IntroLimitError extends Error {}
 
 const COLS = 'id, requester_id, target_id, reason, status, target_message';
 
@@ -59,6 +64,15 @@ export async function requestIntro(requesterId: number, targetId: number, reason
   if (open) return rowToIntro(open);
 
   const t = await now();
+  const recent = await one<{ n: number }>(`SELECT count(*)::int AS n FROM intros WHERE requester_id = $1 AND created_at > $2`, [
+    requesterId,
+    new Date(t.getTime() - 24 * HOUR).toISOString(),
+  ]);
+  if (recent!.n >= INTRO_LIMIT) {
+    throw new IntroLimitError(
+      `daily limit: they already asked mixr to reach out to ${INTRO_LIMIT} people in the last 24h, nobody was asked. tell them something like "you've asked me to reach out to ${INTRO_LIMIT} people today. i'll be able to ask more tomorrow, or want me to host an event instead?"`,
+    );
+  }
   const r = await one(
     `INSERT INTO intros (requester_id, target_id, reason, status, created_at) VALUES ($1, $2, $3, 'target_asked', $4) RETURNING ${COLS}`,
     [requesterId, targetId, reason.trim(), t.toISOString()],
@@ -71,6 +85,22 @@ export async function requestIntro(requesterId: number, targetId: number, reason
   await schedule('expire_intro', { introId: intro.id }, new Date(t.getTime() + INTRO_TTL));
   publish({ type: 'state' });
   return intro;
+}
+
+// A note the agent wants to pass on as the target's words. Kept only if it's the target's own words from the text
+// they just sent (a substring, ignoring case and punctuation) and says more than "yes": the model never authors a
+// quote. "sure, tell them i play saturdays" + "i play saturdays" -> kept; "Yes!" + "Casey's in, say hi!" -> dropped.
+const ACCEPT_WORDS = new Set(
+  'yes yeah yea yep yup ya sure ok okay k bet down im i am in totally definitely absolutely for sure sounds good great cool def please pls of course course lets go do it'.split(
+    ' ',
+  ),
+);
+const norm = (s: string) => s.toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, '').replace(/\s+/g, ' ').trim();
+export function groundedNote(note: string | null | undefined, inbound: string | undefined): string | undefined {
+  const n = norm(note ?? '');
+  if (!n || inbound === undefined || !` ${norm(inbound)} `.includes(` ${n} `)) return undefined;
+  if (n.split(' ').every((w) => ACCEPT_WORDS.has(w))) return undefined;
+  return note!.trim();
 }
 
 // Once both said yes: the other person's contact card (first + last name, phone) with a short caption. The plain
@@ -94,13 +124,16 @@ export async function respondToIntro(targetId: number, introId: number, accept: 
 
   if (accept) {
     const updated = await setStatus(introId, 'connected', msg);
-    const said = msg ? ` they said: "${msg}".` : '';
-    await send(intro.requesterId, `${tName} is down!${said} their number: ${target?.phone ?? ''}`, card(target, `${tName} is down!${said} here's their contact`));
-    await send(intro.targetId, `done! here's ${rName}'s number: ${requester?.phone ?? ''}. have fun!`, card(requester, `done! here's ${rName}'s contact. have fun!`));
+    // Their note in quotes, its own end punctuation dropped so it never reads `"say hi!".`
+    const note = msg?.replace(/[.!\s]+$/, '');
+    const said = note ? ` they said: "${note}"${note.endsWith('?') ? '' : '.'}` : '';
+    // The card carries the caption; the plain text (with the number) is the log line and the fallback.
+    await send(intro.requesterId, `${tName}'s down.${said} here's their number: ${target?.phone ?? ''}`, card(target, `${tName}'s down.${said} here's their contact`));
+    await send(intro.targetId, `done, here's ${rName}'s number: ${requester?.phone ?? ''}. have fun`, card(requester, `done, here's ${rName}'s contact. have fun`));
     return updated;
   }
   const updated = await setStatus(introId, 'declined', msg);
-  await send(intro.requesterId, `heads up, ${tName} can't make it work right now. no worries, i'll keep an eye out for other people for you.`);
+  await send(intro.requesterId, `${tName} can't right now, no worries. i'll keep an eye out for someone else for you.`);
   return updated;
 }
 
@@ -116,7 +149,7 @@ export async function expireIntro(introId: number): Promise<void> {
   if (!intro || (intro.status !== 'target_asked' && intro.status !== 'proposed')) return;
   await setStatus(introId, 'expired');
   const target = await getUser(intro.targetId);
-  await send(intro.requesterId, `didn't hear back from ${firstName(target?.name)}, so i'll let that one go. happy to find you someone else!`);
+  await send(intro.requesterId, `didn't hear back from ${firstName(target?.name)}, so i'll let that one go. hmu if you want me to find someone else`);
 }
 
 registerJob('expire_intro', async (p: { introId: number }) => expireIntro(p.introId));

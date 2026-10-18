@@ -86,7 +86,8 @@ export function summarize(t: TraceEntry, ctx: TraceCtx): string {
       const hits = recallHits(d);
       const label = str(get(d, 'label', 'purpose', 'source'));
       const top = hits[0];
-      return `${label ? `${label} · ` : ''}${hits.length} hits${top ? ` · top ${userName(ctx, top)} ${fix(simOf(top))}` : ''}`;
+      const kw = hits.filter((h) => arr(get(h, 'keywords')).length).length;
+      return `${label ? `${label} · ` : ''}${hits.length} hits${kw ? ` · ${kw} keyword` : ''}${top ? ` · top ${userName(ctx, top)} ${fix(simOf(top))}` : ''}`;
     }
     case 'rerank': {
       const picks = rerankPicks(d);
@@ -235,6 +236,11 @@ function RecallView({ d, ctx }: { d: unknown; ctx: TraceCtx }) {
             <span className="ranked-name">{userName(ctx, h)}</span>
             <SimBar value={simOf(h)} max={max} />
             <span className="mono small">{fix(simOf(h))}</span>
+            {arr(get(h, 'keywords')).length > 0 && (
+              <span className="tag tag-accent" title="BM25 keyword match: these words from the ask are rare and in their profile">
+                keyword: {arr(get(h, 'keywords')).map(String).join(', ')}
+              </span>
+            )}
           </li>
         ))}
       </ol>

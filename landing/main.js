@@ -40,10 +40,18 @@ fit();
 addEventListener('resize', fit);
 
 // live clock and date, like a real lock screen
+let clockShown = '';
 const tick = () => {
   const now = new Date();
-  const t = now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }).replace(/\s?[AP]M/, '');
-  document.querySelectorAll('[data-clock]').forEach((el) => (el.textContent = t));
+  const full = now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }); // "9:17 PM"
+  if (full === clockShown) return; // only touch the DOM when the minute changes
+  clockShown = full;
+  const [hm, ap] = full.split(/\s/);
+  // status bar "9:17"; lock screen "9:17" with a small "PM"; chat timestamps "9:17 PM"
+  for (const el of document.querySelectorAll('[data-clock]')) {
+    if (el.dataset.clock === 'lock') el.replaceChildren(hm, Object.assign(document.createElement('small'), { textContent: ap }));
+    else el.textContent = el.dataset.clock === 'ampm' ? full : hm;
+  }
   $('[data-date]').textContent = now.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
 };
 tick();
@@ -530,7 +538,7 @@ compose.addEventListener('submit', async (e) => {
     compose.classList.add('done');
     zoomOut();
     const rc = bubble('receipt', 'Delivered');
-    setTimeout(() => (rc.textContent = `Read ${$('[data-clock]').textContent}`), reduced ? 0 : 500);
+    setTimeout(() => (rc.textContent = `Read ${$('[data-clock="ampm"]').textContent}`), reduced ? 0 : 500);
     closeKeypad();
     bubble('b them', "you're in! here's your mixr line:");
     const card = await say(lineCard(res.data.number, res.data.link), 'b them line');
@@ -542,9 +550,9 @@ compose.addEventListener('submit', async (e) => {
   bubble(
     'b them',
     !res
-      ? "I can't reach my phone right now. try again in a minute"
+      ? "can't reach my phone rn. try again in a minute"
       : res.status === 409 || res.data?.full
-        ? "mixr's at capacity right now — we'll open more spots soon"
+        ? "mixr's full rn. more spots soon"
         : said ||
           (res.status === 429
             ? "that's a lot of tries. give it a few minutes"
@@ -559,7 +567,7 @@ compose.addEventListener('submit', async (e) => {
   if (SMS) {
     const a = document.createElement('a');
     a.href = `sms:${SMS}&body=hi`;
-    a.textContent = 'Or text me hi directly.';
+    a.textContent = 'or just text me hi';
     await say(a);
   }
   busy = false;

@@ -146,6 +146,8 @@ else
       ['questions per turn (p90)', 'conversations.questions.p90'],
       ['starts with a capital (rate)', 'conversations.capitalRate'],
       ['restates the profile (rate)', 'conversations.restateRate'],
+      ['narrating sentences per turn (mean)', 'conversations.narration.mean'],
+      ['turns with narration (rate)', 'conversations.narrationRate'],
       ['duplicate bubbles (total)', 'conversations.dupes'],
       ['turns with >1 bubble', 'conversations.multiBubbleTurns'],
       ['turns with no reply', 'conversations.silentTurns'],

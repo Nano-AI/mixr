@@ -33,6 +33,8 @@ vi.mock('../src/relay/index.ts', () => ({
   requestIntro: vi.fn(async (r: number, t: number, reason: string) => ({ id: 1, requesterId: r, targetId: t, reason, status: 'target_asked', targetMessage: null })),
   respondToIntro: vi.fn(),
   pendingIntrosFor: vi.fn(async () => []),
+  IntroLimitError: class extends Error {},
+  groundedNote: vi.fn(() => undefined),
 }));
 
 const { handleInbound, MAX_LLM_CALLS } = await import('../src/agent/index.ts');
@@ -208,7 +210,7 @@ test('manage_event only for events the user hosts; respond_to_invite only for th
   const seen2 = script(() => call('respond_to_invite', { event_id: ev!.id, response: 'no_busy' }), say('no worries'));
   await handleInbound(phone, "can't make it");
   expect(events.respondToInvite).toHaveBeenCalledWith(meId, ev!.id, 'no_busy');
-  expect(JSON.parse(outputs(seen2[1])[0].output)).toMatchObject({ outcome: 'accepted' });
+  expect(seen2).toHaveLength(1); // the RSVP's scripted copy is the reply; no second model call
 });
 
 test('request_intro rejects self and unknown users, accepts an active other user', async () => {
@@ -247,6 +249,15 @@ test('snooze sets and clears snoozed_until', async () => {
   await handleInbound(phone, "i'm back");
   r = await one<{ s: string | null }>('SELECT snoozed_until AS s FROM users WHERE id = $1', [meId]);
   expect(r!.s).toBeNull();
+});
+
+test("an action with mixr's own confirmation is sent as-is, with no second model call", async () => {
+  const meId = await makeUser('Jo', 'tennis');
+  const phone = (await one<{ phone: string }>('SELECT phone FROM users WHERE id = $1', [meId]))!.phone;
+  const seen = script(() => call('snooze', { until: null }), say('model should not be asked again'));
+  await handleInbound(phone, "i'm back");
+  expect(seen).toHaveLength(1);
+  expect(['welcome back, texts are back on', "you're back on. hmu anytime"]).toContain((await outbox(phone)).at(-1));
 });
 
 test('context block lists open invites with ids and recent find_people results', async () => {
@@ -331,17 +342,17 @@ test('an accepted intro is confirmed once: the relay already texted them, so the
   vi.mocked(relay.pendingIntrosFor).mockImplementation(async () => [intro as any]);
   vi.mocked(relay.respondToIntro).mockImplementation(async (targetId: number) => {
     const { send } = await import('../src/transport/index.ts');
-    await send(targetId, "done! here's John's number: +14255550000. have fun!");
+    await send(targetId, "done, here's Jordan's number: +14255550000. have fun");
     return { ...intro, targetId, status: 'connected' } as any;
   });
   try {
     const seen = script(
       () => call('respond_to_intro', { intro_id: 7, accept: true, message: null }),
-      () => ({ text: 'Done, I passed it along and shared your numbers with John, so you two can take it from here.', calls: [] }),
+      () => ({ text: 'Done, I passed it along and shared your numbers with Jordan, so you two can take it from here.', calls: [] }),
     );
     await handleInbound('+15550008001', 'yes');
     expect(JSON.parse(outputs(seen[1])[0].output)).toMatchObject({ ok: true, status: 'connected', already_texted: expect.any(String) });
-    expect(await outbox('+15550008001')).toEqual(["done! here's John's number: +14255550000. have fun!"]);
+    expect(await outbox('+15550008001')).toEqual(["done, here's Jordan's number: +14255550000. have fun"]);
 
     // If they also asked something, the answer still goes out.
     script(
@@ -364,11 +375,16 @@ test('the prompt asks for short, lowercase, one-question texts with no recap or 
   expect(p).toMatch(/one question/i);
   expect(p).toMatch(/lowercase/);
   expect(p).toMatch(/recap/i);
-  expect(p).toMatch(/bad: "Got it: photography/); // good-vs-bad examples from the real transcript
-  expect(p.match(/handle all the texting/g)).toHaveLength(2); // only as things not to say
+  expect(p).not.toMatch(/bad:/); // only good examples: quoting bad ones primes the model
+  expect(p.match(/<example>/g)!.length).toBeGreaterThanOrEqual(3);
+  expect(p).toMatch(/Never write "i'll lmk"/);
+  expect(p).not.toMatch(/get back to them/);
+  expect(p).not.toMatch(/handle all the texting/);
   const { HOST_OFFER_HINT } = await import('../src/agent/tools.ts');
   expect(HOST_OFFER_HINT).not.toMatch(/handle all the texting/);
   expect(p).not.toMatch(/tell them you passed it along/);
+  expect(p).toMatch(/they\/them/); // never guess a pronoun from a name
+  expect(p).not.toMatch(/ask if he's down to hit/);
   const hint = seen[0].tools.find((t) => t.name === 'request_intro')!.parameters as any;
   expect(hint.properties.reason.description).toMatch(/not a sentence|noun phrase/i);
 });
@@ -379,7 +395,11 @@ test('replies are tidied: lowercase openers, runaway length clipped at a sentenc
     "got it: photography and poker. nobody's around yet. i'll text you when someone fits.",
   );
   // Names and acronyms stay as they are.
-  expect(tidy('John is down! AI hackathon at the HUB, Aditya.')).toBe('John is down! AI hackathon at the HUB, Aditya.');
+  expect(tidy('Jordan is down! AI hackathon at the HUB, Sam.')).toBe('Jordan is down! AI hackathon at the HUB, Sam.');
+  expect(tidy('Bet, asked Casey. Ngl that sounds fun. Lowkey jealous. Fr.')).toBe('bet, asked Casey. ngl that sounds fun. lowkey jealous. fr.');
+  expect(tidy("bet, asked Casey. i'll leave the trash talk out. i'll get back to you when they answer.")).toBe('bet, asked Casey.');
+  expect(tidy("i'll get back to you")).toBe("i'll get back to you");
+  expect(tidy("you're in. i'll lyk if anything changes")).toBe("you're in. i'll lyk if anything changes");
   const long = 'this is a sentence that goes on for a while. '.repeat(20).trim();
   const out = tidy(long);
   expect(out.length).toBeLessThanOrEqual(480);
