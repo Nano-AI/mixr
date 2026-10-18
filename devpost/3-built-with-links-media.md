@@ -16,9 +16,9 @@ The backend tunnel host is left out on purpose (personal domain, serves an admin
 Upload in order from `template/`, with these captions:
 
 1. `01-cover.png`: mixr, the campus organizer that lives in your texts.
-2. `02-how-it-works.png`: Say what you're into. mixr finds people who want the same thing, picks a time and a public spot on campus, and confirms once enough of them say yes.
-3. `03-under-the-hood.png`: One Node server runs it all: a Claude agent, matching with vectors plus BM25 keyword search, events that learn from who says yes, and a daily pull of UW's public calendar.
-4. `04-landing.png`: joinmixr.club plays a sample conversation, then asks for your number and gives you your own mixr line.
+2. `02-how-it-works.png`: Say what you're into. mixr finds your people, picks a time and place, and confirms once enough say yes.
+3. `03-under-the-hood.png`: One Node server: a Claude agent, vector + BM25 matching, events that learn from RSVPs, and a daily UW calendar pull.
+4. `04-landing.png`: joinmixr.club plays a sample chat, then asks for your number and gives you your own mixr line.
 
 Thumbnail: `template/01-cover.png`, or export the design canvas: https://claude.ai/artifact/H4NDcFnXdbvX7t5gYYCabf
 
