@@ -18,6 +18,7 @@ const MAX_CODE_ATTEMPTS = 3; // tune: wrong codes before a new one is needed
 const NAME_MAX = 80;
 const NAME_WORDS = 4; // tune:
 const EMAIL_MAX = 254;
+const JUDGE_CODE = 'DUBHACKS26'; // temporary: DubHacks judges without a UW email skip verification. Remove after judging.
 
 export const CONSENT =
   "hey! i'm mixr. i find UW students with shared interests and help organize meetups. Reply YES to opt in. Message frequency varies. Reply STOP anytime.";
@@ -69,6 +70,12 @@ export async function onboard(user: User, text: string): Promise<string> {
   const said = text.trim();
   const word = keyword(said);
   const t = await now();
+  if ((user.step === 'email' || user.step === 'verify') && word === JUDGE_CODE) {
+    await q(`UPDATE users SET step = NULL WHERE id = $1`, [user.id]); // email_verified stays false
+    await q(`DELETE FROM email_codes WHERE user_id = $1`, [user.id]);
+    await sendMixrCard(user);
+    return braindumpPrompt(user.name);
+  }
   switch (user.step) {
     case 'name':
       return takeName(user, said);
