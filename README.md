@@ -44,7 +44,7 @@ python3 -m http.server -d landing 4321   # landing page; add ?mock=ok to click t
 ## Deploy (polarcrest)
 
 ```bash
-scripts/deploy.sh             # deploys origin/integration (tarball release, npm ci, dashboard build, restart)
+scripts/deploy.sh             # deploys main (tarball release, npm ci, dashboard build, restart)
 scripts/deploy.sh --rollback  # previous release
 ```
 
