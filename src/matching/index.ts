@@ -7,7 +7,7 @@ import { llm, pipelineLlm } from '../llm/index.ts';
 import { trace } from '../trace.ts';
 import { profileSlots } from '../profiles/index.ts';
 import { peopleFilter, recordScreenings, standingTextRules, type HardFilter, type JudgeRule, type Verdict } from '../requirements/index.ts';
-import { RERANK_SCHEMA, RERANK_SYSTEM } from './prompts.ts';
+import { RERANK_SYSTEM, rerankSchema } from './prompts.ts';
 
 // tune: stage-1 recall size (cheap, tolerant of polymaths' diluted vectors).
 const RECALL_LIMIT = 40;
@@ -81,7 +81,7 @@ function fallbackPick(purpose: RerankReq['purpose'], c: RecallHit): RerankPick {
   };
 }
 
-// Stage 2: LLM picks up to k best candidates for `target` and writes a reason + 1-sentence SMS pitch for each.
+// Stage 2: LLM picks up to k best candidates for `target` and writes a reason (+ a 1-sentence SMS pitch for events) for each.
 // May return fewer than k (drops poor fits). Fallback without LLM: top-k by similarity, template pitch.
 // rules: text requirements. The LLM returns a verdict per pick and lists who fails; code enforces 'must' (only
 // 'pass' survives), orders by 'prefer' passes, and records verdicts under `context` so later rounds skip the fails.
@@ -95,7 +95,7 @@ export type RerankReq = {
   context?: string;
 };
 
-type LlmPick = { user_id: number; reason: string; pitch: string; checks: { requirement_id: number; verdict: Verdict; note: string }[] };
+type LlmPick = { user_id: number; reason: string; pitch?: string; checks: { requirement_id: number; verdict: Verdict; note: string }[] };
 type LlmOut = { picks: LlmPick[]; screened_out: { user_id: number; requirement_id: number; note: string }[] };
 
 export async function rerank(req: RerankReq): Promise<RerankPick[]> {
@@ -121,7 +121,7 @@ export async function rerank(req: RerankReq): Promise<RerankPick[]> {
           .map((c) => `--- user_id: ${c.userId} | name: ${firstName(c.name)} | similarity: ${r3(c.similarity)}\n${c.profile}`)
           .join('\n')}`,
       ].join('\n\n');
-      const r = await llm().json<LlmOut>({ name: 'rerank', system: RERANK_SYSTEM, input, schema: RERANK_SCHEMA });
+      const r = await llm().json<LlmOut>({ name: 'rerank', system: RERANK_SYSTEM, input, schema: rerankSchema(req.purpose) });
       const ruleIds = new Set(rules.map((x) => x.id));
       for (const s of r?.screened_out ?? []) {
         const id = Number(s.user_id);
