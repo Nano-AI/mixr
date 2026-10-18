@@ -14,14 +14,18 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.135.0",
     "@electric-sql/pglite": "^0.5.10",
     "@electric-sql/pglite-pgvector": "^0.0.11",
     "@hono/node-server": "^2.1.5",
     "hono": "^4.13.13",
-    "openai": "^7.37.0"
+    "nodemailer": "^10.1.2",
+    "openai": "^7.37.0",
+    "spectrum-ts": "^12.11.0"
   },
   "devDependencies": {
     "@types/node": "^26.6.5",
+    "@types/nodemailer": "^8.0.2",
     "concurrently": "^10.0.6",
     "tsx": "^4.23.15",
     "typescript": "^7.0.2",
