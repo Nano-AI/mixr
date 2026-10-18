@@ -1,0 +1,203 @@
+import { Hono } from 'hono';
+import { streamSSE } from 'hono/streaming';
+import { getUserByPhone, q, resetDemo } from '../db/index.ts';
+import { now } from '../clock.ts';
+import { publish, subscribe } from '../bus.ts';
+import { advance } from '../jobs/index.ts';
+import { history } from '../transport/index.ts';
+import { handleInbound } from '../agent/index.ts';
+
+// The simulator dashboard's API: state, conversations, acting as any user, the demo clock, traces.
+
+const KEEPALIVE_MS = 10_000; // tune: SSE ping interval (the dashboard reconnects if it hears nothing for 25s)
+
+const iso = (v: unknown): string | null => (v ? new Date(v as string).toISOString() : null);
+const errMsg = (e: unknown): string => (e instanceof Error ? e.message : String(e));
+
+// Mounted at /api by server.ts, behind the admin login. Reads run in the default (demo) context, so `now` here
+// is the demo clock; real users' data is included and labeled by pool.
+export const dashboardApi = new Hono();
+
+dashboardApi.get('/state', async (c) => {
+  const [users, events, invites, intros, llmRows, embedRow, attendees, reqs, blockRows, screenRows] = await Promise.all([
+    q(
+      `SELECT id, phone, name, state, canonical_profile, snoozed_until, seeded, step, email, email_verified, opted_out,
+              assigned_number, joined_via, created_at
+         FROM users ORDER BY seeded, id`,
+    ),
+    q(
+      `SELECT e.id, e.host_id, h.name AS host_name, e.title, e.raw_description, e.starts_at, e.location, e.capacity, e.status,
+              e.wave_number, e.next_wave_at, e.hyde_profile,
+              (SELECT count(*)::int FROM event_invites i WHERE i.event_id = e.id AND i.status = 'yes') AS going,
+              (1 - (e.initial_embedding <=> e.current_embedding))::float8 AS cos_to_e0
+         FROM events e JOIN users h ON h.id = e.host_id ORDER BY e.id`,
+    ),
+    q(
+      `SELECT i.event_id, i.user_id, u.name, i.wave, i.status, i.pitch, i.invited_at, i.responded_at, i.source
+         FROM event_invites i JOIN users u ON u.id = i.user_id ORDER BY i.event_id, i.wave, i.invited_at, i.user_id`,
+    ),
+    q(
+      `SELECT x.id, r.name AS requester_name, t.name AS target_name, x.reason, x.status
+         FROM intros x JOIN users r ON r.id = x.requester_id JOIN users t ON t.id = x.target_id ORDER BY x.id`,
+    ),
+    q<{ purpose: string; n: number; input: number; output: number }>(
+      `SELECT coalesce(data->>'purpose', 'unknown') AS purpose, count(*)::int AS n,
+              coalesce(sum((data->'usage'->>'input_tokens')::int), 0)::int AS input,
+              coalesce(sum((data->'usage'->>'output_tokens')::int), 0)::int AS output
+         FROM traces WHERE kind = 'llm' GROUP BY 1`,
+    ),
+    q<{ tokens: number }>(`SELECT coalesce(sum((data->>'tokens')::int), 0)::int AS tokens FROM traces WHERE kind = 'embed'`),
+    q(
+      `SELECT a.event_id, a.user_id, u.name, a.role, a.joined_at, a.source
+         FROM event_attendees a JOIN users u ON u.id = a.user_id
+        ORDER BY a.event_id, a.role = 'guest', a.joined_at NULLS LAST, a.user_id`,
+    ),
+    q(`SELECT id, owner_id, event_id, kind, person_pattern, criterion, strength, said FROM requirements WHERE active ORDER BY id`),
+    q(
+      `SELECT b.blocker_id, b.name_pattern, coalesce(array_agg(m.blocked_id) FILTER (WHERE m.blocked_id IS NOT NULL), '{}') AS matches
+         FROM blocks b LEFT JOIN block_matches m ON m.block_id = b.id WHERE b.active GROUP BY b.id ORDER BY b.id`,
+    ),
+    q(
+      `SELECT s.context, s.user_id, u.name, s.requirement_id, s.verdict, s.reason
+         FROM screenings s JOIN users u ON u.id = s.user_id ORDER BY s.context, s.created_at`,
+    ),
+  ]);
+
+  const invitesByEvent = new Map<number, unknown[]>();
+  for (const i of invites) {
+    const list = invitesByEvent.get(i.event_id) ?? [];
+    list.push({ userId: i.user_id, name: i.name, wave: i.wave, status: i.status, pitch: i.pitch, invitedAt: iso(i.invited_at), respondedAt: iso(i.responded_at), source: i.source });
+    invitesByEvent.set(i.event_id, list);
+  }
+
+  const reqView = (r: any) => ({ id: r.id, ownerId: r.owner_id, eventId: r.event_id, kind: r.kind, person: r.person_pattern, criterion: r.criterion, strength: r.strength, said: r.said });
+  const screenView = (x: any) => ({ userId: x.user_id, name: x.name, requirementId: x.requirement_id, verdict: x.verdict, reason: x.reason });
+  const attendeesByEvent = new Map<number, unknown[]>();
+  for (const a of attendees) {
+    const list = attendeesByEvent.get(a.event_id) ?? [];
+    list.push({ userId: a.user_id, name: a.name, role: a.role, joinedAt: iso(a.joined_at), source: a.source });
+    attendeesByEvent.set(a.event_id, list);
+  }
+
+  return c.json({
+    now: (await now()).toISOString(),
+    users: users.map((u) => ({
+      id: u.id,
+      phone: u.phone,
+      name: u.name,
+      state: u.state,
+      profile: u.canonical_profile,
+      snoozedUntil: iso(u.snoozed_until),
+      seeded: u.seeded,
+      pool: u.seeded ? 'demo' : 'real',
+      step: u.step, // real users mid-onboarding: consent | name | email | verify
+      emailVerified: u.email_verified,
+      optedOut: u.opted_out,
+      assignedNumber: u.assigned_number,
+      joinedVia: u.joined_via,
+      joinedAt: iso(u.created_at),
+      blocks: blockRows.filter((b) => b.blocker_id === u.id).map((b) => ({ name: b.name_pattern, matches: b.matches })),
+      requirements: reqs.filter((r) => r.owner_id === u.id && r.event_id === null).map(reqView), // standing
+    })),
+    events: events.map((e) => ({
+      id: e.id,
+      hostId: e.host_id,
+      hostName: e.host_name,
+      title: e.title,
+      description: e.raw_description,
+      startsAt: iso(e.starts_at),
+      location: e.location,
+      capacity: e.capacity,
+      status: e.status,
+      waveNumber: e.wave_number,
+      nextWaveAt: iso(e.next_wave_at),
+      hydeProfile: e.hyde_profile,
+      going: e.going,
+      cosToE0: Number(e.cos_to_e0),
+      invites: invitesByEvent.get(e.id) ?? [],
+      attendees: attendeesByEvent.get(e.id) ?? [], // host + confirmed guests
+      requirements: reqs.filter((r) => r.event_id === e.id).map(reqView),
+      screenings: screenRows.filter((x) => x.context === `event:${e.id}`).map(screenView),
+    })),
+    intros: intros.map((x) => ({ id: x.id, requesterName: x.requester_name, targetName: x.target_name, reason: x.reason, status: x.status })),
+    usage: {
+      llmCalls: llmRows.reduce((s, r) => s + r.n, 0),
+      byPurpose: Object.fromEntries(llmRows.map((r) => [r.purpose, r.n])),
+      inputTokens: llmRows.reduce((s, r) => s + r.input, 0),
+      outputTokens: llmRows.reduce((s, r) => s + r.output, 0),
+      embedTokens: embedRow[0]?.tokens ?? 0,
+    },
+  });
+});
+
+dashboardApi.get('/messages/:phone', async (c) => {
+  const u = await getUserByPhone(c.req.param('phone'));
+  return c.json(u ? await history(u.id, 1000) : []);
+});
+
+dashboardApi.post('/inbound', async (c) => {
+  const body = await c.req.json().catch(() => ({}));
+  const phone = typeof body.phone === 'string' ? body.phone.trim() : '';
+  const text = typeof body.text === 'string' ? body.text.trim() : '';
+  if (!phone || !text) return c.json({ ok: false, error: 'phone and text are required' }, 400);
+  try {
+    await handleInbound(phone, text, 'dashboard'); // demo user, or acting as a real one (quiet toward them)
+    return c.json({ ok: true });
+  } catch (e) {
+    return c.json({ ok: false, error: errMsg(e) });
+  } finally {
+    publish({ type: 'state' });
+  }
+});
+
+dashboardApi.post('/clock/advance', async (c) => {
+  const body = await c.req.json().catch(() => ({}));
+  const minutes = Number(body.minutes);
+  if (!Number.isFinite(minutes) || minutes <= 0) return c.json({ ok: false, error: 'minutes must be a positive number' }, 400);
+  const jobsRan = await advance(minutes * 60_000);
+  publish({ type: 'state' });
+  return c.json({ now: (await now()).toISOString(), jobsRan });
+});
+
+dashboardApi.get('/traces', async (c) => {
+  const limit = Math.min(Math.max(Number(c.req.query('limit') ?? 300) || 300, 1), 5000);
+  const kind = c.req.query('kind');
+  const rows = kind
+    ? await q(`SELECT id, sim_time, kind, ref_id, data FROM traces WHERE kind = $1 ORDER BY id DESC LIMIT $2`, [kind, limit])
+    : await q(`SELECT id, sim_time, kind, ref_id, data FROM traces ORDER BY id DESC LIMIT $1`, [limit]);
+  return c.json(rows.map((r) => ({ id: r.id, simTime: iso(r.sim_time), kind: r.kind, refId: r.ref_id, data: r.data })));
+});
+
+dashboardApi.get('/projection', async (c) => {
+  const { projection } = await import('../projection.ts');
+  return c.json(await projection());
+});
+
+dashboardApi.get('/stream', (c) =>
+  streamSSE(c, async (stream) => {
+    const write = (data: string, event?: string) => stream.writeSSE({ data, event }).catch(() => {});
+    const unsub = subscribe((e) => void write(JSON.stringify(e)));
+    const ping = setInterval(() => void write('ping', 'ping'), KEEPALIVE_MS);
+    await new Promise<void>((resolve) => stream.onAbort(resolve));
+    clearInterval(ping);
+    unsub();
+  }),
+);
+
+// Demo pool only: real users and their conversations are never touched.
+dashboardApi.post('/reset', async (c) => {
+  await resetDemo();
+  publish({ type: 'reset' });
+  publish({ type: 'clock', now: (await now()).toISOString() });
+  publish({ type: 'state' });
+  return c.json({ ok: true });
+});
+
+dashboardApi.post('/seed', async (c) => {
+  const { seed } = await import('../seed.ts');
+  const users = await seed();
+  publish({ type: 'resync' }); // histories were written straight to the DB, not as message events
+  publish({ type: 'state' });
+  return c.json({ ok: true, users });
+});
+
