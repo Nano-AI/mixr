@@ -457,11 +457,7 @@ function lineCard(number, link) {
   a.setAttribute('aria-label', `text mixr at ${pretty} in Messages`);
   if (!touch) Object.assign(a, { target: '_blank', rel: 'noopener' }); // keep this page, and the number, open
   const card = document.createDocumentFragment();
-  card.append(
-    el('span', 'line-num', pretty),
-    a,
-    el('span', 'line-note', touch ? "save this number — it's your mixr line" : "save this number — it's your mixr line. text it from your phone"),
-  );
+  card.append(el('span', 'line-num', pretty), a);
   return card;
 }
 

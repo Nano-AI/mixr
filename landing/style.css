@@ -327,7 +327,6 @@ a { color: inherit; }
   font: 600 17px/1 var(--sf); letter-spacing: -.2px;
 }
 .line .line-cta:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
-.line-note { font-size: 13px; line-height: 17px; letter-spacing: -.08px; color: #6e6e73; }
 
 .compose { flex: none; display: flex; align-items: flex-end; gap: 9px; padding: 8px 12px 30px; background: #fff; }
 .chat.kb .compose { padding-bottom: 8px; }
