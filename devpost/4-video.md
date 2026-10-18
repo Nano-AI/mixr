@@ -11,5 +11,5 @@ A video is required or the team isn't judged. Shot list for 2:00. Beats on a fas
 | 1:00 to 1:20 | The organizing | Ask for "pickup soccer or something", become host, invite arrives on a second phone, reply "i'm in". | Cook Smarter: scheduling, logistics |
 | 1:20 to 1:35 | Something goes wrong | A guest says "busy friday" vs "not my thing"; show the next round going out. Text STOP and show it's honored. | Photon Depth: edge cases, safety |
 | 1:35 to 1:45 | Why that person | Dashboard trace: recall, rerank pitch, Rocchio drift arrow on the vector map. Label "clock fast-forwarded" if used. | Depth, Craft |
-| 1:45 to 1:55 | How it's built | One diagram card: iPhone, Photon Spectrum gRPC stream, one Node process, PGlite + pgvector. "184 tests". | Craft, Traction |
+| 1:45 to 1:55 | How it's built | One diagram card: iPhone, Photon Spectrum gRPC stream, one Node process, PGlite + pgvector. "251 tests". | Craft, Traction |
 | 1:55 to 2:00 | Close | joinmixr.club and the repo URL. | |
