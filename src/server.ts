@@ -10,6 +10,7 @@ import { dashboardStatic } from './http/static.ts';
 import { adminApi } from './http/admin.ts';
 import { startMessaging } from './messaging/photon.ts';
 import { startTicker, stopTicker } from './runtime.ts';
+import { recoverInterrupted } from './transport/outbox.ts';
 // Imported for their side effects too: each registers its job handlers at load time.
 import './profiles/index.ts';
 import './relay/index.ts';
@@ -38,6 +39,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   const server = serve({ fetch: app.fetch, port: config.port, hostname: config.host }, (info) => {
     console.log(`mixr listening on ${config.host}:${info.port} (transport: ${config.transport})`);
   });
+  await recoverInterrupted();
   // iMessage (no-op unless TRANSPORT=photon); it reconnects on its own if the stream drops.
   const messaging = startMessaging();
   startTicker();

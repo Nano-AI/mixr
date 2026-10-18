@@ -15,6 +15,13 @@ const BUSY_REPLY = "i'm swamped right now and can't think straight. try me again
 
 export type ToolCallLog = { name: string; args: unknown; result: unknown };
 
+// A reply that's about our machinery rather than to the student: a bracketed note, tool names, "tool call".
+const TOOL_NAMES = /\b(save_profile|edit_profile|create_event|respond_to_invite|manage_event|discover_events|join_event|find_people|request_intro|respond_to_intro|block_person|unblock_person|add_requirement|remove_requirement|snooze)\b/;
+export const looksInternal = (text: string): boolean =>
+  /^\s*\[[^\]]*\]\s*$/.test(text) || TOOL_NAMES.test(text) || /\b(tool|function)s? (call|use)|called in parallel/i.test(text);
+const NUDGE =
+  "(system note, not from the student: your last reply described tool calls instead of making them, and the student can't see tools. If you need a tool, call it now; then reply to the student in plain words.)";
+
 // Activity searches always surface hosting explicitly. If the model's reply forgot, add a plain line (a
 // statement, not a second question) so the option is never missing.
 const HOST_LINE = "or i can host an event for this and invite people who'd be into it, just say the word.";
@@ -62,12 +69,23 @@ async function turn(phone: string, text: string, via: 'phone' | 'dashboard', rec
   const toolCalls: ToolCallLog[] = [];
   let reply = '';
   let error: string | undefined;
+  let nudged = false;
 
   try {
     for (let i = 0; i < MAX_LLM_CALLS; i++) {
       const res = await llm().agent({ instructions: INSTRUCTIONS, input, tools });
       if (!res.calls.length) {
-        reply = res.text.trim();
+        // The model sometimes narrates tool use ("[find_people and discover_events called]") instead of making
+        // the calls. That must never reach a phone: ask once more for real calls, then fall back.
+        if (looksInternal(res.text) && !nudged && i < MAX_LLM_CALLS - 1) {
+          nudged = true;
+          if (res.raw !== undefined) input.push({ type: 'assistant_raw', content: res.raw });
+          else input.push({ role: 'assistant', content: res.text });
+          input.push({ role: 'user', content: NUDGE });
+          error = 'narrated_tools';
+          continue;
+        }
+        reply = looksInternal(res.text) ? FALLBACK_REPLY : res.text.trim();
         break;
       }
       if (i === MAX_LLM_CALLS - 1) {

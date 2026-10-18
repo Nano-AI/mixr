@@ -117,3 +117,23 @@ test('dashboard-typed numbers join the demo pool; a real user typed as stays rea
   await handleInbound('+15550001234', 'hey');
   expect((await q<{ seeded: boolean }>(`SELECT seeded FROM users WHERE phone = '+15550001234'`))[0].seeded).toBe(true);
 });
+
+test('a slow send is never sent twice when the retry loop runs during it (double-text regression)', async () => {
+  await fresh();
+  config.transport = 'photon';
+  const live = await realUser('Real Riley', 'tennis');
+  let release!: () => void;
+  const gate = new Promise<void>((r) => (release = r));
+  const sent: string[] = [];
+  setDeliverer(async (_p, text) => {
+    await gate; // Photon taking its time
+    sent.push(text);
+  });
+  const sending = runIn(real, () => send(live, 'only once please'));
+  await new Promise((r) => setTimeout(r, 20));
+  await retryPending(); // the ticker fires mid-send
+  release();
+  await sending;
+  await retryPending();
+  expect(sent).toEqual(['only once please']);
+});

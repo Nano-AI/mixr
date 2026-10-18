@@ -282,3 +282,21 @@ test('a failing turn rejects but does not block the next text from that phone', 
   await handleInbound('+15550006666', 'hi again');
   expect(await outbox('+15550006666')).toEqual(['back!']);
 });
+
+test('a reply that narrates tool calls is never sent: the model is asked once more, then a fallback', async () => {
+  const { looksInternal } = await import('../src/agent/index.ts');
+  expect(looksInternal('[find_people and discover_events both called in parallel]')).toBe(true);
+  expect(looksInternal('let me run find_people for you')).toBe(true);
+  expect(looksInternal('found 3 people into hackathons! want an intro?')).toBe(false);
+
+  let n = 0;
+  fake.agentHandler = () => (++n === 1 ? { text: '[find_people and discover_events both called in parallel]', calls: [] } : { text: 'here are two hackathon people!', calls: [] });
+  await handleInbound('+15550007001', 'show me hackathon people');
+  expect(await outbox('+15550007001')).toEqual(['here are two hackathon people!']);
+
+  fake.agentHandler = () => ({ text: '[tool call: find_people]', calls: [] });
+  await handleInbound('+15550007002', 'hi');
+  const out = await outbox('+15550007002');
+  expect(out).toHaveLength(1);
+  expect(out[0]).not.toMatch(/find_people|\[/);
+});
