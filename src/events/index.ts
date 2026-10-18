@@ -269,6 +269,8 @@ export async function discoverEvents(userId: number, query?: string): Promise<Ev
        FROM (${SUMMARY_SQL}
          WHERE e.status = 'open' AND e.starts_at > $1 AND e.host_id <> $2
            AND NOT EXISTS (SELECT 1 FROM event_invites x WHERE x.event_id = e.id AND x.user_id = $2 AND x.status = 'yes')
+           -- demo and real users never meet: only events hosted by someone in the same pool
+           AND h.seeded = (SELECT seeded FROM users WHERE id = $2)
        ) sm JOIN events ev ON ev.id = sm.id
      ) s WHERE s.going < s.capacity ORDER BY ${qv ? 's.fit DESC' : 's.starts_at'} LIMIT ${DISCOVER_SCAN}`,
     qv ? [t, userId, toVec(qv)] : [t, userId],
@@ -348,7 +350,8 @@ export async function joinEvent(userId: number, eventId: number): Promise<RsvpRe
   const ev = await loadEvent(eventId);
   if (!ev) return { outcome: 'closed', detail: "i couldn't find that event" };
   if (ev.hostId === userId) return { outcome: 'closed', detail: "that's your own event — you're already going!" };
-  if (!accepting(ev, await now()) || !(await hardEligible(userId, eventId))) return { outcome: 'closed', detail: copy.guestClosed(ev.title) };
+  if (!accepting(ev, await now()) || !(await hardEligible(userId, eventId)) || !(await samePool(userId, ev.hostId)))
+    return { outcome: 'closed', detail: copy.guestClosed(ev.title) };
   // Self-serve joins still have to meet the host's 'must' text rules (judged once, then remembered).
   const unmet = await unmetRule(userId, ev);
   if (unmet) return { outcome: 'closed', detail: copy.guestNotForYou(ev.title, unmet) };
@@ -382,6 +385,12 @@ async function unmetRule(userId: number, ev: EventFull): Promise<string | null> 
     verdicts = await screeningFor(context, userId);
   }
   return must.find((r) => verdicts.get(r.id) !== 'pass')?.criterion ?? null;
+}
+
+// Demo and real users never meet.
+async function samePool(a: number, b: number): Promise<boolean> {
+  const r = await q<{ seeded: boolean }>('SELECT DISTINCT seeded FROM users WHERE id = ANY($1::int[])', [[a, b]]);
+  return r.length === 1;
 }
 
 // Used by the inspector/server: Et's drift from E0 without shipping vectors around.

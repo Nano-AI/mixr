@@ -19,7 +19,8 @@ export async function makeUser(name: string, profile: string, vector?: number[])
   const v = vector ?? (await fakeEmbed([profile]))[0];
   const phone = `+1555${String(Math.floor(Math.random() * 1e7)).padStart(7, '0')}`;
   const r = await q<{ id: number }>(
-    `INSERT INTO users (phone, name, state, canonical_profile, embedding) VALUES ($1, $2, 'active', $3, $4) RETURNING id`,
+    // Demo pool: tests run without a context, which is the demo pool (simulated clock, no delivery).
+    `INSERT INTO users (phone, name, state, canonical_profile, embedding, seeded) VALUES ($1, $2, 'active', $3, $4, true) RETURNING id`,
     [phone, name, profile, toVec(v)],
   );
   return r[0].id;

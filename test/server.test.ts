@@ -46,7 +46,7 @@ test('GET /api/state returns users, events with going/cosToE0/invites, intros an
   const s = await res.json();
   expect(s.now).toBe(T0.toISOString());
   expect(s.users).toHaveLength(2);
-  expect(s.users[0]).toMatchObject({ id: host, name: 'Sam Lee', state: 'active', snoozedUntil: null, seeded: false });
+  expect(s.users[0]).toMatchObject({ id: host, name: 'Sam Lee', state: 'active', snoozedUntil: null, seeded: true });
   expect(s.users[0].profile).toBe('board games');
   expect(s.events[0]).toMatchObject({ id: 1, hostId: host, hostName: 'Sam Lee', title: 'Catan', description: 'catan night', capacity: 4, status: 'open', waveNumber: 0, going: 1, nextWaveAt: null, startsAt: T0.toISOString() });
   expect(s.events[0].cosToE0).toBeCloseTo(1);

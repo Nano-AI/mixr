@@ -293,7 +293,7 @@ export const TOOLS: ToolDef[] = [
       const u = await activeMe(ctx);
       if (a.target_user_id === u.id) throw new ToolError("can't intro someone to themselves");
       const t = await getUser(a.target_user_id);
-      if (!t || t.state !== 'active') throw new ToolError(`no active user ${a.target_user_id}; use a user_id from find_people`);
+      if (!t || t.state !== 'active' || t.seeded !== u.seeded) throw new ToolError(`no active user ${a.target_user_id}; use a user_id from find_people`);
       const dup = await one(
         `SELECT id FROM intros WHERE status IN ('proposed', 'target_asked', 'connected')
            AND ((requester_id = $1 AND target_id = $2) OR (requester_id = $2 AND target_id = $1))`,
