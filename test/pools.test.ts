@@ -137,3 +137,19 @@ test('a slow send is never sent twice when the retry loop runs during it (double
   await retryPending();
   expect(sent).toEqual(['only once please']);
 });
+
+test('admin /send delivers an operator message to a real user and reports the delivery', async () => {
+  await fresh();
+  config.transport = 'photon';
+  const sent: string[] = [];
+  setDeliverer(async (phone, text) => void sent.push(`${phone}:${text}`));
+  const live = await realUser('Real Riley', 'tennis');
+  const phone = (await getUser(live))!.phone;
+  const { adminApi } = await import('../src/http/admin.ts');
+  const res = await adminApi.request('/send', { method: 'POST', body: JSON.stringify({ phone, text: 'hey riley, mixr here' }), headers: { 'content-type': 'application/json' } });
+  expect(await res.json()).toMatchObject({ ok: true, delivery: { status: 'sent', attempts: 1 } });
+  expect(sent).toEqual([`${phone}:hey riley, mixr here`]);
+  const demo = await makeUser('Demo Dana', 'tennis');
+  const bad = await adminApi.request('/send', { method: 'POST', body: JSON.stringify({ phone: (await getUser(demo))!.phone, text: 'x' }), headers: { 'content-type': 'application/json' } });
+  expect(bad.status).toBe(404);
+});
