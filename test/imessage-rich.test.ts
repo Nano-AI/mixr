@@ -7,6 +7,7 @@ import { send } from '../src/transport/index.ts';
 import { retryPending, setDeliverer, type RichContent } from '../src/transport/outbox.ts';
 import { deliver, type Sdk, type SpaceLike } from '../src/messaging/photon.ts';
 import { fakeEmbed } from '../src/llm/embed.ts';
+import { requestIntro, respondToIntro } from '../src/relay/index.ts';
 
 // Native iMessage extras: rich content rides on outbound jobs, the Photon deliverer builds the SDK object and
 // falls back to the plain text. Photon is never called: a capturing deliverer, or deliver() with a fake space.
@@ -140,4 +141,24 @@ test('deliver: plain text, rich content, and the text fallback when Photon rejec
   s = fakeSpace({ reject: ['text'] });
   await expect(deliver(s.space, 'x', { kind: 'effect', effect: 'confetti' }, fakeSdk(['effect']))).rejects.toThrow(/refused/);
   warn.mockRestore();
+});
+
+test("accepted intro: each side gets the other's contact card (first + last name, phone), the numbered text as fallback", async () => {
+  await fresh();
+  const sent = capture();
+  const maya = await realUser('Maya Lopez');
+  const jordan = await realUser('Jordan de la Cruz');
+  await runIn(real, async () => respondToIntro(jordan.id, (await requestIntro(maya.id, jordan.id, 'tennis')).id, true, 'saturdays work'));
+  const toMaya = sent.find((s) => s.phone === maya.phone)!;
+  const toJordan = sent.filter((s) => s.phone === jordan.phone).at(-1)!;
+  expect(toMaya).toEqual({
+    phone: maya.phone,
+    text: `Jordan is down! they said: "saturdays work". their number: ${jordan.phone}`,
+    content: { kind: 'contact', first: 'Jordan', last: 'de la Cruz', phone: jordan.phone, caption: `Jordan is down! they said: "saturdays work". here's their contact` },
+  });
+  expect(toJordan).toEqual({
+    phone: jordan.phone,
+    text: `done! here's Maya's number: ${maya.phone}. have fun!`,
+    content: { kind: 'contact', first: 'Maya', last: 'Lopez', phone: maya.phone, caption: "done! here's Maya's contact. have fun!" },
+  });
 });
