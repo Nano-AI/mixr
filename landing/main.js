@@ -70,7 +70,6 @@ for (const [k, sub] of KEYS) {
 let digits = '';
 let busy = false;
 let kbOn = false;
-let nudged = false;
 let joined = false; // number sent: the conversation is over, the field stays shut
 const num = $('#num'); // real (visually hidden) input: keyboard, paste and autofill all land here
 // touch screens type on the drawn pad; focusing the hidden input there makes iOS Safari scroll it
@@ -84,6 +83,7 @@ const render = () => {
   typed.textContent = fmt(digits);
   typed.toggleAttribute('data-empty', !digits);
   sendBtn.disabled = digits.length !== 10;
+  compose.classList.toggle('ready', kbOn && !digits && !busy && !joined); // pulse the field: type here
 };
 
 const down = (el) => {
@@ -147,12 +147,8 @@ function openKeypad() {
   if (kbOn || joined) return;
   kbOn = true;
   chatView.classList.add('kb');
+  render();
   focusNum(); // ready to type, no click needed
-  // if nothing gets typed for a while, mixr starts typing again, like someone waiting on the other end
-  if (!nudged) {
-    nudged = true;
-    setTimeout(() => !digits && !busy && kbOn && !joined && say("just the 10 digits. I'll give you a number to text me at"), 9000);
-  }
   keypad.style.height = 'auto';
   const h = keypad.offsetHeight;
   if (!reduced) {
@@ -162,6 +158,7 @@ function openKeypad() {
 }
 function closeKeypad() {
   kbOn = false;
+  render();
   num.blur();
   const done = () => chatView.classList.remove('kb');
   if (reduced) return (keypad.style.height = '0px'), done();
@@ -195,7 +192,7 @@ const paintLit = (t) => {
 };
 
 if (reduced) {
-  utils.set(['.off', '.lock', '.hero'], { opacity: 0 });
+  utils.set(['.off', '.lock', '.hero', '.origin'], { opacity: 0 });
   utils.set('.statusbar', { color: '#000' });
   utils.set('.homebar', { opacity: 1 });
   paintLit(1);
@@ -259,8 +256,11 @@ if (reduced) {
     go(LAST);
   };
 
+  $('#more').addEventListener('click', () => go(slide + 1));
+
   go = (i) => {
     i = utils.clamp(i, 0, LAST);
+    if (i > 0) root.classList.add('moved'); // the swipe cue has done its job
     if (i === slide && !move && pos.t === SLIDES[i].t) return;
     speed = Math.abs(i - slide) > 1 ? 6 : 1.5; // a jump (nav button, a dot) fast-forwards the texts
     slide = i;
@@ -305,12 +305,13 @@ if (reduced) {
   };
   requestAnimationFrame(chase);
 
-  // last slide: zoom to the bottom of the phone so the pad is as big as the screen allows, leaving
-  // room under it for the consent note. y is in phone units (scaled by --s), the zoom by z.
+  // last slide: zoom to the bottom of the phone so the pad is as big as the screen allows, ending
+  // above the consent note (measured: it wraps to 4-5 lines on a phone). y is in phone units (scaled
+  // by --s), the zoom by z.
   const zoom = () => {
     const s = parseFloat(phone.style.getPropertyValue('--s'));
-    const z = Math.min((innerWidth * 0.96) / (426 * s), (innerHeight - 150) / (520 * s), 1.45);
-    const room = innerWidth < 700 ? 74 : 64;
+    const room = innerHeight - $('.foot').getBoundingClientRect().top + 12; // viewport bottom to the phone's
+    const z = Math.min((innerWidth * 0.96) / (426 * s), (innerHeight - room - 76) / (520 * s), 1.45);
     return { z, y: (innerHeight / 2 - room) / s - 449 * z };
   };
 
@@ -341,16 +342,35 @@ if (reduced) {
 
   // input: one wheel gesture, swipe, tap or arrow key moves one slide
   const busyTarget = (t) => t.closest('a, button, .compose, .keypad');
+  // A trackpad flick keeps firing a decaying momentum tail for a second or two with no gap in it, so a
+  // pause alone can't end a gesture: a new one also starts when the direction flips, or when the
+  // deltas climb again after fading (a fresh flick cutting the momentum off). A mouse wheel's steady
+  // notches never fade, so a fast spin still moves one slide.
   let quietSince = 0;
   let armed = true;
+  let dir = 0;
+  let avg = 0; // |delta| smoothed, so jitter in a slow drag doesn't read as a new flick
+  let peak = 0; // biggest avg so far in this gesture
+  let low = 0; // smallest avg since that peak
   addEventListener('wheel', (e) => {
     e.preventDefault();
     const now = performance.now();
-    if (now - quietSince > 220) armed = true; // a pause ends the gesture (trackpad momentum keeps firing)
+    const d = Math.abs(e.deltaY);
+    const s = Math.sign(e.deltaY);
+    if (!s) return (quietSince = now); // sideways only
+    const fresh = now - quietSince > 220 || s !== dir;
+    avg = fresh ? d : avg + (d - avg) / 3;
+    if (fresh || (low < peak / 2 && avg > low * 2)) {
+      armed = true;
+      peak = 0;
+    }
     quietSince = now;
-    if (armed && Math.abs(e.deltaY) > 6) {
+    dir = s;
+    if (avg >= peak) peak = low = avg;
+    else low = Math.min(low, avg);
+    if (armed && d > 6) {
       armed = false;
-      go(slide + Math.sign(e.deltaY));
+      go(slide + s);
     }
   }, { passive: false });
   let touchY = null;
