@@ -69,3 +69,15 @@ test('agent request caches the shared prefix: explicit breakpoint on the system 
   const tr = await one<{ data: any }>(`SELECT data FROM traces WHERE kind = 'llm' ORDER BY id DESC LIMIT 1`);
   expect(tr!.data.ms).toEqual(expect.any(Number));
 });
+
+test('json calls turn thinking off only when asked (formatting-only steps); the agent loop keeps it on', async () => {
+  const { l, sent } = await stubbedClaude();
+  const req = { name: 'x', system: 's', input: 'i', schema: { type: 'object', properties: {}, required: [], additionalProperties: false } };
+  await l.json({ ...req, noThinking: true });
+  await l.json(req);
+  await l.agent({ instructions: 'you are mixr', input: [{ role: 'user', content: 'hi' }], tools: [] });
+  expect(sent[0].thinking).toEqual({ type: 'disabled' });
+  expect(sent[0].output_config.effort).toBe('low'); // disabled is only accepted at effort high or lower
+  expect(sent[1].thinking).toBeUndefined();
+  expect(sent[2].thinking).toBeUndefined();
+});

@@ -11,6 +11,9 @@ export type JsonRequest = {
   system: string;
   input: string;
   schema: Record<string, unknown>; // JSON schema: every property required, additionalProperties false
+  // Pure reformatting under the schema: skip thinking (Haiku 5.5 thinks by default; disabled is accepted at
+  // effort high or lower, and these run at low). Leave unset for judgment calls like rerank.
+  noThinking?: boolean;
 };
 
 export type AgentInputItem =
@@ -129,6 +132,7 @@ export class ClaudeLlm implements Llm {
       max_tokens: JSON_MAX_TOKENS,
       system: req.system,
       messages: [{ role: 'user', content: req.input }],
+      ...(req.noThinking ? { thinking: { type: 'disabled' } } : {}),
       output_config: { effort: EFFORT, format: { type: 'json_schema', schema: toClaudeSchema(req.schema) as Record<string, unknown> } },
     } as Anthropic.MessageCreateParamsNonStreaming);
     await trace('llm', null, { purpose: req.name, usage: r.usage, ms: Date.now() - started, stop: r.stop_reason });

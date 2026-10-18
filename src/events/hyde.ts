@@ -42,6 +42,7 @@ export async function hydeProfile(d: NewEvent): Promise<{ text: string; source: 
       system: SYSTEM,
       input: `Event title: ${d.title}\nEvent description: ${d.description}\nGuest spots: ${d.capacity}`,
       schema: SCHEMA,
+      noThinking: true,
     });
     const text = r?.target_profile?.trim();
     if (!text) return { text: hydeFallback(d), source: 'fallback', error: 'empty target_profile' };
