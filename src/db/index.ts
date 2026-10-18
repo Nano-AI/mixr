@@ -67,7 +67,7 @@ export const toVec = (v: number[]): string => `[${v.join(',')}]`;
 export const fromVec = (s: string | null): number[] | null => (s ? JSON.parse(s) : null);
 
 const USER_COLS =
-  'id, phone, name, state, canonical_profile, embedding::text AS embedding, snoozed_until, seeded, step, email, email_verified, opted_out, assigned_number, joined_via';
+  'id, phone, name, state, canonical_profile, embedding::text AS embedding, snoozed_until, seeded, step, email, email_verified, opted_out, assigned_number, joined_via, service';
 
 export async function getUser(id: number): Promise<User | undefined> {
   const r = await one(`SELECT ${USER_COLS} FROM users WHERE id = $1`, [id]);
@@ -106,5 +106,6 @@ function rowToUser(r: Record<string, any>): User {
     optedOut: !!r.opted_out,
     assignedNumber: r.assigned_number ?? null,
     joinedVia: r.joined_via ?? null,
+    service: r.service ?? null,
   };
 }

@@ -5,7 +5,9 @@ import { poolContext, runIn } from '../src/context.ts';
 import { config } from '../src/config.ts';
 import { send } from '../src/transport/index.ts';
 import { retryPending, setDeliverer, type RichContent } from '../src/transport/outbox.ts';
-import { deliver, parseSpectrumMessage, type Sdk, type SpaceLike } from '../src/messaging/photon.ts';
+import { deliver, parseSpectrumMessage, rememberService, type Sdk, type SpaceLike } from '../src/messaging/photon.ts';
+import { getUser } from '../src/db/index.ts';
+import { contextBlock } from '../src/agent/context.ts';
 import { processText } from '../src/messaging/pipeline.ts';
 import { fakeEmbed } from '../src/llm/embed.ts';
 import { requestIntro, respondToIntro } from '../src/relay/index.ts';
@@ -317,4 +319,67 @@ test('confetti on the reply that finishes onboarding, not on a later profile red
   fake.agentHandler = () => ({ text: 'nice', calls: [] });
   await handleInbound(u.phone, 'cool', 'phone');
   expect(sent.at(-1)).toEqual({ phone: u.phone, text: 'nice', content: null });
+});
+
+test('service: stored from the inbound sender.service, refreshed on change, unknown keeps it; the context line shows it', async () => {
+  await fresh();
+  const u = await realUser();
+  const msg = (service?: string) =>
+    parseSpectrumMessage(
+      { type: 'dm' },
+      { platform: 'imessage', direction: 'inbound', id: 's-1', sender: { id: u.phone, ...(service ? { service } : {}) }, content: { type: 'text', text: 'hi' } },
+    )!;
+  const service = async () => (await getUser(u.id))!.service;
+
+  expect(await service()).toBeNull();
+  expect((await contextBlock((await getUser(u.id))!, new Date())).split('\n').find((l) => l.startsWith('user:'))).toMatch(/\| service=unknown$/);
+  expect(msg('RCS').service).toBe('rcs');
+  await rememberService(msg('RCS'));
+  expect(await service()).toBe('rcs');
+  await rememberService(msg('unknown')); // Photon couldn't tell: keep what we know
+  await rememberService(msg());
+  expect(await service()).toBe('rcs');
+  await rememberService(msg('iMessage')); // switched back to an iPhone
+  expect(await service()).toBe('imessage');
+  await rememberService(msg('SMS'));
+  expect(await service()).toBe('sms');
+  expect(await contextBlock((await getUser(u.id))!, new Date())).toContain('| service=sms');
+});
+
+test('deliver per service: iMessage gets everything, RCS keeps tapbacks only, SMS is plain text', async () => {
+  const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+  const sdk = fakeSdk();
+  const target = { id: 'GUID-9' };
+  const reaction: RichContent = { kind: 'reaction', emoji: '❤️', targetId: 'imessage:GUID-9' };
+  const effect: RichContent = { kind: 'effect', effect: 'confetti' };
+  const contact: RichContent = { kind: 'contact', first: 'Ana', phone: '+14255550100', caption: "here's Ana", captionEffect: 'confetti' };
+  const share: RichContent = { kind: 'share_contact' };
+  const link: RichContent = { kind: 'richlink', url: 'https://www.joinmixr.club', caption: 'help text' };
+  const run = async (service: 'imessage' | 'rcs' | 'sms' | null, text: string, content: RichContent, opts: { reject?: string[] } = {}) => {
+    const s = fakeSpace({ messages: { 'GUID-9': target }, ...opts });
+    await deliver(s.space, text, content, sdk, service);
+    return s.sent;
+  };
+
+  for (const service of ['imessage', null] as const) {
+    expect(await run(service, '❤️', reaction)).toEqual([{ kind: 'reaction', args: ['❤️', target] }]);
+    expect(await run(service, 'yay', effect)).toEqual([{ kind: 'effect', args: ['yay', 'confetti-id'] }]);
+    expect((await run(service, "here's Ana: +14255550100", contact)).map((c) => (c as { kind: string }).kind)).toEqual(['effect', 'contact']);
+    expect(await run(service, '[share name and photo]', share)).toEqual([{ kind: 'nativeContactCard', args: [] }]);
+  }
+
+  expect(await run('rcs', '❤️', reaction)).toEqual([{ kind: 'reaction', args: ['❤️', target] }]);
+  expect(await run('rcs', '❤️', reaction, { reject: ['reaction'] })).toEqual([]); // no bare emoji
+  expect(await run('rcs', 'yay', effect)).toEqual(['yay']);
+  expect(await run('rcs', "here's Ana: +14255550100", contact)).toEqual(["here's Ana: +14255550100"]);
+  expect(await run('rcs', '[share name and photo]', share)).toEqual([]);
+  expect(await run('rcs', 'help text', link)).toEqual(['help text\nhttps://www.joinmixr.club']);
+  expect(await run('rcs', "you're in!", { kind: 'reply', targetId: 'imessage:GUID-9' })).toEqual(["you're in!"]);
+
+  expect(await run('sms', '❤️', reaction)).toEqual([]);
+  expect(await run('sms', 'yay', effect)).toEqual(['yay']);
+  expect(await run('sms', "here's Ana: +14255550100", contact)).toEqual(["here's Ana: +14255550100"]);
+  expect(await run('sms', '[share name and photo]', share)).toEqual([]);
+  expect(await run('sms', 'see https://www.joinmixr.club', { kind: 'richlink', url: 'https://www.joinmixr.club' })).toEqual(['see https://www.joinmixr.club']);
+  warn.mockRestore();
 });

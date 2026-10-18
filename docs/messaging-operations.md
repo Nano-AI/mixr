@@ -195,6 +195,31 @@ degrades to plain texts. Used today:
 - inline replies: a student's inline reply to an older message (e.g. an invite) is now
   accepted as text, and mixr's plain answers during that turn thread under it.
 
+### iMessage, RCS and SMS
+
+Android students text the same line over RCS or SMS. Every inbound text carries the
+service Apple reports for the sender (spectrum `message.sender.service`: `iMessage`,
+`RCS`, `SMS` or `unknown`, from advanced-imessage `Message.sender.service`, proto
+`ChatServiceType` 1/2/3). It is stored on `users.service` (`imessage|rcs|sms`, NULL =
+unknown) before and after each inbound text is handled; `unknown` never overwrites a
+known value. `deliver()` picks the content per stored service, and the agent sees it on
+the user line of its context block as `service=imessage|rcs|sms|unknown`.
+
+| kind | imessage / unknown | rcs | sms |
+| --- | --- | --- | --- |
+| reaction | tapback (fallback: the emoji) | tapback (fallback: nothing) | nothing |
+| effect | text with confetti | text | text |
+| contact | caption, then the vCard | text (it carries the number) | text |
+| share_contact | Share Name and Photo | skipped | skipped |
+| reply | threaded under their text | plain text | plain text |
+| richlink | link preview | text + URL | text + URL |
+
+Unknown keeps the old behavior (try the rich form, fall back to text on error). iOS 18
+RCS carries emoji reactions to Android; screen effects and Share Name and Photo are
+iMessage-only. Still to confirm on a real Android phone: an RCS tapback from Photon shows
+as a reaction (not a "Loved ..." text), the inbound `service` reads `RCS` for an RCS
+chat and `SMS` with RCS turned off.
+
 The Photon project profile is named Mixr with its previously generated avatar uploaded.
 The current Free shared line reports `imessageSynced=false`, so the SDK's automatic
 name/photo sharing is not active.
