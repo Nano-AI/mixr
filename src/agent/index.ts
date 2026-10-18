@@ -1,7 +1,7 @@
 import { getOrCreateUser } from '../db/index.ts';
 import { runIn, type RunContext } from '../context.ts';
 import { now } from '../clock.ts';
-import { recordInbound, send } from '../transport/index.ts';
+import { recordInbound, send, URL_RE } from '../transport/index.ts';
 import { runDue } from '../jobs/index.ts';
 import { llm, LlmBudgetError, type AgentInputItem } from '../llm/index.ts';
 import { trace } from '../trace.ts';
@@ -44,10 +44,14 @@ export function tidy(text: string): string {
     .trim()
     .replace(/(^|[.!?]\s+)([A-Z][a-z]*)(?=['’\s,.!?:]|$)/g, (m, pre: string, w: string) => (OPENERS.has(w.toLowerCase()) ? pre + w.toLowerCase() : m))
     .replace(/\bI\b/g, 'i');
-  if (t.length > MAX_REPLY) {
-    const cut = t.slice(0, MAX_REPLY);
+  // Links don't count toward the cap (each goes out as its own bubble) and are never a cut point: on a copy with
+  // every link blanked out, find the cut, then apply it to the real text.
+  const masked = t.replace(URL_RE, (u) => '\0'.repeat(u.length));
+  if (masked.replace(/\0/g, '').length > MAX_REPLY) {
+    const lim = MAX_REPLY + masked.slice(0, MAX_REPLY).split('\0').length - 1; // the cap in words, plus links passed
+    const cut = masked.slice(0, lim);
     const end = Math.max(cut.lastIndexOf('.'), cut.lastIndexOf('!'), cut.lastIndexOf('?'));
-    t = end > MAX_REPLY / 3 ? cut.slice(0, end + 1) : cut.slice(0, cut.lastIndexOf(' '));
+    t = t.slice(0, end > lim / 3 ? end + 1 : cut.lastIndexOf(' ')).trim();
   }
   return t;
 }

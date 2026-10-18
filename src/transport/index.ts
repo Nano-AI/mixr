@@ -16,8 +16,33 @@ export async function send(userId: number, text: string, opts: SendOpts = {}): P
   const note = await takeNote(userId, opts);
   const body = note ? withNote(note, text) : text;
   const content = note && opts.content?.caption ? { ...opts.content, caption: withNote(note, opts.content.caption) } : opts.content;
-  const messageId = await log(userId, 'out', body);
-  await queueDelivery(userId, messageId, body, { ...opts, content });
+  // Plain text (or text with an effect / thread) goes out as one message per part, so each link gets its own preview.
+  // The first part keeps the content and the caller's dedupe key; later parts get key:1, key:2...
+  const parts = !content || content.kind === 'effect' || content.kind === 'reply' ? splitLinks(body) : [body];
+  for (const [i, part] of parts.entries()) {
+    const messageId = await log(userId, 'out', part);
+    await queueDelivery(userId, messageId, part, {
+      ...opts,
+      content: i ? undefined : content,
+      dedupeKey: opts.dedupeKey && i ? `${opts.dedupeKey}:${i}` : opts.dedupeKey,
+    });
+  }
+}
+
+// A link alone in its bubble gets a rich preview (iMessage, RCS); inside a sentence it's just blue text. So text with
+// links splits into its words and each link, in order: "add it: <url>" -> ["add it:", "<url>"]. Punctuation a link
+// leaves at the start of the next part goes, and parts with no letters or digits (a trailing ".") are dropped. Trailing punctuation stays out of the link.
+export const URL_RE = /https?:\/\/[^\s<>"]*[^\s<>".,;:!?)\]'"]/g;
+export function splitLinks(text: string): string[] {
+  const parts: string[] = [];
+  let at = 0;
+  for (const m of text.matchAll(URL_RE)) {
+    parts.push(text.slice(at, m.index), m[0]);
+    at = m.index + m[0].length;
+  }
+  parts.push(text.slice(at));
+  const out = parts.map((p) => p.replace(/^[\s.,;:!?)\]]+/, '').trim()).filter((p) => /[\p{L}\p{N}]/u.test(p));
+  return out.length ? out : [text];
 }
 
 // An operator's one-time note (users.pending_note, set by POST /api/admin/note) leads the next text that's actually
@@ -40,7 +65,7 @@ const showsText = (c: RichContent | undefined): boolean => !c || c.kind === 'eff
 // "<note> <text>", the note its own sentence.
 const withNote = (note: string, text: string): string => `${note}${/[\p{L}\p{N}]$/u.test(note) ? '.' : ''} ${text}`;
 
-// "+14255183059" -> "(425) 518-3059"; other countries stay E.164.
+// "+14255550123" -> "(425) 555-0123"; other countries stay E.164.
 export const prettyPhone = (e164: string): string => e164.replace(/^\+1(\d{3})(\d{3})(\d{4})$/, '($1) $2-$3');
 // The log line (and plain fallback) for a contact card.
 export const cardLine = (name: string, phone: string): string => `[contact card: ${name}, ${prettyPhone(phone)}]`;

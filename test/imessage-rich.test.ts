@@ -413,3 +413,29 @@ test('deliver per service: iMessage gets everything, RCS keeps tapbacks only, SM
   expect(await run('sms', 'see https://www.joinmixr.club', { kind: 'richlink', url: 'https://www.joinmixr.club' })).toEqual(['see https://www.joinmixr.club']);
   warn.mockRestore();
 });
+
+test('links go out as their own messages, in order; effect and dedupe key stay on the first', async () => {
+  const { splitLinks } = await import('../src/transport/index.ts');
+  expect(splitLinks('add it to your calendar: https://calendar.google.com/calendar/render?action=TEMPLATE&text=x.')).toEqual([
+    'add it to your calendar:',
+    'https://calendar.google.com/calendar/render?action=TEMPLATE&text=x',
+  ]);
+  expect(splitLinks('see https://a.example.com/1 and https://b.example.com/2, fri')).toEqual(['see', 'https://a.example.com/1', 'and', 'https://b.example.com/2', 'fri']);
+  expect(splitLinks('no links here.')).toEqual(['no links here.']);
+  expect(splitLinks('https://a.example.com')).toEqual(['https://a.example.com']);
+
+  await fresh();
+  const sent = capture();
+  const u = await realUser();
+  const content: RichContent = { kind: 'effect', effect: 'confetti' };
+  await runIn(real, () => send(u.id, "you're in! add it: https://calendar.google.com/x", { dedupeKey: 'j1', content }));
+  await runIn(real, () => send(u.id, "you're in! add it: https://calendar.google.com/x", { dedupeKey: 'j1', content })); // replay
+  expect(sent).toEqual([
+    { phone: u.phone, text: "you're in! add it:", content },
+    { phone: u.phone, text: 'https://calendar.google.com/x', content: null },
+  ]);
+  // A contact card's caption is one native object: never split.
+  sent.length = 0;
+  await runIn(real, () => send(u.id, 'card https://x.example.com', { content: { kind: 'contact', first: 'Ana', phone: '+14255550100', caption: 'see https://x.example.com' } }));
+  expect(sent).toHaveLength(1);
+});
