@@ -34,6 +34,22 @@ test('create_event sends the first round right away and reports how many went ou
   expect(r.first_round).toMatch(/fits/);
 });
 
+test("create_event and update_description run only this event's round, not every due job in the pool", async () => {
+  await fresh();
+  await seed();
+  const { schedule } = await import('../src/jobs/index.ts');
+  const { now } = await import('../src/clock.ts');
+  await schedule('expire_intro', { introId: 999 }, await now()); // someone else's due work: the ticker's job
+  const maya = (await getUserByPhone('+12065550101'))!.id;
+  const r = (await runTool(maya, 'create_event', event({ capacity: 20 }))).result as any;
+  expect(r.invited_now).toBeGreaterThan(0);
+  await runTool(maya, 'manage_event', JSON.stringify({ event_id: r.event_id, action: 'update_description', n: null, description: 'tennis at the IMA, any level welcome' }));
+  const stray = await q<{ done: boolean }>(`SELECT done FROM jobs WHERE kind = 'expire_intro'`);
+  expect(stray).toEqual([{ done: false }]);
+  const waves = await q<{ n: number }>(`SELECT count(*)::int AS n FROM jobs WHERE kind = 'wave' AND done AND (payload->>'eventId')::int = $1`, [r.event_id]);
+  expect(waves[0].n).toBe(2); // round 1 on create, the next round on the description change
+});
+
 test('a first round with nobody who fits is reported by the reply, not by a second "pool is thin" text', async () => {
   await fresh();
   await seed();
