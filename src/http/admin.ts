@@ -10,8 +10,12 @@ import { send } from '../transport/index.ts';
 //   POST /send     operator message to one real user ({phone, text}); delivered like any mixr text (outbox,
 //                  opt-out respected) and returns the delivery record. For support and for unsticking a
 //                  conversation. (mixr only texts first when WELCOME_TEXT=on: one welcome after a website join.)
+//   POST /note     one-time note for one real user ({phone, note}, <= NOTE_MAX chars): leads the next text mixr
+//                  actually delivers to them (e.g. their reply when they next text in), as its own first sentence,
+//                  then it's cleared. Sends nothing by itself; a second note replaces one not yet sent.
 
 const LIMIT = 100;
+const NOTE_MAX = 300;
 const iso = (v: unknown): string | null => (v ? new Date(v as string).toISOString() : null);
 
 export const adminApi = new Hono();
@@ -58,4 +62,15 @@ adminApi.post('/send', async (c) => {
   await runIn({ pool: 'real', deliver: true }, () => send(u.id, text, { dedupeKey: key }));
   const job = await one(`SELECT status, attempts, error FROM message_jobs WHERE dedupe_key = $1`, [key]);
   return c.json({ ok: true, delivery: job ?? { status: 'not queued (transport is not photon?)' } });
+});
+
+adminApi.post('/note', async (c) => {
+  const body = await c.req.json().catch(() => ({}));
+  const phone = typeof body.phone === 'string' ? body.phone.trim() : '';
+  const note = typeof body.note === 'string' ? body.note.trim().replace(/\s+/g, ' ') : '';
+  if (!phone || !note || note.length > NOTE_MAX) return c.json({ ok: false, error: `phone and note (<= ${NOTE_MAX} chars) are required` }, 400);
+  const u = await getUserByPhone(phone);
+  if (!u || u.seeded) return c.json({ ok: false, error: 'no real user with that phone' }, 404);
+  await q(`UPDATE users SET pending_note = $2 WHERE id = $1`, [u.id, note]);
+  return c.json({ ok: true });
 });

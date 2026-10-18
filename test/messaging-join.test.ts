@@ -5,7 +5,7 @@ import { config } from '../src/config.ts';
 import { publicApi } from '../src/http/public.ts';
 import { adminApi } from '../src/http/admin.ts';
 import { setPhotonFetch } from '../src/messaging/photon-api.ts';
-import { setDeliverer } from '../src/transport/outbox.ts';
+import { retryPending, setDeliverer } from '../src/transport/outbox.ts';
 import { processText } from '../src/messaging/pipeline.ts';
 import { CONSENT, WELCOME } from '../src/messaging/onboarding.ts';
 
@@ -203,6 +203,81 @@ test('WELCOME_TEXT=on: a welcome Photon refused does not count as consent; their
   expect((await getUserByPhone('+14255550103'))!.step).toBe('consent');
 });
 
+test('WELCOME_TEXT=on: a refused welcome still pending is dropped when they text in, and their "hi" gets the full disclosure', async () => {
+  config.welcomeText = true;
+  photon(() => created('+14255550104'));
+  setDeliverer(async () => {
+    throw new Error('Target not allowed for this project');
+  });
+  const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+  await join({ phone: '4255550104' });
+  await vi.waitFor(() => expect(warn).toHaveBeenCalledWith(expect.stringMatching(/^Welcome text for user \d+ not delivered/)));
+  warn.mockRestore();
+  const u = (await getUserByPhone('+14255550104'))!;
+  const welcomeJob = () => one(`SELECT status, attempts, error FROM message_jobs WHERE dedupe_key = $1`, [`welcome:${u.id}`]);
+  expect(await welcomeJob()).toMatchObject({ status: 'pending', attempts: 1 });
+  // Another pending job from before the inbound that isn't the welcome is left alone.
+  await q(`INSERT INTO message_jobs (user_id, message_id, dedupe_key, text) SELECT $1, id, 'other', 'something else' FROM messages WHERE user_id = $1`, [u.id]);
+
+  const sent: string[] = [];
+  setDeliverer(async (_phone, text) => void sent.push(text));
+  await processText('+14255550104', 'hi', 'phone', 'imessage:w5');
+  expect(sent).toEqual([CONSENT]);
+  expect(await outbound('+14255550104')).toEqual([WELCOME, CONSENT]);
+  expect(await welcomeJob()).toMatchObject({ status: 'suppressed', attempts: 1, error: expect.stringMatching(/texted in before the welcome/) });
+  expect((await one(`SELECT status FROM message_jobs WHERE dedupe_key = 'other'`))!.status).toBe('pending');
+  expect((await one(`SELECT status FROM message_jobs WHERE dedupe_key = 'reply:imessage:w5'`))!.status).toBe('sent');
+  await retryPending(); // the retry loop never sends the stale welcome
+  expect(sent).toEqual([CONSENT, 'something else']);
+
+  // The disclosure reached them, so YES opts in.
+  await processText('+14255550104', 'yes', 'phone', 'imessage:w6');
+  expect((await getUserByPhone('+14255550104'))!.step).toBe('name');
+});
+
+test('a welcome that gave up (failed) does not count either; the failed job is left as it is', async () => {
+  config.transport = 'photon';
+  const u = (await one<{ id: number }>(`INSERT INTO users (phone, seeded, joined_via, step) VALUES ('+14255550106', false, 'web', 'consent') RETURNING id`))!;
+  const m = (await one<{ id: number }>(`INSERT INTO messages (user_id, direction, text, sim_time, via) VALUES ($1, 'out', $2, now(), 'system') RETURNING id`, [u.id, WELCOME]))!;
+  await q(`INSERT INTO message_jobs (user_id, message_id, dedupe_key, text, status, attempts) VALUES ($1, $2, $3, $4, 'failed', 3)`, [u.id, m.id, `welcome:${u.id}`, WELCOME]);
+  const sent: string[] = [];
+  setDeliverer(async (_phone, text) => void sent.push(text));
+  await processText('+14255550106', 'hi', 'phone', 'imessage:w9');
+  expect(sent).toEqual([CONSENT]);
+  expect((await one(`SELECT status FROM message_jobs WHERE dedupe_key = $1`, [`welcome:${u.id}`]))!.status).toBe('failed');
+});
+
+test('WELCOME_TEXT=on, photon: a delivered welcome counts as the disclosure; a reply that is not YES gets the short ask', async () => {
+  config.welcomeText = true;
+  photon(() => created('+14255550105'));
+  const sent: string[] = [];
+  setDeliverer(async (_phone, text) => void sent.push(text));
+  await join({ phone: '4255550105' });
+  await vi.waitFor(async () => expect((await q(`SELECT 1 FROM message_jobs WHERE status = 'sent'`)).length).toBe(1));
+  await processText('+14255550105', 'hi mixr', 'phone', 'imessage:w7');
+  expect(sent).toEqual([WELCOME, expect.stringMatching(/^reply YES to opt in/)]);
+  expect(sent[1]).not.toBe(CONSENT);
+  expect((await getUserByPhone('+14255550105'))!.step).toBe('consent');
+  await processText('+14255550105', 'yes', 'phone', 'imessage:w8');
+  expect((await getUserByPhone('+14255550105'))!.step).toBe('name');
+});
+
+test('a consent text Photon refused does not count: their YES gets the disclosure again', async () => {
+  config.transport = 'photon';
+  setDeliverer(async () => {
+    throw new Error('Target not allowed for this project');
+  });
+  await processText('+14255550107', 'hi', 'phone', 'imessage:c1');
+  expect((await one(`SELECT status FROM message_jobs WHERE dedupe_key = 'reply:imessage:c1'`))!.status).toBe('pending');
+  const sent: string[] = [];
+  setDeliverer(async (_phone, text) => void sent.push(text));
+  await processText('+14255550107', 'yes', 'phone', 'imessage:c2');
+  expect(sent).toEqual([CONSENT]);
+  expect((await getUserByPhone('+14255550107'))!.step).toBe('consent');
+  await processText('+14255550107', 'yes', 'phone', 'imessage:c3');
+  expect((await getUserByPhone('+14255550107'))!.step).toBe('name');
+});
+
 test('photon: plan cap reached -> 409 full, nobody created', async () => {
   photon(() => json(403, { succeed: false, data: null, code: 'FORBIDDEN', message: 'Project has reached maxSharedUsers (10)' }));
   const res = await join({ phone: '4255550100' });
@@ -248,4 +323,27 @@ test('admin: delivery records without text; unfinished inbound only', async () =
   expect(JSON.stringify(jobs)).not.toContain('secret text');
   const inbound = await (await adminApi.request('/inbound')).json();
   expect(inbound.map((r: { providerId: string }) => r.providerId).sort()).toEqual(['b', 'c']);
+});
+
+test('admin /note: validated, real users only, stored for the next delivered text', async () => {
+  const note = (body: unknown) =>
+    adminApi.request('/note', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: typeof body === 'string' ? body : JSON.stringify(body) });
+  const u = (await one<{ id: number }>(`INSERT INTO users (phone, seeded) VALUES ('+14255550100', false) RETURNING id`))!;
+  await q(`INSERT INTO users (phone, seeded) VALUES ('+15555550123', true)`);
+  for (const body of [{}, 'not json', { phone: '+14255550100' }, { note: 'hi' }, { phone: '+14255550100', note: '   ' }, { phone: '+14255550100', note: 7 }, { phone: '+14255550100', note: 'x'.repeat(301) }]) {
+    const res = await note(body);
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ ok: false, error: 'phone and note (<= 300 chars) are required' });
+  }
+  expect((await note({ phone: '+14255550199', note: 'hello' })).status).toBe(404);
+  expect((await note({ phone: '+15555550123', note: 'hello' })).status).toBe(404); // demo user
+  expect((await one(`SELECT pending_note FROM users WHERE id = $1`, [u.id]))!.pending_note).toBeNull();
+
+  const ok = await note({ phone: ' +14255550100 ', note: '  sorry for the\n mixup earlier  ' });
+  expect(ok.status).toBe(200);
+  expect(await ok.json()).toEqual({ ok: true });
+  expect((await one(`SELECT pending_note FROM users WHERE id = $1`, [u.id]))!.pending_note).toBe('sorry for the mixup earlier');
+  expect((await note({ phone: '+14255550100', note: 'y'.repeat(300) })).status).toBe(200); // replaces it; 300 is fine
+  expect((await one(`SELECT pending_note FROM users WHERE id = $1`, [u.id]))!.pending_note).toBe('y'.repeat(300));
+  expect((await q(`SELECT 1 FROM messages`)).length).toBe(0); // sends nothing by itself
 });

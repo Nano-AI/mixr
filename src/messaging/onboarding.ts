@@ -33,9 +33,10 @@ const NAME_AGAIN = `what's your full name? (first and last, just letters, up to 
 // One word so far: nothing is saved; the first name rides along in this reply (our own text) until the last name comes.
 const askLast = (first: string): string => `got it, ${first}! and your last name?`;
 const LAST_AGAIN = ' (just your last name, letters only)';
-const ASKED_LAST = /^got it, ([^\s,!?]+)! and your last name\?/;
+const ASKED_LAST = /(?:^|\s)got it, ([^\s,!?]+)! and your last name\?/; // an operator's one-time note may lead it
 const ASK_EMAIL = "what's your @uw.edu email? i use it to keep mixr UW-only.";
-const ASK_CODE = "reply with the 6-digit code from your UW inbox. can't find it? check spam or junk. or text EMAIL to use a different address.";
+// Almost every code email lands in spam/junk, so every text about the code says so first.
+const ASK_CODE = "reply with the 6-digit code i emailed you. check your spam/junk folder first, that's usually where it ends up! text EMAIL to use a different address.";
 const EMAIL_TAKEN = "that email is already connected to another mixr account. if that's not right, reach out to the mixr team.";
 export const CODE_PLACEHOLDER = '[verification code]';
 
@@ -83,15 +84,21 @@ export async function onboard(user: User, text: string): Promise<string> {
 
 async function takeConsent(user: User, word: string, t: Date): Promise<string> {
   // A YES only counts once they've seen what they're agreeing to (a first text of "yes" gets the disclosure): the
-  // consent text, or the welcome unless its delivery is known to have not gone through.
-  const seen = await q<{ text: string }>(
-    `SELECT DISTINCT m.text FROM messages m LEFT JOIN message_jobs j ON j.message_id = m.id
-     WHERE m.user_id = $1 AND m.direction = 'out' AND (m.text = $2 OR (m.text = $3 AND (j.id IS NULL OR j.status = 'sent')))`,
+  // consent text or the welcome, and only if it reached them. Photon accepted its delivery, or it was never queued
+  // (the dashboard, the sim transport); queued but refused or still waiting doesn't count. Matched on the ending:
+  // an operator's one-time note may lead it.
+  const seen = (await one<{ consent: boolean; welcome: boolean }>(
+    `SELECT coalesce(bool_or(right(m.text, length($2::text)) = $2::text), false) AS consent,
+            coalesce(bool_or(right(m.text, length($3::text)) = $3::text), false) AS welcome
+     FROM messages m
+     WHERE m.user_id = $1 AND m.direction = 'out'
+       AND (right(m.text, length($2::text)) = $2::text OR right(m.text, length($3::text)) = $3::text)
+       AND NOT EXISTS (SELECT 1 FROM message_jobs j WHERE j.message_id = m.id AND j.status <> 'sent')`,
     [user.id, CONSENT, WELCOME],
-  );
-  if (!seen.length || !CONSENT_WORDS.includes(word)) {
+  ))!;
+  if (!(seen.consent || seen.welcome) || !CONSENT_WORDS.includes(word)) {
     if (user.step !== 'consent') await setStep(user.id, 'consent');
-    return seen.some((r) => r.text === WELCOME) ? CONSENT_AGAIN : CONSENT;
+    return seen.welcome ? CONSENT_AGAIN : CONSENT;
   }
   await q(`UPDATE users SET consent_at = $2, step = 'name' WHERE id = $1`, [user.id, t.toISOString()]);
   return `you're in! ${ASK_NAME}`;
@@ -190,7 +197,8 @@ async function requestCode(user: User, said: string, t: Date): Promise<string> {
   if (await emailTaken(email, user.id)) return EMAIL_TAKEN;
   // The wait survives wrong codes and expiry (the row is kept until success), so codes can't be farmed.
   const last = await one<{ sent_at: string }>(`SELECT sent_at FROM email_codes WHERE user_id = $1`, [user.id]);
-  if (last && t.getTime() - new Date(last.sent_at).getTime() < RESEND_WAIT_MS) return 'give it a minute before i send another code, then send your @uw.edu address again.';
+  if (last && t.getTime() - new Date(last.sent_at).getTime() < RESEND_WAIT_MS)
+    return 'heads up: my codes almost always land in spam/junk, so check there first! need a new one? give it a minute before i send another code, then send your @uw.edu address again.';
 
   const code = String(randomInt(0, 1_000_000)).padStart(6, '0');
   const salt = randomBytes(16).toString('hex');
@@ -210,7 +218,7 @@ async function requestCode(user: User, said: string, t: Date): Promise<string> {
     [user.id, email, hash, salt, new Date(t.getTime() + CODE_TTL_MS).toISOString(), t.toISOString()],
   );
   await q(`UPDATE users SET email = $2, email_verified = false, step = 'verify' WHERE id = $1`, [user.id, email]);
-  return `sent a 6-digit code to ${email}. reply with it here, it expires in 10 minutes. not seeing it? check spam or junk. (text EMAIL to use a different address)`;
+  return `sent a 6-digit code to ${email}. heads up: it almost always lands in spam/junk, so check there first! reply with the code here (expires in 10 min). text EMAIL to use a different address.`;
 }
 
 async function verify(user: User, said: string, word: string, t: Date): Promise<string> {
@@ -242,7 +250,7 @@ async function verify(user: User, said: string, word: string, t: Date): Promise<
       await setStep(user.id, 'email');
       return 'too many wrong codes. send your @uw.edu address again for a new one.';
     }
-    return "that code doesn't match. check your UW inbox and try again (text EMAIL to use a different address).";
+    return "that code doesn't match. heads up: my codes almost always land in spam/junk, so check there for the newest one! try again, or text EMAIL to use a different address.";
   }
   // One statement, so two phones can't both claim the same address.
   const claimed = await q(

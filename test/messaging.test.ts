@@ -3,6 +3,8 @@ import { fresh, makeUser } from './helpers.ts';
 import { getUserByPhone, one, q, toVec } from '../src/db/index.ts';
 import { config } from '../src/config.ts';
 import { setDeliverer } from '../src/transport/outbox.ts';
+import { send } from '../src/transport/index.ts';
+import { runIn } from '../src/context.ts';
 import type { FakeLlm, AgentRequest } from '../src/llm/index.ts';
 import { markInterrupted, processText, HELP_TEXT, STOP_ACK, MAX_TEXT, RATE_LIMIT, RATE_LIMITED } from '../src/messaging/pipeline.ts';
 import { CONSENT, CODE_PLACEHOLDER, braindumpPrompt, cleanName, setCodeSender } from '../src/messaging/onboarding.ts';
@@ -98,7 +100,10 @@ test('onboarding happy path: consent -> name -> UW email -> code -> the agent ta
   u = await user();
   expect(u).toMatchObject({ step: 'verify', email: 'ana@uw.edu', emailVerified: false });
   expect(codes).toEqual([{ email: 'ana@uw.edu', code: expect.stringMatching(/^\d{6}$/) }]);
-  expect(await lastOut()).toMatch(/check spam or junk/);
+  // Almost every code email lands in spam: the code text says so right after the fact, before anything else.
+  expect(await lastOut()).toBe(
+    'sent a 6-digit code to ana@uw.edu. heads up: it almost always lands in spam/junk, so check there first! reply with the code here (expires in 10 min). text EMAIL to use a different address.',
+  );
   const row = (await one(`SELECT hash, salt FROM email_codes WHERE user_id = $1`, [u.id]))!;
   expect(row.hash).not.toContain(lastCode());
   expect(row.salt).toHaveLength(32);
@@ -261,7 +266,9 @@ test('three wrong codes send them back to the email step; chatter is not a guess
   await say("where's my code?");
   expect((await user()).step).toBe('verify');
   expect((await one(`SELECT attempts FROM email_codes`))!.attempts).toBe(0);
+  expect(await lastOut()).toMatch(/^reply with the 6-digit code i emailed you\. check your spam\/junk folder first/);
   await say(wrong());
+  expect(await lastOut()).toMatch(/^that code doesn't match\. heads up: my codes almost always land in spam\/junk/);
   await say(wrong());
   expect((await user()).step).toBe('verify');
   await say(wrong());
@@ -270,8 +277,10 @@ test('three wrong codes send them back to the email step; chatter is not a guess
   expect(await lastOut()).toMatch(/too many/i);
   // Asking again right away still waits out the minute (attempts don't reset the clock).
   await say('ana@uw.edu');
-  expect(await lastOut()).toMatch(/give it a minute/);
+  expect(await lastOut()).toMatch(/^heads up: my codes almost always land in spam\/junk, so check there first! .*give it a minute/);
   expect(codes).toHaveLength(1);
+  // Every code text stays a comfortable single bubble.
+  expect((await outbox()).every((t) => t.length <= 300)).toBe(true);
 });
 
 test('codes expire after 10 minutes', async () => {
@@ -526,4 +535,66 @@ test('the dashboard /api/inbound route runs the pipeline', async () => {
   expect(await ok.json()).toEqual({ ok: true });
   expect(await outbox('+15550001234')).toEqual(['(fake agent) got: hey']);
   expect((await post({ phone: 'not-a-phone', text: 'hey' })).status).toBe(400);
+});
+
+const pendingNote = async (phone = PHONE) => (await one<{ pending_note: string | null }>(`SELECT pending_note FROM users WHERE phone = $1`, [phone]))!.pending_note;
+const setNote = (note: string, phone = PHONE) => q(`UPDATE users SET pending_note = $2 WHERE phone = $1`, [phone, note]);
+
+test("an operator's note leads the first delivered reply, once, and the conversation carries on", async () => {
+  const sent = capture();
+  await realUser(PHONE);
+  await setNote('sorry for the radio silence');
+  await say('hi');
+  const first = `sorry for the radio silence. ${CONSENT}`; // its own sentence
+  expect(sent).toEqual([{ phone: PHONE, text: first }]);
+  expect(await lastOut()).toBe(first); // the log shows what they got
+  expect(await pendingNote()).toBeNull();
+  // The disclosure (note and all) reached them, so YES opts in; the note doesn't come again.
+  await say('yes');
+  expect((await user()).step).toBe('name');
+  expect(sent.at(-1)!.text).toBe("you're in! what's your full name? (first and last)");
+
+  // Mid-name: the last-name ask still works with a note in front of it. Ends in punctuation: no extra period.
+  await setNote('quick heads up, we fixed a bug!');
+  await say('Ana');
+  expect(sent.at(-1)!.text).toBe('quick heads up, we fixed a bug! got it, Ana! and your last name?');
+  await say('Lee');
+  expect(await user()).toMatchObject({ name: 'Ana Lee', step: 'email' });
+  expect(sent.filter((s) => s.text.includes('heads up, we fixed'))).toHaveLength(1);
+});
+
+test("an operator's note waits when the text isn't delivered: dashboard, sim transport, tapback, STOP acknowledgement", async () => {
+  const id = await realUser(PHONE);
+  await setNote('sorry for the radio silence');
+  // Sim transport: logged only.
+  await say('hi');
+  expect(await lastOut()).toBe(CONSENT);
+  expect(await pendingNote()).toBe('sorry for the radio silence');
+
+  const sent = capture();
+  // Acting as them from the dashboard: nothing goes to their phone.
+  await processText(PHONE, 'hello?', 'dashboard');
+  expect(await lastOut()).toBe(CONSENT);
+  expect(await pendingNote()).toBe('sorry for the radio silence');
+  // A tapback shows no words; the STOP acknowledgement stays exactly the compliance text.
+  await runIn({ pool: 'real', deliver: true }, () => send(id, '❤️', { content: { kind: 'reaction', emoji: '❤️', targetId: null } }));
+  await say('stop');
+  expect(sent.map((s) => s.text)).toEqual(['❤️', STOP_ACK]);
+  expect(await pendingNote()).toBe('sorry for the radio silence');
+  // Opted out: nothing is delivered, so the note keeps waiting; START's reply carries it.
+  await say('START');
+  expect(sent.at(-1)!.text).toBe(`sorry for the radio silence. ${CONSENT}`);
+  expect(await pendingNote()).toBeNull();
+});
+
+test("an operator's note leads a captioned rich text in both the caption and the plain fallback", async () => {
+  const sent = capture();
+  await realUser(PHONE);
+  await setNote('welcome back!');
+  await say('help', 'help-1');
+  const job = (await one<{ text: string; content: { kind: string; caption: string } }>(`SELECT text, content FROM message_jobs WHERE dedupe_key = 'reply:imessage:help-1'`))!;
+  expect(job.text).toBe(`welcome back! ${HELP_TEXT}`);
+  expect(job.content).toMatchObject({ kind: 'richlink', caption: `welcome back! ${HELP_TEXT}` });
+  expect(sent).toHaveLength(1);
+  expect(await pendingNote()).toBeNull();
 });
