@@ -1,9 +1,10 @@
 import { runIn, poolContext } from './context.ts';
 import { runDue } from './jobs/index.ts';
 import { retryPending } from './transport/outbox.ts';
+import { maybeBackup } from './backup.ts';
 
-// Background work for the real pool: due jobs on the wall clock (waves, expiries, profile learning) and
-// delivery retries. Overlapping ticks are skipped, and a failed tick never takes the process down.
+// Background work for the real pool: due jobs on the wall clock (waves, expiries, profile learning),
+// delivery retries, and the nightly database snapshot. Overlapping ticks are skipped, and a failed tick never takes the process down.
 
 const TICK_MS = 15_000; // tune:
 
@@ -18,6 +19,7 @@ export async function tick(): Promise<void> {
       await runDue();
       await retryPending();
     });
+    await maybeBackup();
   } catch (e) {
     console.error('tick failed; will retry:', e instanceof Error ? e.message : e);
   } finally {
