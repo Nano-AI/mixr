@@ -177,8 +177,17 @@ Indicator failures are best-effort and do not block the reply. Duplicate input
 and messages from opted-out users do not trigger indicators (START can resume).
 
 The Photon project profile is named Mixr with its previously generated avatar uploaded.
-The current Free shared line reports `imessageSynced=false`; native name/photo
-sharing is therefore not active. `assets/mixr-contact.vcf` is a saveable contact
+The current Free shared line reports `imessageSynced=false`, so the SDK's automatic
+name/photo sharing is not active.
+
+Right after UW email verification mixr also sends `nativeContactCard()` (Apple's
+"Share Name and Photo") once per user, best effort: errors are logged and swallowed,
+nothing replaces it, and it is not written to the chat log. **Risk:** it always shares
+the *sending account's* own card. On the Free shared line that account is Photon's
+shared number, so the recipient may be offered Photon's (or another tenant's) name and
+photo instead of mixr's. Check it on a real iPhone; if it shows the wrong identity, set
+`IMESSAGE_SHARE_CARD=off` (default on) and restart. The vCard contact card below is
+unaffected. `assets/mixr-contact.vcf` is a saveable contact
 card with the avatar and the current test user's assigned number, +16287896827.
 Do not reuse that number for other shared-line users without checking their
 own `assignedPhoneNumber` records. Photon CLI 2.2.0's avatar upload command
