@@ -236,7 +236,7 @@ if (reduced) {
   });
 
   zoomOut = () => {
-    SLIDES[LAST].t = 900; // the pad is done: the last slide is now the whole phone
+    SLIDES[LAST].t = 700; // the pad is done: the last slide is now the whole phone
     root.classList.remove('end');
     go(LAST);
   };
@@ -267,9 +267,10 @@ if (reduced) {
     // color on past the unlock, off only once clearly back before it
     if (pos.t > 470) reveal.goal = 1;
     else if (pos.t < 420) reveal.goal = 0;
-    // texts land one at a time once the phone has settled; going back rewinds at once
+    // texts land one at a time once the phone has settled; going back plays them out in reverse,
+    // quickly, rather than cutting (a cut reads as a glitch)
     const target = pos.t >= 690 ? SLIDES[slide].chat : 0;
-    if (head > target) chat.seek((head = target));
+    if (head > target) chat.seek((head = Math.max(target, head - dt * 8)));
     else if (head < target) chat.seek((head = Math.min(target, head + dt * speed)));
     // the page turns light as the color reaches the top edge behind the nav (cover ~0.12..0.5; the
     // corners fill last), on the same clock, so nav and background change together
@@ -316,7 +317,7 @@ if (reduced) {
     // color grows out of the black behind the phone; the page settles to light under it
     .add(reveal, { v: [0, 1], duration: 170, ease: 'inOutSine' }, 445)
     .add(phone, { scale: [0.82, 1], y: [100, 0], duration: 90, ease: 'inOutQuad' }, 520)
-    .add(phone, { scale: [1, () => zoom().z], y: [0, () => zoom().y], duration: 100, ease: 'inOutCubic' }, 900)
+    .add(phone, { scale: [1, () => zoom().z], y: [0, () => zoom().y], duration: 300, ease: 'inOutSine' }, 700)
     // keeps the timeline exactly 1000 long, so slide times are story times
     .add({ t: 0 }, { t: 1, duration: 1 }, 999);
 
