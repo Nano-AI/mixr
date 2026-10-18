@@ -1,7 +1,13 @@
 import { test, expect } from 'vitest';
-import { fresh, T0 } from './helpers.ts';
+import { mkdtempSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { fresh, makeUser, T0 } from './helpers.ts';
 import { q } from '../src/db/index.ts';
-import { importUwEvents, isStudentRelevant, parseIcs, scrubPii, type UwEvent } from '../src/calendar/uw.ts';
+import { config } from '../src/config.ts';
+import { poolContext, runIn } from '../src/context.ts';
+import { runTool } from '../src/agent/tools.ts';
+import { archiveSnapshot, campusEvents, importUwEvents, isStudentRelevant, parseIcs, scrubPii, type UwEvent } from '../src/calendar/uw.ts';
 
 // Invented events, people and contacts (example.com, 555 numbers only). T0 is Tue 2026-10-20 noon PDT.
 const ICS = [
@@ -105,4 +111,73 @@ test('importUwEvents: demo pool, discover-only, idempotent by UID', async () => 
     expect(r.next_wave_at).toBeNull();
   }
   expect((await q(`SELECT 1 FROM jobs WHERE kind = 'wave'`)).length).toBe(0); // never invites anyone
+});
+
+// ---------- campus events in discover_events ----------
+
+const H = 3600_000;
+const uwEvent = (uid: string, title: string, inHours: number, description = '', location = 'HUB 145'): UwEvent => ({
+  uid, title, startsAt: new Date(Date.now() + inHours * H).toISOString(), endsAt: null, allDay: false, location, description,
+  url: `https://example.com/events/${uid}`,
+});
+// Invented events, relative to the wall clock (the real pool's clock).
+const CAMPUS = [
+  uwEvent('c1', 'Pottery Wheel Open Studio', 20, 'Throw clay on the wheel, all levels welcome.'),
+  uwEvent('c2', 'Intro to Bouldering Night', 50, 'Climbing wall session, shoes provided.', 'Intramural Activities Building'),
+  uwEvent('c3', 'Jazz Combo Concert', 30, 'Student jazz ensembles perform.'),
+  uwEvent('c4', 'Last Week Film Screening', -48, 'Already happened.'),
+  uwEvent('c5', 'Payroll Staff Training', 10, 'For staff only.'),
+  uwEvent('c6', 'Far Future Gala', 30 * 24, 'More than two weeks out.'),
+];
+const real = poolContext('real');
+
+const realUser = async () =>
+  (await q<{ id: number }>(`INSERT INTO users (phone, name, state, canonical_profile, seeded) VALUES ('+15550100777', 'Real Riley', 'active', 'board games', false) RETURNING id`))[0].id;
+
+// Points snapshotDir() at a temp dir for the call. The DB is already open, so nothing else reads config.dbDir now.
+async function withSnapshot<T>(events: UwEvent[] | null, fn: () => Promise<T>): Promise<T> {
+  const was = config.dbDir;
+  config.dbDir = join(mkdtempSync(join(tmpdir(), 'mixr-uw-')), 'pglite');
+  try {
+    if (events) archiveSnapshot(events);
+    return await fn();
+  } finally {
+    config.dbDir = was;
+  }
+}
+
+test('discover_events: a real user gets upcoming campus events (soonest first, no past/far/staff); demo users do not', async () => {
+  await fresh();
+  const id = await realUser();
+  const demo = await makeUser('Demo Dana', 'board games');
+  const [out, demoOut] = (await withSnapshot(CAMPUS, async () => [
+    await runIn(real, () => runTool(id, 'discover_events', '{"query":null}')),
+    await runTool(demo, 'discover_events', '{"query":null}'),
+  ])).map((r) => r.result as any);
+  expect(out.campus_events.map((e: any) => e.title)).toEqual(['Pottery Wheel Open Studio', 'Jazz Combo Concert', 'Intro to Bouldering Night']);
+  expect(out.campus_events[0]).toMatchObject({ location: 'HUB 145', url: 'https://example.com/events/c1', starts_at: expect.stringMatching(/^\w{3}, \w{3} \d+, \d+:\d{2} [AP]M$/) });
+  expect(demoOut.campus_events).toEqual([]); // the demo pool has them as imported events instead
+});
+
+test('campus events: ranked by relevance to the request', async () => {
+  await fresh();
+  const top = await withSnapshot(CAMPUS, () => runIn(real, () => campusEvents('climbing bouldering wall')));
+  expect(top[0].title).toBe('Intro to Bouldering Night');
+  expect(top).toHaveLength(3);
+});
+
+test('campus events: no snapshot means none, no crash', async () => {
+  await fresh();
+  const id = await realUser();
+  const out = (await withSnapshot(null, () => runIn(real, () => runTool(id, 'discover_events', '{"query":"pottery"}')))).result as any;
+  expect(out.campus_events).toEqual([]);
+});
+
+test('campus events: a newer snapshot replaces the cached one', async () => {
+  await fresh();
+  const dir = mkdtempSync(join(tmpdir(), 'mixr-uw-'));
+  writeFileSync(join(dir, '2026-10-01.json'), JSON.stringify(CAMPUS));
+  expect((await runIn(real, () => campusEvents(undefined, dir))).map((e) => e.uid)).toEqual(['c1', 'c3', 'c2']);
+  writeFileSync(join(dir, '2026-10-02.json'), JSON.stringify([uwEvent('n1', 'Chess Club Social', 5)]));
+  expect((await runIn(real, () => campusEvents(undefined, dir))).map((e) => e.uid)).toEqual(['n1']);
 });

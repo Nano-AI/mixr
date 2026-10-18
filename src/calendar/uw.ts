@@ -1,10 +1,12 @@
-import { mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { config } from '../config.ts';
 import { one, q } from '../db/index.ts';
 import { HOUR, now } from '../clock.ts';
 import { poolContext, runIn } from '../context.ts';
 import { createEvent } from '../events/index.ts';
+import { embed, embedOne } from '../llm/embed.ts';
+import { dot } from '../vec.ts';
 
 // UW's public events calendar (washington.edu/calendar runs on Trumba, web name "sea_campus"). Pulled once a day,
 // scrubbed, and archived as JSON so we keep history after events drop off the feed. The import step copies
@@ -149,14 +151,19 @@ export function archiveSnapshot(events: UwEvent[], dir = snapshotDir()): string 
   return file;
 }
 
-export function latestSnapshot(dir = snapshotDir()): UwEvent[] | null {
-  let files: string[];
+// Path of the newest YYYY-MM-DD.json in `dir`, or null.
+function newestSnapshotFile(dir: string): string | null {
   try {
-    files = readdirSync(dir).filter((f) => /^\d{4}-\d{2}-\d{2}\.json$/.test(f)).sort();
+    const f = readdirSync(dir).filter((f) => /^\d{4}-\d{2}-\d{2}\.json$/.test(f)).sort().at(-1);
+    return f ? join(dir, f) : null;
   } catch {
     return null;
   }
-  return files.length ? (JSON.parse(readFileSync(join(dir, files.at(-1)!), 'utf8')) as UwEvent[]) : null;
+}
+
+export function latestSnapshot(dir = snapshotDir()): UwEvent[] | null {
+  const file = newestSnapshotFile(dir);
+  return file ? (JSON.parse(readFileSync(file, 'utf8')) as UwEvent[]) : null;
 }
 
 export async function syncUwCalendar(): Promise<string | null> {
@@ -191,6 +198,40 @@ export const isStudentRelevant = (e: UwEvent): boolean =>
   !SKIP_TITLE.test(e.title) &&
   !SKIP_CATEGORY.test(e.category ?? '') &&
   !SKIP_LOCATION.test(e.location);
+
+// ---------- campus events for discover_events (read-only) ----------
+
+const CAMPUS_MAX = 5; // tune: campus events per discover result
+const CAMPUS_WINDOW = 14 * DAY; // tune: how far ahead discover looks
+
+// Newest snapshot's student-relevant events, plus embeddings filled in on first ranked use. Reloaded when a newer
+// file shows up (or today's is rewritten). Never fetches: no snapshot = no campus events.
+let campus: { key: string; events: UwEvent[]; vecs: Map<string, number[]> } | null = null;
+
+// Upcoming (now .. +14 days) student-relevant UW calendar events, one per title. With a query: closest by embedding
+// first; without: soonest first.
+export async function campusEvents(query?: string, dir = snapshotDir()): Promise<UwEvent[]> {
+  const file = newestSnapshotFile(dir);
+  if (!file) return [];
+  const key = `${file}:${statSync(file).mtimeMs}`;
+  if (campus?.key !== key) campus = { key, events: (JSON.parse(readFileSync(file, 'utf8')) as UwEvent[]).filter(isStudentRelevant), vecs: new Map() };
+  const c = campus;
+  const t = (await now()).getTime();
+  const seen = new Set<string>();
+  const upcoming = c.events
+    .filter((e) => Date.parse(e.startsAt) > t && Date.parse(e.startsAt) < t + CAMPUS_WINDOW)
+    .sort((a, b) => a.startsAt.localeCompare(b.startsAt))
+    .filter((e) => !seen.has(e.title.toLowerCase()) && !!seen.add(e.title.toLowerCase())); // weekly series: first only
+  if (!query?.trim()) return upcoming.slice(0, CAMPUS_MAX);
+  const missing = upcoming.filter((e) => !c.vecs.has(e.uid));
+  if (missing.length) (await embed(missing.map((e) => `${e.title}\n${e.description}`))).forEach((v, i) => c.vecs.set(missing[i].uid, v));
+  const qv = await embedOne(query.trim());
+  return upcoming
+    .map((e) => ({ e, s: dot(qv, c.vecs.get(e.uid)!) }))
+    .sort((a, b) => b.s - a.s)
+    .slice(0, CAMPUS_MAX)
+    .map((x) => x.e);
+}
 
 export const DEMO_HOST = { name: 'UW Events', phone: '+12065550199' }; // invented demo user, fictional 555-01xx
 const WINDOW = 14 * DAY; // tune: how far ahead to import
