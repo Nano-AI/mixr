@@ -1,0 +1,182 @@
+[
+ {
+  "type": "exact",
+  "text": "tennis 4.0",
+  "expected": [ "+12065550106", "+12065550136", "+12065550140" ],
+  "names": [ "Kenji Watanabe", "Daniel Cho", "Alex Novak" ]
+ },
+ {
+  "type": "exact",
+  "text": "USTA 4.5 tennis hitting partner",
+  "expected": [ "+12065550101" ],
+  "names": [ "Maya Chen" ]
+ },
+ {
+  "type": "exact",
+  "text": "Seattle Bouldering Project",
+  "expected": [ "+12065550107", "+12065550108", "+12065550111", "+12065550141", "+12065550145" ],
+  "names": [ "Aaliyah Brooks", "Lucas Martins", "Noor Haddad", "Nadia Petrova", "Elena Popescu" ]
+ },
+ {
+  "type": "exact",
+  "text": "ESP32",
+  "expected": [ "+12065550108", "+12065550117", "+12065550138", "+12065550140", "+12065550142" ],
+  "names": [ "Lucas Martins", "Ravi Patel", "Kofi Mensah", "Alex Novak", "Jake Morrison" ]
+ },
+ {
+  "type": "exact",
+  "text": "DubHacks",
+  "expected": [ "+12065550117", "+12065550136", "+12065550143" ],
+  "names": [ "Ravi Patel", "Daniel Cho", "Amara Obi" ]
+ },
+ {
+  "type": "exact",
+  "text": "Valorant",
+  "expected": [ "+12065550106", "+12065550130", "+12065550131", "+12065550132", "+12065550138" ],
+  "names": [ "Kenji Watanabe", "Aiden Park", "Fatima Diallo", "Tyler Brennan", "Kofi Mensah" ]
+ },
+ {
+  "type": "exact",
+  "text": "Super Smash Bros",
+  "expected": [ "+12065550114", "+12065550132", "+12065550133", "+12065550142" ],
+  "names": [ "Marcus Johnson", "Tyler Brennan", "Jasmine Wu", "Jake Morrison" ]
+ },
+ {
+  "type": "exact",
+  "text": "Catan",
+  "expected": [ "+12065550101", "+12065550114", "+12065550126" ],
+  "names": [ "Maya Chen", "Marcus Johnson", "Nate Sullivan" ]
+ },
+ {
+  "type": "exact",
+  "text": "Wingspan",
+  "expected": [ "+12065550101", "+12065550115", "+12065550141" ],
+  "names": [ "Maya Chen", "Isabella Garcia", "Nadia Petrova" ]
+ },
+ {
+  "type": "exact",
+  "text": "Lichess",
+  "expected": [ "+12065550104", "+12065550123", "+12065550130" ],
+  "names": [ "Ethan Okafor", "Leila Ahmadi", "Aiden Park" ]
+ },
+ {
+  "type": "exact",
+  "text": "Neumos",
+  "expected": [ "+12065550103", "+12065550120" ],
+  "names": [ "Priya Raman", "Grace Liu" ]
+ },
+ {
+  "type": "exact",
+  "text": "Green Lake",
+  "expected": [ "+12065550111", "+12065550122", "+12065550129", "+12065550141", "+12065550145" ],
+  "names": [ "Noor Haddad", "Zoe Anderson", "Ruby Thompson", "Nadia Petrova", "Elena Popescu" ]
+ },
+ {
+  "type": "exact",
+  "text": "Enchantments",
+  "expected": [ "+12065550110", "+12065550135" ],
+  "names": [ "Diego Hernandez", "Olivia Martinez" ]
+ },
+ {
+  "type": "exact",
+  "text": "Dungeons and Dragons",
+  "expected": [ "+12065550115" ],
+  "names": [ "Isabella Garcia" ]
+ },
+ {
+  "type": "exact",
+  "text": "Denny Field",
+  "expected": [ "+12065550146", "+12065550150" ],
+  "names": [ "Mateo Ramirez", "Maddie Kowalski" ]
+ },
+ {
+  "type": "semantic",
+  "text": "someone to go on photo walks with",
+  "expected": [ "+12065550103", "+12065550118", "+12065550120", "+12065550134", "+12065550135", "+12065550140", "+12065550143" ],
+  "names": [ "Priya Raman", "Emily Larsen", "Grace Liu", "Elliot Grayson", "Olivia Martinez", "Alex Novak", "Amara Obi" ]
+ },
+ {
+  "type": "semantic",
+  "text": "gym buddy to lift weights with",
+  "expected": [ "+12065550147" ],
+  "names": [ "Kai Hoffmann" ]
+ },
+ {
+  "type": "semantic",
+  "text": "someone to vibe code with and build an app",
+  "expected": [ "+12065550117", "+12065550136", "+12065550138", "+12065550141" ],
+  "names": [ "Ravi Patel", "Daniel Cho", "Kofi Mensah", "Nadia Petrova" ]
+ },
+ {
+  "type": "semantic",
+  "text": "someone who wants to bake together",
+  "expected": [ "+12065550105", "+12065550115", "+12065550126", "+12065550139", "+12065550142" ],
+  "names": [ "Sofia Rossi", "Isabella Garcia", "Nate Sullivan", "Lily Zhang", "Jake Morrison" ]
+ },
+ {
+  "type": "semantic",
+  "text": "people to go to concerts with",
+  "expected": [ "+12065550103", "+12065550112", "+12065550120", "+12065550121", "+12065550122", "+12065550124", "+12065550141" ],
+  "names": [ "Priya Raman", "Ben Whitaker", "Grace Liu", "Jamal Wright", "Zoe Anderson", "Sam Rivera", "Nadia Petrova" ]
+ },
+ {
+  "type": "semantic",
+  "text": "a climbing partner who can lead outdoors",
+  "expected": [ "+12065550110" ],
+  "names": [ "Diego Hernandez" ]
+ },
+ {
+  "type": "semantic",
+  "text": "someone chill to learn climbing with, i am new",
+  "expected": [ "+12065550109", "+12065550112" ],
+  "names": [ "Hannah Kim", "Ben Whitaker" ]
+ },
+ {
+  "type": "semantic",
+  "text": "running buddy for my first half marathon",
+  "expected": [ "+12065550111", "+12065550137" ],
+  "names": [ "Noor Haddad", "Sarah Goldberg" ]
+ },
+ {
+  "type": "semantic",
+  "text": "someone to try new restaurants with",
+  "expected": [ "+12065550120", "+12065550125", "+12065550127", "+12065550143" ],
+  "names": [ "Grace Liu", "Ananya Iyer", "Mei Tanaka", "Amara Obi" ]
+ },
+ {
+  "type": "semantic",
+  "text": "someone into japanese comics",
+  "expected": [ "+12065550109", "+12065550113", "+12065550127", "+12065550131", "+12065550144" ],
+  "names": [ "Hannah Kim", "Chloe Nguyen", "Mei Tanaka", "Fatima Diallo", "Hiro Sato" ]
+ },
+ {
+  "type": "semantic",
+  "text": "a startup cofounder",
+  "expected": [ "+12065550117", "+12065550136", "+12065550137", "+12065550139", "+12065550141", "+12065550143" ],
+  "names": [ "Ravi Patel", "Daniel Cho", "Sarah Goldberg", "Lily Zhang", "Nadia Petrova", "Amara Obi" ]
+ },
+ {
+  "type": "semantic",
+  "text": "someone to kick a ball around with casually on weekends",
+  "expected": [ "+12065550146", "+12065550148" ],
+  "names": [ "Mateo Ramirez", "Zara Ahmed" ]
+ },
+ {
+  "type": "semantic",
+  "text": "someone to jam with on an instrument",
+  "expected": [ "+12065550119", "+12065550121", "+12065550123", "+12065550124", "+12065550140" ],
+  "names": [ "Tomás Silva", "Jamal Wright", "Leila Ahmadi", "Sam Rivera", "Alex Novak" ]
+ },
+ {
+  "type": "semantic",
+  "text": "someone to go dancing with",
+  "expected": [ "+12065550146" ],
+  "names": [ "Mateo Ramirez" ]
+ },
+ {
+  "type": "semantic",
+  "text": "a cozy cooperative game night",
+  "expected": [ "+12065550109", "+12065550115", "+12065550141" ],
+  "names": [ "Hannah Kim", "Isabella Garcia", "Nadia Petrova" ]
+ }
+]
