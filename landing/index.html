@@ -147,21 +147,23 @@
   <section class="last" id="last" role="dialog" aria-modal="true" aria-labelledby="lastHead" aria-describedby="lastWhy" hidden>
     <div class="last-in">
       <div class="last-main">
-        <h2 class="last-head" id="lastHead" tabindex="-1"><span class="last-kicker">one more step<span class="sr">:</span></span> text mixr to finish signing up</h2>
-        <p class="last-why" id="lastWhy">mixr can't text you first — send any message to your mixr number and it'll reply right away.</p>
+        <h2 class="last-head" id="lastHead" tabindex="-1">text mixr to finish signing up</h2>
+        <p class="last-why" id="lastWhy">text literally anything to the number below</p>
         <button class="last-num" id="lastNum" type="button">
           <span class="last-num-top"><img src="brand/mixr-icon.svg" alt="">your mixr number<span class="last-tip" id="lastTip">copy</span></span>
           <span class="last-val" id="lastVal"></span>
         </button>
         <p class="sr" id="lastSaid" aria-live="polite"></p>
-        <a class="last-go" id="lastGo" href="#">text mixr now</a>
-        <p class="last-save">this is your personal mixr line — save it as mixr. <a href="#" id="lastContact">add to contacts</a></p>
+        <div class="last-acts">
+          <a class="last-go" id="lastGo" href="#">text mixr now</a>
+          <button type="button" class="last-contact" id="lastContact">add mixr to contacts</button>
+        </div>
       </div>
       <div class="last-qr" id="lastQR">
         <div class="last-code" id="lastCode" role="img" aria-label="QR code that opens Messages to your mixr number with hi mixr typed"></div>
-        <p class="last-cap">scan with your phone's camera<small>opens Messages with “hi mixr” typed</small></p>
+        <p class="last-cap">scan with your phone's camera</p>
       </div>
-      <p class="last-over"><span id="lastOverLead">entered the wrong number?</span> <button type="button" id="lastRestart">start over</button></p>
+      <p class="last-over"><span id="lastOverLead"></span> <button type="button" id="lastRestart">start over</button></p>
     </div>
   </section>
 </body>

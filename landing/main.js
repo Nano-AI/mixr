@@ -12,10 +12,10 @@ const API = (window.MIXR_API || (!PROD && query.get('api')) || (PROD ? 'https://
 const MOCK = query.get('mock') ?? (PROD || window.MIXR_API || query.get('api') ? null : 'ok');
 const SMS = document.body.dataset.sms; // set data-sms="+1..." on <body> to offer a text-us fallback
 
-// a join is remembered ({number, link}), so a reload or a return visit opens straight on the last step.
-// Mock joins keep their own key, so a fake number never shows up against a real server; ?mock=full|error|offline
-// start fresh so those states are one load away.
-const SAVED = MOCK ? 'mixr.line.mock' : 'mixr.line';
+// a real join is remembered ({number, link}), so a reload or a return visit opens straight on the last step.
+// Mock joins aren't, so a local preview always starts from the top; ?last opens straight on the last step
+// with a made-up number instead.
+const SAVED = 'mixr.line';
 const store = {
   get() {
     try {
@@ -25,10 +25,10 @@ const store = {
       return null;
     }
   },
-  set: (v) => { try { localStorage.setItem(SAVED, JSON.stringify(v)); } catch {} },
+  set: (v) => { if (!MOCK) try { localStorage.setItem(SAVED, JSON.stringify(v)); } catch {} },
   clear: () => { try { localStorage.removeItem(SAVED); } catch {} },
 };
-const saved = !MOCK || MOCK === 'ok' ? store.get() : null;
+const saved = MOCK ? (query.has('last') ? { number: '+12065550142', link: '' } : null) : store.get();
 
 const $ = (s) => document.querySelector(s);
 const phone = $('#phone');
@@ -552,13 +552,17 @@ const lastSaid = $('#lastSaid');
 const lastGo = $('#lastGo');
 const lastContact = $('#lastContact');
 const lastQR = $('#lastQR');
-const TIP = touch ? 'tap to copy' : 'click to copy';
+// ?device=phone|mac|desktop previews another device's version of this screen (e.g. from a Linux laptop).
+const SIM = ['phone', 'mac', 'desktop'].includes(query.get('device')) ? query.get('device') : null;
+const asTouch = SIM ? SIM === 'phone' : touch;
+const asMac = SIM ? SIM === 'mac' : mac;
+const TIP = asTouch ? 'tap to copy' : 'click to copy';
 let lastLine = null; // { e164, pretty } of the number on screen
 let lastTimer = 0;
 let copyTimer = 0;
-last.classList.toggle('by-touch', touch); // not .touch: that's the lock screen's finger
-lastGo.hidden = lastContact.hidden = !(touch || mac);
-if (touch) {
+last.classList.toggle('by-touch', asTouch); // not .touch: that's the lock screen's finger
+lastGo.hidden = lastContact.hidden = !(asTouch || asMac);
+if (asTouch) {
   const more = Object.assign(document.createElement('details'), { className: 'last-more' });
   more.append(Object.assign(document.createElement('summary'), { textContent: 'texting from another phone? show a QR code' }));
   lastQR.replaceWith(more);
@@ -603,11 +607,11 @@ function openLast({ number, link }, returning = false) {
   } catch {}
   lastGo.href = href;
   // a Mac opens a web link in a new tab, keeping this page (and the number) open
-  if (!touch && href.startsWith('https:')) Object.assign(lastGo, { target: '_blank', rel: 'noopener' });
+  if (!asTouch && href.startsWith('https:')) Object.assign(lastGo, { target: '_blank', rel: 'noopener' });
   else lastGo.removeAttribute('target');
   lastVal.textContent = pretty;
   lastTip.textContent = TIP;
-  $('#lastOverLead').textContent = returning ? 'not you?' : 'entered the wrong number?';
+  $('#lastOverLead').textContent = returning ? 'not you?' : '';
   drawQR(smsTo(e164));
 
   finished = true;
