@@ -28,6 +28,23 @@ async function setStatus(id: number, status: Intro['status'], message: string | 
 
 // Strip a trailing period so the reason reads naturally mid-sentence.
 const clause = (s: string) => s.trim().replace(/[.!\s]+$/, '');
+const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+// The intro ask's middle, from whatever reason the agent passed: a noun phrase ("a 4.5 hitting partner"), or a
+// sentence about the requester ("Maya is into hackathons...", "is into chess", "into chess"). Names the requester
+// once, by first name only (a full name in the reason never leaks the last name).
+export function introLine(requesterName: string | null | undefined, reason: string): string {
+  const name = firstName(requesterName);
+  let r = clause(reason);
+  for (const n of [requesterName?.trim(), name]) {
+    if (n) r = r.replace(new RegExp(`^${escapeRe(n)}(?:['’]s)?\\b`, 'i'), (m) => (/['’]s$/i.test(m) ? 'is' : '')).trim();
+  }
+  if (/^(is|was|has|wants|would|likes|loves|enjoys|plays|needs|does|can|just|really|also|mostly)\b/i.test(r)) return `${name} ${r}`;
+  if (/^(looking|hoping|trying|into|down|new|interested|keen)\b/i.test(r)) return `${name} is ${r}`;
+  // "A chess partner" -> "a chess partner", but leave acronyms ("AI startups") alone.
+  const np = /^[A-Z](?![A-Z])/.test(r) ? r[0].toLowerCase() + r.slice(1) : r;
+  return `${name} on campus is looking for ${np}`;
+}
 
 // Requester said yes to a match: create the intro and text the target asking if they're open to it.
 export async function requestIntro(requesterId: number, targetId: number, reason: string): Promise<Intro> {
@@ -49,7 +66,7 @@ export async function requestIntro(requesterId: number, targetId: number, reason
   const intro = rowToIntro(r!);
   await send(
     targetId,
-    `hey ${firstName(target.name)}! ${firstName(requester.name)} on campus is looking for ${clause(reason)}. want me to connect you two?`,
+    `hey ${firstName(target.name)}! ${introLine(requester.name, reason)}. want me to connect you two?`,
   );
   await schedule('expire_intro', { introId: intro.id }, new Date(t.getTime() + INTRO_TTL));
   publish({ type: 'state' });

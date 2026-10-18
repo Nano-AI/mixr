@@ -86,3 +86,24 @@ test('expires after 24h via the expire_intro job', async () => {
   expect(toReq).not.toContain(tgtUser.phone);
   expect((await respondToIntro(tgt, intro.id, true)).status).toBe('expired');
 });
+
+test('intro ask reads right whatever shape the reason comes in (sentence, "is into", noun phrase)', async () => {
+  const { introLine } = await import('../src/relay/index.ts');
+  // The real transcript: the reason was a sentence about the requester, and the template named them twice.
+  const { req, tgt } = await pair();
+  await requestIntro(req, tgt, 'Maya is into hackathons and AI startups, and wants to meet someone building side projects.');
+  expect((await texts(tgt))[0]).toBe('hey Jordan! Maya is into hackathons and AI startups, and wants to meet someone building side projects. want me to connect you two?');
+
+  expect(introLine('Maya Lopez', 'a 4.5 tennis hitting partner.')).toBe('Maya on campus is looking for a 4.5 tennis hitting partner');
+  expect(introLine('Maya Lopez', 'A chess partner')).toBe('Maya on campus is looking for a chess partner');
+  expect(introLine('Maya Lopez', 'someone to play poker with')).toBe('Maya on campus is looking for someone to play poker with');
+  expect(introLine('Maya Lopez', 'is into chess and poker')).toBe('Maya is into chess and poker');
+  expect(introLine('Maya Lopez', 'into chess and poker')).toBe('Maya is into chess and poker');
+  expect(introLine('Maya Lopez', "maya's into jazz piano")).toBe('Maya is into jazz piano');
+  expect(introLine('Maya Lopez', 'Maya’s into jazz piano')).toBe('Maya is into jazz piano');
+  expect(introLine('Maya Lopez', 'looking for a climbing buddy')).toBe('Maya is looking for a climbing buddy');
+  expect(introLine('Maya Lopez', 'wants a doubles partner')).toBe('Maya wants a doubles partner');
+  // Never leak the last name, even if the agent wrote the full name into the reason.
+  expect(introLine('Maya Lopez', 'Maya Lopez wants a climbing buddy')).toBe('Maya wants a climbing buddy');
+  expect(introLine('Maya Lopez', 'AI startup cofounders')).toBe('Maya on campus is looking for AI startup cofounders');
+});
