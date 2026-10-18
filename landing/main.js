@@ -329,6 +329,9 @@ if (reduced) {
       onUpdate: () => story.seek(pos.t),
       onComplete: () => (move = null),
     });
+    // a zero-length move (same zoom, only the chat advances) completes before `move` is assigned: clear it here,
+    // or autoplay waits on it forever
+    if (!d) move = null;
   };
 
   const chase = (now) => {
