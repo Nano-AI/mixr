@@ -4,13 +4,31 @@ import { startGlow } from './glow.js';
 // sign-up server: api.joinmixr.club on joinmixr.club, a local one anywhere else.
 // Overrides for testing: window.MIXR_API (set before this script), or ?api=https://… on any host but
 // joinmixr.club (there, a shared link could send people's numbers elsewhere).
-// ?mock=ok|welcome|full|error|offline skips the network and answers with a canned response. Off joinmixr.club the
+// ?mock=ok|full|error|offline skips the network and answers with a canned response. Off joinmixr.club the
 // default is ?mock=ok (a demo works with no backend); pass ?api=… or set MIXR_API to use a real one.
 const query = new URLSearchParams(location.search);
 const PROD = /(^|\.)joinmixr\.club$/.test(location.hostname);
 const API = (window.MIXR_API || (!PROD && query.get('api')) || (PROD ? 'https://api.joinmixr.club' : 'http://localhost:8787')).replace(/\/+$/, '');
 const MOCK = query.get('mock') ?? (PROD || window.MIXR_API || query.get('api') ? null : 'ok');
 const SMS = document.body.dataset.sms; // set data-sms="+1..." on <body> to offer a text-us fallback
+
+// a join is remembered ({number, link}), so a reload or a return visit opens straight on the last step.
+// Mock joins keep their own key, so a fake number never shows up against a real server; ?mock=full|error|offline
+// start fresh so those states are one load away.
+const SAVED = MOCK ? 'mixr.line.mock' : 'mixr.line';
+const store = {
+  get() {
+    try {
+      const v = JSON.parse(localStorage.getItem(SAVED));
+      return v && typeof v.number === 'string' && /\d{7}/.test(v.number) ? v : null;
+    } catch {
+      return null;
+    }
+  },
+  set: (v) => { try { localStorage.setItem(SAVED, JSON.stringify(v)); } catch {} },
+  clear: () => { try { localStorage.removeItem(SAVED); } catch {} },
+};
+const saved = !MOCK || MOCK === 'ok' ? store.get() : null;
 
 const $ = (s) => document.querySelector(s);
 const phone = $('#phone');
@@ -80,6 +98,7 @@ let digits = '';
 let busy = false;
 let kbOn = false;
 let joined = false; // number sent: the conversation is over, the field stays shut
+let finished = false; // the last-step screen is up: the story underneath ignores scroll, swipe, clicks and keys
 const num = $('#num'); // real (visually hidden) input: keyboard, paste and autofill all land here
 // touch screens type on the drawn pad; focusing the hidden input there makes iOS Safari scroll it
 // into view (preventScroll or not), which shifts the whole fixed page
@@ -146,7 +165,7 @@ num.addEventListener('keydown', (e) => {
 });
 // a digit typed anywhere on the page jumps to the phone and starts the number
 addEventListener('keydown', (e) => {
-  if (joined || e.target === num || e.metaKey || e.ctrlKey || e.altKey || !/^\d$/.test(e.key)) return;
+  if (joined || finished || e.target === num || e.metaKey || e.ctrlKey || e.altKey || !/^\d$/.test(e.key)) return;
   e.preventDefault();
   go(Infinity);
   openKeypad();
@@ -297,7 +316,7 @@ if (reduced) {
     document.body.append(cur);
     addEventListener('mousemove', (e) => {
       cur.style.transform = `translate(${e.clientX}px, ${e.clientY}px)`;
-      root.classList.toggle('cursoring', slide < LAST && !busyTarget(e.target));
+      root.classList.toggle('cursoring', !finished && slide < LAST && !busyTarget(e.target));
     }, { passive: true });
     document.documentElement.addEventListener('mouseleave', () => root.classList.remove('cursoring'));
   }
@@ -405,6 +424,7 @@ if (reduced) {
   let peak = 0; // biggest avg so far in this gesture
   let low = 0; // smallest avg since that peak
   addEventListener('wheel', (e) => {
+    if (finished) return; // the last-step screen scrolls natively
     e.preventDefault();
     const now = performance.now();
     const d = Math.abs(e.deltaY);
@@ -427,9 +447,9 @@ if (reduced) {
   }, { passive: false });
   let touchY = null;
   addEventListener('touchstart', (e) => (touchY = e.touches[0].clientY), { passive: true });
-  addEventListener('touchmove', (e) => e.cancelable && e.preventDefault(), { passive: false });
+  addEventListener('touchmove', (e) => !finished && e.cancelable && e.preventDefault(), { passive: false });
   addEventListener('touchend', (e) => {
-    if (touchY === null) return;
+    if (touchY === null || finished) return;
     const dy = touchY - e.changedTouches[0].clientY;
     touchY = null;
     if (Math.abs(dy) > 40) go(slide + Math.sign(dy));
@@ -439,16 +459,18 @@ if (reduced) {
   addEventListener('pointerdown', (e) => (pointer = e.pointerType));
   addEventListener('click', (e) => {
     // mouse clicks advance too; touch taps are handled above
-    if (pointer === 'mouse' && !busyTarget(e.target) && slide < LAST) go(slide + 1);
+    if (pointer === 'mouse' && !finished && !busyTarget(e.target) && slide < LAST) go(slide + 1);
   });
   addEventListener('keydown', (e) => {
-    if (e.target === num || (e.key === ' ' && busyTarget(e.target))) return; // space presses a focused button
+    if (finished || e.target === num || (e.key === ' ' && busyTarget(e.target))) return; // space presses a focused button
     if (['ArrowDown', 'PageDown', ' '].includes(e.key)) go(slide + 1);
     else if (['ArrowUp', 'PageUp'].includes(e.key)) go(slide - 1);
     else return;
     e.preventDefault();
   });
-  go(location.hash === '#join' ? Infinity : 0); // /#join (the CTA on the other pages) opens on the number pad
+  // /#join (the CTA on the other pages) opens on the number pad; so does a return visit, under the last step,
+  // so "start over" lands on the pad
+  go(saved || location.hash === '#join' ? Infinity : 0);
 }
 
 // the one load-in moment: the hero settles into place
@@ -463,6 +485,7 @@ $('#toJoin').addEventListener('click', (e) => {
 function bubble(cls, content) {
   const p = document.createElement('p');
   p.className = cls;
+  p.dataset.live = ''; // not part of the story: "start over" clears these
   if (content instanceof Node) p.append(content);
   else p.textContent = content;
   p.style.transformOrigin = origin(p);
@@ -484,11 +507,11 @@ const say = async (content, cls = 'b them') => {
   return bubble(cls, content);
 };
 
-// POST {phone} → 200 {ok, number, link, welcome} | 409 {full} | 400/429/5xx {error}. joining hands you your own
-// mixr number, and `link` opens Messages to it with "hi mixr" typed; welcome = mixr just texted you first
+// POST {phone} → 200 {ok, number, link} | 409 {full} | 400/429/5xx {error}. joining hands you your own mixr
+// number, and `link` opens Messages to it with "hi mixr" typed. mixr can't text first (Photon's shared line only
+// replies), so any `welcome` flag is ignored: the sign-up finishes when they text that number.
 const MOCKS = {
   ok: [200, { ok: true, number: '+16285551234', link: 'sms:+16285551234&body=hi%20mixr' }],
-  welcome: [200, { ok: true, number: '+16285551234', link: 'sms:+16285551234&body=hi%20mixr', welcome: true }],
   full: [409, { ok: false, full: true, error: 'mixr is full.' }],
   error: [502, { ok: false, error: "couldn't set up your line. try again in a minute" }],
 };
@@ -514,86 +537,165 @@ async function join(phone) {
   }
 }
 
-// your mixr line: the number big and selectable, then whatever this device can do with it. Phones and
-// Macs open Messages and Contacts; Macs also get a QR (plenty of people text from their phone); other
-// desktops can't open either, so they get the QR and a copy button instead.
-const el = (tag, cls, text) => Object.assign(document.createElement(tag), { className: cls, textContent: text });
-function lineCard(number, link) {
-  const d = String(number).replace(/\D/g, '').replace(/^1(?=\d{10}$)/, '');
-  const pretty = d.length === 10 ? fmt(d) : String(number);
-  const e164 = d.length === 10 ? `+1${d}` : String(number);
-  const head = el('span', 'line-head');
-  const id = el('span', 'line-id');
-  const numEl = el('span', 'line-num', pretty);
-  id.append(el('b', 'line-name', 'mixr'), numEl);
-  head.append(Object.assign(el('img', 'line-av'), { src: 'brand/mixr-icon.svg', alt: '' }), id);
-  const card = document.createDocumentFragment();
-  card.append(head);
-  if (touch || mac) card.append(lineActs(number, link, pretty));
-  if (!touch) card.append(lineQR(e164, pretty));
-  if (!touch && !mac) card.append(copyButton(e164, numEl));
-  return card;
+// ── the last step: a screen of its own, over the phone ──
+// mixr can't text first, so signing up isn't done until they text their mixr number. Inside the phone that was
+// easy to miss; this screen isn't. The number is big and copies on a tap, "text mixr now" opens Messages with
+// "hi mixr" typed, and a QR does the same from a phone's camera. Phones and Macs can open Messages and Contacts,
+// so they get the button and "add to contacts"; other desktops can't, and the QR is their way in. On touch
+// screens the QR waits behind a disclosure (you can't scan the phone you're holding).
+const last = $('#last');
+const lastHead = $('#lastHead');
+const lastNum = $('#lastNum');
+const lastTip = $('#lastTip');
+const lastVal = $('#lastVal');
+const lastSaid = $('#lastSaid');
+const lastGo = $('#lastGo');
+const lastContact = $('#lastContact');
+const lastQR = $('#lastQR');
+const TIP = touch ? 'tap to copy' : 'click to copy';
+let lastLine = null; // { e164, pretty } of the number on screen
+let lastTimer = 0;
+let copyTimer = 0;
+last.classList.toggle('by-touch', touch); // not .touch: that's the lock screen's finger
+lastGo.hidden = lastContact.hidden = !(touch || mac);
+if (touch) {
+  const more = Object.assign(document.createElement('details'), { className: 'last-more' });
+  more.append(Object.assign(document.createElement('summary'), { textContent: 'texting from another phone? show a QR code' }));
+  lastQR.replaceWith(more);
+  more.append(lastQR);
 }
 
-// Message (a real sms: link) and Add to Contacts (a vCard)
-function lineActs(number, link, pretty) {
-  // only hand the link to the browser if it's a web or sms link; anything else gets a plain sms: one
-  let href = `sms:${number}&body=hi%20mixr`;
+// Messages to mixr with "hi mixr" typed. `?&body=`: iOS takes the body after the &, Android after the ?, so one
+// form fills it in on both (with a bare &body=, Android readers can fold the body into the number).
+const smsTo = (e164) => `sms:${e164}?&body=hi%20mixr`;
+
+// the QR library loads only once the last step shows, so the homepage never pays for it
+let qrLib;
+const loadQR = () =>
+  (qrLib ??= new Promise((resolve, reject) => {
+    const s = Object.assign(document.createElement('script'), { src: 'vendor/qrcode.min.js' });
+    s.onload = () => resolve(window.qrcode);
+    s.onerror = reject;
+    document.head.append(s);
+  }));
+function drawQR(text) {
+  const box = $('#lastCode');
+  box.replaceChildren();
+  loadQR()
+    .then((qrcode) => {
+      const qr = qrcode(0, 'M');
+      qr.addData(text);
+      qr.make();
+      box.innerHTML = qr.createSvgTag({ cellSize: 1, margin: 4, scalable: true });
+    })
+    .catch(() => ((lastQR.closest('details') || lastQR).hidden = true)); // the number is still there to type
+}
+
+function openLast({ number, link }, returning = false) {
+  const d = String(number).replace(/\D/g, '').replace(/^1(?=\d{10}$)/, '');
+  const e164 = d.length === 10 ? `+1${d}` : String(number);
+  const pretty = d.length === 10 ? fmt(d) : String(number);
+  lastLine = { e164, pretty };
+  // only hand the browser a web or sms link; anything else gets a plain sms: one
+  let href = smsTo(e164);
   try {
     if (['https:', 'sms:'].includes(new URL(link).protocol)) href = link;
   } catch {}
-  const msg = el('a', 'line-cta', 'Message');
-  msg.href = href;
-  msg.setAttribute('aria-label', `message mixr at ${pretty}`);
-  if (!touch) Object.assign(msg, { target: '_blank', rel: 'noopener' }); // keep this page, and the number, open
-  const add = el('a', 'line-add', 'Add to Contacts');
-  add.href = '#';
-  add.addEventListener('click', (e) => {
-    e.preventDefault();
-    saveContact(number);
-  });
-  const acts = el('span', 'line-acts');
-  acts.append(msg, add);
-  return acts;
+  lastGo.href = href;
+  // a Mac opens a web link in a new tab, keeping this page (and the number) open
+  if (!touch && href.startsWith('https:')) Object.assign(lastGo, { target: '_blank', rel: 'noopener' });
+  else lastGo.removeAttribute('target');
+  lastVal.textContent = pretty;
+  lastTip.textContent = TIP;
+  $('#lastOverLead').textContent = returning ? 'not you?' : 'entered the wrong number?';
+  drawQR(smsTo(e164));
+
+  finished = true;
+  root.classList.remove('cursoring');
+  for (const n of document.body.children) if (n !== last) n.inert = true; // keyboard and screen readers stay here
+  clearTimeout(lastTimer);
+  last.hidden = false;
+  if (returning) {
+    // a reload or return visit: already there, no entrance
+    last.classList.add('now', 'on');
+    requestAnimationFrame(() => last.classList.remove('now'));
+  } else {
+    void last.offsetWidth; // start the fade from where `hidden` left it
+    last.classList.add('on');
+  }
+  lastHead.focus({ preventScroll: true });
 }
 
-// a QR that opens Messages to mixr with "hi mixr" typed. SMSTO: is the form iOS Camera and Google Lens
-// both turn into a text; with sms: the body splits between ?body= (Android) and &body= (iOS).
-// The QR library loads only here, so the homepage never pays for it.
-function lineQR(e164, pretty) {
-  const box = el('span', 'line-qr');
-  const code = el('span', 'line-code');
-  code.setAttribute('role', 'img');
-  code.setAttribute('aria-label', `QR code that texts mixr at ${pretty}`);
-  box.append(code, el('span', 'line-cap', 'Scan with your phone to text mixr'));
-  const s = Object.assign(document.createElement('script'), { src: 'vendor/qrcode.min.js' });
-  s.onload = () => {
-    const qr = window.qrcode(0, 'M');
-    qr.addData(`SMSTO:${e164}:hi mixr`);
-    qr.make();
-    code.innerHTML = qr.createSvgTag({ cellSize: 1, margin: 4, scalable: true });
-  };
-  s.onerror = () => box.remove(); // the number above is still there to type
-  document.head.append(s);
-  return box;
+function closeLast() {
+  finished = false;
+  lastLine = null;
+  for (const n of document.body.children) n.inert = false;
+  last.classList.remove('on');
+  lastTimer = setTimeout(() => (last.hidden = true), reduced ? 0 : 450);
 }
 
-function copyButton(e164, numEl) {
-  const copy = el('button', 'line-copy', 'Copy number');
-  copy.type = 'button';
-  copy.setAttribute('aria-live', 'polite');
-  copy.addEventListener('click', async () => {
-    try {
-      await navigator.clipboard.writeText(e164);
-      copy.textContent = 'Copied';
-    } catch {
-      getSelection().selectAllChildren(numEl); // no clipboard (plain http, old browser): select it instead
-      copy.textContent = 'Press Ctrl+C to copy';
-    }
-    setTimeout(() => (copy.textContent = 'Copy number'), 1800);
-  });
-  return copy;
+async function copyText(text) {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {}
+  // no async clipboard (plain http, older browsers): the old way, through a throwaway field
+  const back = document.activeElement;
+  const ta = Object.assign(document.createElement('textarea'), { value: text, readOnly: true, className: 'sr' });
+  last.append(ta);
+  ta.select();
+  ta.setSelectionRange(0, text.length); // iOS
+  let ok = false;
+  try {
+    ok = document.execCommand('copy');
+  } catch {}
+  ta.remove();
+  back?.focus({ preventScroll: true });
+  return ok;
 }
+
+lastNum.addEventListener('click', async () => {
+  if (!lastLine) return;
+  const { e164, pretty } = lastLine;
+  const ok = await copyText(e164);
+  lastNum.classList.toggle('copied', ok);
+  if (ok) {
+    lastTip.textContent = 'copied';
+    lastSaid.textContent = `copied ${pretty}`;
+  } else {
+    getSelection().selectAllChildren(lastVal); // no clipboard at all: select it to copy by hand
+    lastTip.textContent = touch ? "couldn't copy" : `press ${mac ? '⌘' : 'Ctrl+'}C to copy`;
+  }
+  clearTimeout(copyTimer);
+  copyTimer = setTimeout(() => {
+    lastNum.classList.remove('copied');
+    lastTip.textContent = TIP;
+    lastSaid.textContent = '';
+  }, 2200);
+});
+
+lastContact.addEventListener('click', (e) => {
+  e.preventDefault();
+  if (lastLine) saveContact(lastLine.e164);
+});
+
+// wrong number, or someone else's: forget it and go back to "what's your number?" with the pad up
+$('#lastRestart').addEventListener('click', () => {
+  store.clear();
+  closeLast();
+  rail.querySelectorAll('[data-live]').forEach((n) => n.remove());
+  joined = false;
+  busy = false;
+  digits = '';
+  num.disabled = false;
+  compose.classList.remove('done');
+  root.classList.remove('focus');
+  root.classList.add('end');
+  go(Infinity);
+  openKeypad();
+  render();
+  focusNum();
+});
 
 // a vCard with mixr's name, photo and this person's line, so the thread shows up as mixr
 async function saveContact(number) {
@@ -632,13 +734,13 @@ compose.addEventListener('submit', async (e) => {
     root.classList.add('focus');
     const rc = bubble('receipt', 'Delivered');
     setTimeout(() => (rc.textContent = `Read ${$('[data-clock="ampm"]').textContent}`), reduced ? 0 : 500);
-    closeKeypad(); // the pad slides away and makes room for the card
-    // welcome: mixr has already texted them, so the card comes first and the bubble says so
-    if (!res.data.welcome) bubble('b them', "you're in! here's your mixr line:");
-    const line = await say(lineCard(res.data.number, res.data.link), 'b them line');
-    const sent = res.data.welcome && say('sent you a text!'); // its typing dots hold the spot below the card
-    if (!touch) line.querySelector('a, button').focus({ preventScroll: true }); // Enter opens Messages, or copies
-    await sent;
+    closeKeypad();
+    // signing up isn't done until they text mixr: say so here, then hand over to the last-step screen
+    const line = { number: String(res.data.number), link: typeof res.data.link === 'string' ? res.data.link : '' };
+    store.set(line);
+    bubble('b them', "you're in! one more step");
+    await sleep(700);
+    openLast(line);
     busy = false;
     return;
   }
@@ -670,3 +772,4 @@ compose.addEventListener('submit', async (e) => {
 });
 
 render();
+if (saved) openLast(saved, true);

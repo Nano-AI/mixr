@@ -141,5 +141,28 @@
   <footer class="foot">
     <p>When you send your number, you get your own mixr number to text. mixr may text you at this number. Msg &amp; data rates may apply. Reply STOP anytime to opt out. UW students only for now. mixr's replies are written by AI. More in <a href="/about">About</a> and <a href="/privacy">Privacy</a>.</p>
   </footer>
+
+  <!-- after joining: mixr can't text first, so the sign-up ends with them texting their mixr number.
+       Its own screen over the phone, filled in by main.js (openLast) -->
+  <section class="last" id="last" role="dialog" aria-modal="true" aria-labelledby="lastHead" aria-describedby="lastWhy" hidden>
+    <div class="last-in">
+      <div class="last-main">
+        <h2 class="last-head" id="lastHead" tabindex="-1"><span class="last-kicker">one more step<span class="sr">:</span></span> text mixr to finish signing up</h2>
+        <p class="last-why" id="lastWhy">mixr can't text you first — send any message to your mixr number and it'll reply right away.</p>
+        <button class="last-num" id="lastNum" type="button">
+          <span class="last-num-top"><img src="brand/mixr-icon.svg" alt="">your mixr number<span class="last-tip" id="lastTip">copy</span></span>
+          <span class="last-val" id="lastVal"></span>
+        </button>
+        <p class="sr" id="lastSaid" aria-live="polite"></p>
+        <a class="last-go" id="lastGo" href="#">text mixr now</a>
+        <p class="last-save">this is your personal mixr line — save it as mixr. <a href="#" id="lastContact">add to contacts</a></p>
+      </div>
+      <div class="last-qr" id="lastQR">
+        <div class="last-code" id="lastCode" role="img" aria-label="QR code that opens Messages to your mixr number with hi mixr typed"></div>
+        <p class="last-cap">scan with your phone's camera<small>opens Messages with “hi mixr” typed</small></p>
+      </div>
+      <p class="last-over"><span id="lastOverLead">entered the wrong number?</span> <button type="button" id="lastRestart">start over</button></p>
+    </div>
+  </section>
 </body>
 </html>
