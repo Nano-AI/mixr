@@ -1,6 +1,7 @@
 import { config } from '../config.ts';
 import { getOrCreateUser, getUserByPhone, one, q } from '../db/index.ts';
 import { runIn, type RunContext } from '../context.ts';
+import { now } from '../clock.ts';
 import { recordInbound, send } from '../transport/index.ts';
 import { handleInbound } from '../agent/index.ts';
 import { openInvitesFor, respondToInvite } from '../events/index.ts';
@@ -116,10 +117,28 @@ async function realTurn(user: User, text: string, via: Via, providerId?: string)
     await reply(HELP_TEXT);
     return false;
   }
+  if (via === 'phone' && (await overLimit(user.id))) return false;
   if (user.step) {
     await reply(await onboard(user, text));
     return false;
   }
+  return true;
+}
+
+// Per-person flood guard: past RATE_LIMIT texts in an hour, mixr says so once and then stays quiet until the
+// hour rolls over. STOP, START and HELP are handled before this, so they always work.
+export const RATE_LIMIT = 30; // tune: inbound texts per person per RATE_WINDOW_MS
+export const RATE_WINDOW_MS = 60 * 60 * 1000;
+export const RATE_LIMITED = "you're texting faster than i can keep up. give me a bit and i'll be back.";
+
+async function overLimit(userId: number): Promise<boolean> {
+  const since = new Date((await now()).getTime() - RATE_WINDOW_MS);
+  const r = (await one<{ n: number }>(
+    `SELECT count(*)::int AS n FROM messages WHERE user_id = $1 AND direction = 'in' AND via = 'phone' AND sim_time > $2`,
+    [userId, since.toISOString()],
+  ))!;
+  if (r.n <= RATE_LIMIT) return false;
+  if (r.n === RATE_LIMIT + 1) await send(userId, RATE_LIMITED, { dedupeKey: `rate-limited:${userId}:${since.toISOString().slice(0, 13)}` });
   return true;
 }
 
