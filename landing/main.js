@@ -265,11 +265,12 @@ if (reduced) {
   };
 
   $('#more').addEventListener('click', () => go(slide + 1));
-  if (touch) $('#more span').textContent = 'swipe up';
+  const verb = touch ? 'swipe up' : 'scroll';
 
   go = (i) => {
     i = utils.clamp(i, 0, LAST);
     root.classList.toggle('moved', i === LAST); // the swipe cue stays until the last slide: keep going
+    $('#more span').textContent = LAST - i > 1 ? `${i ? 'keep going' : verb} · ${LAST - i} more` : `${verb} to join`;
     if (i === slide && !move && pos.t === SLIDES[i].t) return;
     speed = Math.abs(i - slide) > 1 ? 6 : 1.5; // a jump (nav button, a dot) fast-forwards the texts
     slide = i;
