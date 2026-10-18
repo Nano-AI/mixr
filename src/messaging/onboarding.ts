@@ -2,9 +2,10 @@ import { randomBytes, randomInt, scrypt, timingSafeEqual } from 'node:crypto';
 import { one, q } from '../db/index.ts';
 import { MINUTE, now } from '../clock.ts';
 import type { OnboardingStep, User } from '../types.ts';
+import { firstName } from '../events/copy.ts';
 import { createEmailSender, type CodeSender } from './email.ts';
 
-// Real users before the agent takes over, deterministic (no LLM): consent -> name -> email -> verify.
+// Real users before the agent takes over, deterministic (no LLM): consent -> full name -> email -> verify.
 // On success: email_verified = true, step = NULL, state stays 'onboarding', and the agent handles the braindump.
 // Each call answers one inbound text with exactly one reply (the caller sends it).
 
@@ -18,15 +19,20 @@ const EMAIL_MAX = 254;
 export const CONSENT =
   "hey! i'm mixr. i find UW students with shared interests and help organize meetups. Reply YES to opt in. Message frequency varies. Reply STOP anytime.";
 const CONSENT_WORDS = ['YES', 'Y', 'I AGREE', 'OPT IN'];
-const ASK_NAME = "what's your first name?";
+const ASK_NAME = "what's your full name? (first and last)";
+const NAME_AGAIN = `what's your full name? (first and last, just letters, up to ${NAME_MAX} characters)`;
+// One word so far: nothing is saved; the first name rides along in this reply (our own text) until the last name comes.
+const askLast = (first: string): string => `got it, ${first}! and your last name?`;
+const LAST_AGAIN = ' (just your last name, letters only)';
+const ASKED_LAST = /^got it, ([^\s,!?]+)! and your last name\?/;
 const ASK_EMAIL = "what's your @uw.edu email? i use it to keep mixr UW-only.";
 const ASK_CODE = 'reply with the 6-digit code from your UW inbox, or text EMAIL to use a different address.';
 const EMAIL_TAKEN = "that email is already connected to another mixr account. if that's not right, reach out to the mixr team.";
 export const CODE_PLACEHOLDER = '[verification code]';
 
-// The first thing the agent's onboarding builds on: the user has a name, now they braindump.
+// The first thing the agent's onboarding builds on: the user has a name, now they braindump. Greets by first name.
 export const braindumpPrompt = (name: string | null): string =>
-  `you're verified${name ? `, ${name}` : ''}! now the fun part: braindump me what you're into. sports, games, music, hobbies, things you want to try, and how serious you are about each. the more you tell me, the better i can match you.`;
+  `you're verified${name ? `, ${firstName(name)}` : ''}! now the fun part: braindump me what you're into. sports, games, music, hobbies, things you want to try, and how serious you are about each. the more you tell me, the better i can match you.`;
 
 // What to say when someone comes back mid-onboarding (START after STOP).
 export function stepPrompt(step: OnboardingStep): string {
@@ -77,29 +83,83 @@ async function takeConsent(user: User, word: string, t: Date): Promise<string> {
   return `you're in! ${ASK_NAME}`;
 }
 
-// "i'm ana!" -> "ana". Names show up in other people's texts and in the agent's context, so only letters,
-// spaces, apostrophes, hyphens and periods, a few words at most; a repeated YES isn't a name either.
-export function cleanName(said: string): string | null {
+// Whole replies that aren't names: a repeated YES, or a brush-off when asked for a last name.
+const NOT_NAMES = [...CONSENT_WORDS, 'NO', 'NOPE', 'NAH', 'IDK', 'NONE', 'SKIP', 'WHY'];
+// Lowercase mid-name ("maria de la cruz" -> "Maria de la Cruz").
+const PARTICLES = new Set(['de', 'da', 'di', 'do', 'dos', 'das', 'du', 'del', 'della', 'der', 'den', 'la', 'le', 'van', 'von']);
+
+// Names show up in the agent's context and (first name only) in other people's texts, so only letters,
+// spaces, apostrophes, hyphens and periods, a few words at most, every word with a letter in it.
+function validName(name: string): boolean {
+  const words = name.split(' ');
+  return (
+    name.length <= NAME_MAX &&
+    words.length <= NAME_WORDS &&
+    /^[\p{L}\p{M}'’. -]+$/u.test(name) &&
+    words.every((w) => /\p{L}/u.test(w)) &&
+    !NOT_NAMES.includes(name.toUpperCase())
+  );
+}
+
+// "john o'meara" -> "John O'Meara". Only all-lowercase input is touched, so "McDonald" or "de la Cruz" typed with
+// capitals stays as typed. `before` = name words already in front of this piece (a last name added to a first name).
+function capitalize(name: string, before = 0): string {
+  if (name !== name.toLowerCase()) return name;
+  const words = name.split(' ');
+  return words
+    .map((w, i) =>
+      i + before > 0 && i < words.length - 1 && PARTICLES.has(w)
+        ? w
+        : w
+            .replace(/(^|[-.])(\p{L})/gu, (_, p: string, c: string) => p + c.toUpperCase()) // smith-jones, j.r.
+            .replace(/(^|-)(\p{L}['’])(\p{L})/gu, (_, p: string, o: string, c: string) => p + o + c.toUpperCase()) // o'meara
+            .replace(/^Mc(\p{L})/u, (_, c: string) => `Mc${c.toUpperCase()}`),
+    )
+    .join(' ');
+}
+
+// "hey, i'm ana lee!" -> "Ana Lee". 1 to NAME_WORDS words (the caller decides whether a single word is enough).
+export function cleanName(said: string, before = 0): string | null {
   const name = said
     .replace(/^(hi|hey|hello|yo)\b[\s,!.]*/i, '')
-    .replace(/^(i'?m|i am|my name is|my name'?s|it'?s|this is|call me|name'?s)\s+/i, '')
+    .replace(/^(?:i['’]?m|i am|it['’]?s|this is|call me|(?:my )?(?:full |first |last |sur)?name(?:['’]?s| is))\s+/i, '')
     .replace(/[\s.!?,]+$/, '')
     .replace(/\s+/g, ' ')
     .trim();
-  if (!name || name.length > NAME_MAX || !/^[\p{L}\p{M}'’. -]+$/u.test(name) || name.split(' ').length > NAME_WORDS) return null;
-  if (CONSENT_WORDS.includes(name.toUpperCase())) return null;
-  return name;
+  return validName(name) ? capitalize(name, before) : null;
 }
 
 // "it's Ana@UW.edu." -> "ana@uw.edu" (validated by the caller).
 export const extractEmail = (said: string): string =>
   (said.toLowerCase().match(/[^\s<>()"',;:]+@[^\s<>()"',;:]+/)?.[0] ?? '').replace(/[.!?]+$/, '');
 
+// Full name (first and last). A single word is taken as the first name: nothing is saved, the reply asks for the
+// last name, and the next text completes it (or repeats the whole name, "ana lee").
 async function takeName(user: User, said: string): Promise<string> {
+  const first = await askedLastFor(user.id);
+  if (first) {
+    const last = cleanName(said, 1);
+    if (!last) return askLast(first) + LAST_AGAIN;
+    const whole = last.includes(' ') && last.split(' ')[0].toLowerCase() === first.toLowerCase();
+    const name = whole ? cleanName(said) : `${first} ${last}`;
+    if (!name || !validName(name)) return NAME_AGAIN;
+    return saveName(user, name);
+  }
   const name = cleanName(said);
-  if (!name) return `${ASK_NAME} (just your first name, up to ${NAME_MAX} characters)`;
+  if (!name) return NAME_AGAIN;
+  if (!name.includes(' ')) return askLast(name);
+  return saveName(user, name);
+}
+
+// The first name waiting on a last name: only right after mixr asked for it (the inbound is already recorded).
+async function askedLastFor(userId: number): Promise<string | null> {
+  const out = await one<{ text: string }>(`SELECT text FROM messages WHERE user_id = $1 AND direction = 'out' ORDER BY id DESC LIMIT 1`, [userId]);
+  return out?.text.match(ASKED_LAST)?.[1] ?? null;
+}
+
+async function saveName(user: User, name: string): Promise<string> {
   await q(`UPDATE users SET name = $2, step = 'email' WHERE id = $1`, [user.id, name]);
-  return `nice to meet you, ${name}! ${ASK_EMAIL}`;
+  return `nice to meet you, ${firstName(name)}! ${ASK_EMAIL}`;
 }
 
 // A verified email belongs to one phone. Checked when a code is requested and again (atomically) on success.
