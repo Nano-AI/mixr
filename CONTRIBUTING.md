@@ -62,6 +62,48 @@ CI (`.github/workflows/ci.yml`) runs all of these, the dashboard build and a lan
 
 Elsewhere: `web/` dashboard (React), `landing/` joinmixr.club (static), `scripts/` seed and deploy, `deploy/` systemd units and `release.sh`, `test/`, `fixtures/`.
 
+## Tracing a message through the application
+
+Start here when a student texts mixr but gets no reply, a duplicate, or the wrong
+onboarding prompt. This describes the current implementation; the older
+`docs/messaging-operations.md` includes historical interfaces and settings.
+
+1. **Receive and normalize:** [`src/messaging/photon.ts`](src/messaging/photon.ts)
+   consumes Spectrum's authenticated event stream and accepts phone-number direct
+   messages, including inline text replies. Read receipts and typing indicators
+   are best-effort; their failure does not prevent processing.
+2. **Identify and route:** [`src/messaging/pipeline.ts`](src/messaging/pipeline.ts)
+   resolves the phone to a persistent user and serializes work per phone, while
+   different phones can proceed concurrently. It records the provider ID before
+   routing, so a redelivered event does not repeat onboarding or agent actions.
+   STOP, START, and HELP are deterministic; opt-out and rate limits are enforced
+   before ordinary conversation reaches the agent.
+3. **Onboard:** [`src/messaging/onboarding.ts`](src/messaging/onboarding.ts) owns
+   consent, full name, UW email, and code verification. The normal email path uses
+   salted code hashes, a ten-minute expiry, and three attempts. The temporary
+   judge-code path skips email verification without setting `email_verified`.
+   [`email.ts`](src/messaging/email.ts) handles sending; delivery failure never
+   counts as verification.
+4. **Converse and act:** [`src/agent/index.ts`](src/agent/index.ts) handles texts
+   after the deterministic onboarding step clears. It builds context and calls
+   tools in [`src/agent/tools.ts`](src/agent/tools.ts), which connect conversation
+   to profile, matching, event, and intro services. Trace tool results when a
+   conversational reply succeeds but the expected action does not.
+5. **Deliver:** [`src/transport/outbox.ts`](src/transport/outbox.ts) persists real
+   outbound jobs with deduplication keys and claims each job atomically before
+   sending. Pending jobs retry within a 24-hour window, up to three attempts.
+   `sent` means Photon accepted the message, not that the handset displayed it.
+
+On restart, interrupted inbound processing and outbound jobs left in `sending`
+are marked failed for inspection, rather than automatically replayed: their
+external effects may already have happened. STOP suppresses queued messages,
+and START does not revive those suppressed jobs. Deduplication prevents repeated
+application submissions; it is not a guarantee of exactly-once handset delivery.
+
+For offline reproduction, use `MIXR_FAKE=1` and `TRANSPORT=sim`. Dashboard demo
+users never deliver messages. Acting as a real user suppresses delivery to that
+user only; other effects still run in the real pool.
+
 ## How changes ship
 
 1. Branch off `main` and open a PR. CI must pass.
